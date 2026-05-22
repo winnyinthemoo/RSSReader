@@ -1,6 +1,6 @@
 use super::{
     fetch_and_parse_feed, ArticleDetail, ArticleListFilter, ArticleListItem,
-    ArticleMarkReadRequest, FeedAddRequest, FeedListResult, FeedRefreshRequest,
+    ArticleMarkReadRequest, FeedAddRequest, FeedDeleteRequest, FeedListResult, FeedRefreshRequest,
     FeedRefreshResult, FeedRepository, FeedStatus, FeedWithArticles,
 };
 
@@ -111,6 +111,10 @@ impl FeedService {
     pub fn mark_article_read(&mut self, request: ArticleMarkReadRequest) -> Result<(), String> {
         self.repository
             .mark_article_read(&request.article_id, request.is_read)
+    }
+
+    pub fn delete_feed(&mut self, request: FeedDeleteRequest) -> Result<(), String> {
+        self.repository.delete_feed(&request.feed_id)
     }
 }
 

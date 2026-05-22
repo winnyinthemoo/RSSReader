@@ -271,9 +271,6 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
             <p className="eyebrow">AI</p>
             <h2>Provider &amp; Models</h2>
           </div>
-          <button className="tool-button" type="button" onClick={onClose}>
-            Close
-          </button>
         </header>
 
         <div className="ai-settings-body">
@@ -544,6 +541,11 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
           {statusMessage ? <p className="ai-status-ok">{statusMessage}</p> : null}
           {errorMessage ? <p className="ai-status-error">{errorMessage}</p> : null}
         </div>
+        <footer className="ai-settings-footer">
+          <button className="tool-button" type="button" onClick={onClose}>
+            Close
+          </button>
+        </footer>
       </section>
     </div>
   );

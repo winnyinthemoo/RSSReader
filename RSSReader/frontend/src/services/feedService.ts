@@ -4,6 +4,7 @@ import type {
   ArticleListResult,
   ArticleMarkReadRequest,
   FeedAddRequest,
+  FeedDeleteRequest,
   FeedListResult,
   FeedRefreshRequest,
   FeedRefreshResult,
@@ -61,6 +62,18 @@ export async function refreshFeed(request: FeedRefreshRequest): Promise<FeedRefr
   return requestJson<FeedRefreshResult>("/api/feeds/refresh", {
     method: "POST",
     body: JSON.stringify({ feedId: request.feedId }),
+  });
+}
+
+export async function deleteFeed(request: FeedDeleteRequest): Promise<void> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<void>("feed_delete", { feedId: request.feedId });
+  }
+
+  await requestJson<{ ok: boolean }>("/api/feeds/delete", {
+    method: "POST",
+    body: JSON.stringify(request),
   });
 }
 

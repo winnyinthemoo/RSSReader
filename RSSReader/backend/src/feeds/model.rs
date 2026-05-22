@@ -24,6 +24,11 @@ pub struct FeedAddRequest {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FeedDeleteRequest {
+    pub feed_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FeedRefreshRequest {
     pub feed_id: String,
 }

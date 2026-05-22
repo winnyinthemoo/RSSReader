@@ -3,9 +3,9 @@ use std::net::{TcpListener, TcpStream};
 
 use rssreader_backend::ai::http::try_handle as try_handle_ai;
 use rssreader_backend::feeds::{
-    article_get, article_list, article_mark_read, feed_add, feed_list, feed_refresh, ArticleDetail,
-    ArticleListFilter, ArticleListItem, ArticleListResult, FeedListResult, FeedRefreshResult,
-    FeedStatus, FeedSummary, FeedWithArticles,
+    article_get, article_list, article_mark_read, feed_add, feed_delete, feed_list, feed_refresh,
+    ArticleDetail, ArticleListFilter, ArticleListItem, ArticleListResult, FeedListResult,
+    FeedRefreshResult, FeedStatus, FeedSummary, FeedWithArticles,
 };
 
 fn main() -> std::io::Result<()> {
@@ -84,6 +84,17 @@ fn handle_connection(mut stream: TcpStream) {
 
             match feed_refresh(feed_id) {
                 Ok(result) => write_json(&mut stream, 200, &feed_refresh_json(&result)),
+                Err(message) => write_json(&mut stream, 404, &error_json(&message)),
+            }
+        }
+        ("POST", "/api/feeds/delete") => {
+            let Some(feed_id) = json_string_field(body, "feedId") else {
+                write_json(&mut stream, 400, &error_json("Missing feedId"));
+                return;
+            };
+
+            match feed_delete(feed_id) {
+                Ok(()) => write_json(&mut stream, 200, "{\"ok\":true}"),
                 Err(message) => write_json(&mut stream, 404, &error_json(&message)),
             }
         }
