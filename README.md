@@ -48,3 +48,17 @@ A web implementation of an RSS reader with AI
 
 ## 协作流程
 Issue -> Branch -> 开发 -> Commit -> Push -> Pull Request -> Review -> Merge
+
+
+## 环境要求
+
+### Rust安装
+```bash
+Invoke-WebRequest -Uri https://win.rustup.rs -OutFile rustup-init.exe
+.\rustup-init.ex
+```
+验证
+```
+rustc --version   # rustc 1.78.0
+cargo --version   # cargo 1.78.0
+```

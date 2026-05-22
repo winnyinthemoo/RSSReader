@@ -1,0 +1,10 @@
+node_modules/
+dist/
+target/
+*.tsbuildinfo
+*.log
+*.db
+*.sqlite
+*.sqlite3
+.DS_Store
+Thumbs.db
