@@ -1,1 +1,0 @@
-AI Provider、摘要、翻译

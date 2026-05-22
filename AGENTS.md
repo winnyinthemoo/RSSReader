@@ -53,7 +53,17 @@ Mercury的开源仓库地址：https://github.com/neolee/mercury
 
 ### 4.1 前后端边界
 
-前端位于 `src/`，只负责：
+项目应用代码位于 `RSSReader/` 目录下。当前核心目录定位如下：
+
+- `RSSReader/frontend/`：前端，负责 UI、交互、状态展示和调用 Tauri Commands。
+- `RSSReader/backend/`：后端，负责 Tauri / Rust 本地能力、RSS、文件、AI 调用等业务逻辑。
+- `RSSReader/db/`：数据库，负责 SQLite 表结构、迁移、初始化脚本和数据库说明。
+- `RSSReader/shared/`：前后端共享，负责 Command 契约、共享类型和通用常量。
+- `RSSReader/resources/`：资源模板，负责 Prompt 模板、文摘模板等可复用文本资源。
+- `RSSReader/build/`：打包，负责 Windows / macOS / Linux 打包配置、产物说明和发布材料。
+- `RSSReader/docs/`：项目文档、决策记录和 Agent 工作记录。
+
+前端位于 `RSSReader/frontend/`，只负责：
 
 - 页面布局
 - 用户交互
@@ -61,7 +71,7 @@ Mercury的开源仓库地址：https://github.com/neolee/mercury
 - 调用 Tauri Commands
 - 显示后端返回的数据
 
-后端位于 `src-tauri/`，负责：
+后端位于 `RSSReader/backend/`，负责：
 
 - RSS 请求
 - RSS / Atom / JSON Feed 解析
@@ -70,6 +80,8 @@ Mercury的开源仓库地址：https://github.com/neolee/mercury
 - HTML 清洗
 - AI Provider 调用
 - 本地文件和系统能力
+
+数据库相关文件位于 `RSSReader/db/`。后端可以通过 repository / service 访问数据库，但前端不得直接访问数据库文件或 SQL。
 
 前端不得直接访问 SQLite。  
 前端不得直接保存 API Key 到源码。  
@@ -94,17 +106,21 @@ ai_summarize(article_id, provider_id) -> SummaryResult
 
 ### 4.3 模块边界
 
-- `src/features/feeds`：订阅源相关 UI
-- `src/features/articles`：文章列表相关 UI
-- `src/features/reader`：阅读器相关 UI
-- `src/features/tags`：标签相关 UI
-- `src/features/ai`：AI 摘要、翻译、Provider 设置 UI
-- `src-tauri/src/feeds`：RSS 请求、解析、订阅源业务逻辑
-- `src-tauri/src/articles`：文章查询、状态更新
-- `src-tauri/src/database`：SQLite 连接、迁移、Repository
-- `src-tauri/src/reader`：正文清洗与阅读内容处理
-- `src-tauri/src/ai`：AI Provider 调用
-- `docs/`：项目文档和过程记录
+- `RSSReader/frontend/src/features/feeds`：订阅源相关 UI
+- `RSSReader/frontend/src/features/articles`：文章列表相关 UI
+- `RSSReader/frontend/src/features/reader`：阅读器相关 UI
+- `RSSReader/frontend/src/features/tags`：标签相关 UI
+- `RSSReader/frontend/src/features/ai`：AI 摘要、翻译、Provider 设置 UI
+- `RSSReader/backend/src/feeds`：RSS 请求、解析、订阅源业务逻辑
+- `RSSReader/backend/src/articles`：文章查询、状态更新
+- `RSSReader/backend/src/database`：SQLite 连接、Repository 和数据库访问封装
+- `RSSReader/backend/src/reader`：正文清洗与阅读内容处理
+- `RSSReader/backend/src/ai`：AI Provider 调用
+- `RSSReader/db/`：SQLite migration、schema、初始化数据和数据库说明
+- `RSSReader/shared/`：前后端共享类型、Command 输入输出契约和通用常量
+- `RSSReader/resources/`：Prompt 模板、文摘模板和其他文本模板资源
+- `RSSReader/build/`：跨平台打包配置、脚本和产物说明
+- `RSSReader/docs/`：项目文档和过程记录
 
 不得在一个模块中实现另一个模块的大量业务逻辑。
 
@@ -113,7 +129,7 @@ ai_summarize(article_id, provider_id) -> SummaryResult
 ### 5.1 TypeScript
 
 - 避免使用 `any`。
-- 公共类型放入 `src/types/` 或对应 feature 的 types 目录。
+- 前后端共享类型放入 `RSSReader/shared/`；仅前端使用的公共类型放入 `RSSReader/frontend/src/types/` 或对应 feature 的 types 目录。
 - UI 组件尽量小而清晰。
 - 不在组件中写复杂业务逻辑。
 - 组件只调用前端 service 或 store，不直接拼接复杂后端参数。
@@ -124,12 +140,13 @@ ai_summarize(article_id, provider_id) -> SummaryResult
 - 后端错误应转换为前端可读的错误信息。
 - 数据结构需要通过 `serde` 支持序列化和反序列化。
 - 数据库操作应集中在 repository 层。
+- 数据库 migration、schema 和初始化说明应与 `RSSReader/db/` 保持一致。
 - RSS 解析、HTML 清洗、AI 调用应分模块实现。
 - 避免在 Tauri Command 中写过长逻辑，Command 只做参数接收和调用 service。
 
 ### 5.3 SQLite
 
-- 所有表结构变更必须通过 migration 记录。
+- 所有表结构变更必须通过 `RSSReader/db/` 中的 migration 记录。
 - 不直接在多个位置散落 SQL。
 - 重要字段需要有索引，例如 feed_id、article_url、published_at。
 - 文章 URL 应有去重策略。
@@ -145,7 +162,7 @@ ai_summarize(article_id, provider_id) -> SummaryResult
 
 ## 7. Agent 使用规则
 
-每次使用 Coding Agent 完成实际任务时，需要在 `docs/agent-logs/` 中记录：
+每次使用 Coding Agent 完成实际任务时，需要在 `RSSReader/docs/agent-logs/` 中记录：
 
 - 日期
 - 负责人
@@ -182,21 +199,21 @@ Issue -> Branch -> Agent/人工开发 -> 本地运行 -> Commit -> Push -> Pull 
 
 ## 9. 验证命令
 
-前端修改后至少运行：
+前端修改后，应在 `RSSReader/frontend/` 下至少运行：
 
 ```bash
 npm run dev
 npm run build
 ```
 
-Rust 后端修改后至少运行：
+Rust 后端修改后，应在 `RSSReader/backend/` 下至少运行：
 
 ```bash
 cargo check
 cargo test
 ```
 
-完整应用修改后应运行：
+完整应用修改后，应按最终 Tauri 配置在应用根目录或前端目录下运行：
 
 ```bash
 npm run tauri dev
