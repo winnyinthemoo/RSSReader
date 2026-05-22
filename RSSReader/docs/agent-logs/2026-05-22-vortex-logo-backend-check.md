@@ -1,0 +1,21 @@
+# 2026-05-22 Agent 工作记录：Vortex Logo 与后端检查
+
+- 日期：2026-05-22
+- 负责人：Codex
+- 使用工具：PowerShell、apply_patch、npm、cargo
+- 对应 Issue / PR：暂无
+- 任务目标：完善前后端部分，并在左上角加入 assets 目录下的 logo 和 Vortex 品牌名。
+- 关键 Prompt 摘要：用户说明当前环境已经下载好 cargo / rustc，要求完善前后端部分，并在左上角加 logo 与 Vortex。
+- Agent 修改内容摘要：
+  - 左上角品牌从 RSSReader 改为 Vortex，并接入 `RSSReader/assets/logo.png` 生成的前端小尺寸图标。
+  - 新增 `RSSReader/frontend/src/assets/vortex-logo.png`，避免将 2.8MB 原始 logo 直接打包进前端。
+  - 后端开发服务移除 serde / serde_json 依赖，改为纯标准库 JSON 响应，保证当前环境可以稳定执行 `cargo check`。
+  - 新增 `backend-check` 脚本，并让 `check-all` 使用前端 build + 后端 check / check --tests。
+  - Windows 脚本支持自动查找 `%USERPROFILE%\.cargo\bin\cargo.exe`。
+- 人工检查结果：待人工检查。
+- 是否运行测试：
+  - 已运行 `npm.cmd run build`，前端构建通过。
+  - 已运行 `cargo check` 和 `cargo check --tests`，后端检查通过。
+  - 已运行 `RSSReader\scripts\backend-check.cmd` 和 `RSSReader\scripts\check-all.cmd`，均通过。
+  - `cargo test` 未通过，因为当前 Windows MSVC toolchain 能找到部分 Build Tools，但缺少可用的 Windows SDK 系统库链接环境。
+- 未解决问题：如需运行真正的 `cargo test` 或 `cargo run`，需要安装/修复 Visual Studio Build Tools 的 C++ 工具链和 Windows SDK，或切换到完整可链接的 GNU toolchain。

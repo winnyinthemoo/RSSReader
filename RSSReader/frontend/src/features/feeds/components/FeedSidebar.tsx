@@ -1,0 +1,112 @@
+import { Plus, RefreshCw, Rss } from "lucide-react";
+import { FormEvent, useState } from "react";
+
+import vortexLogo from "../../../assets/vortex-logo.png";
+import type { FeedSummary } from "../../../../../shared/feed";
+
+interface FeedSidebarProps {
+  feeds: FeedSummary[];
+  selectedFeedId?: string;
+  isAdding: boolean;
+  isRefreshing: boolean;
+  onSelectFeed: (feedId?: string) => void;
+  onAddFeed: (url: string) => Promise<void>;
+  onRefreshFeed: (feedId: string) => Promise<void>;
+}
+
+export function FeedSidebar({
+  feeds,
+  selectedFeedId,
+  isAdding,
+  isRefreshing,
+  onSelectFeed,
+  onAddFeed,
+  onRefreshFeed,
+}: FeedSidebarProps) {
+  const [url, setUrl] = useState("");
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!url.trim()) {
+      return;
+    }
+
+    await onAddFeed(url);
+    setUrl("");
+  }
+
+  const totalUnread = feeds.reduce((total, feed) => total + feed.unreadCount, 0);
+
+  return (
+    <aside className="feed-sidebar">
+      <div className="pane-header">
+        <div className="brand-lockup">
+          <img className="brand-logo" src={vortexLogo} alt="Vortex logo" />
+          <div className="brand-text">
+            <h1>Vortex</h1>
+          </div>
+        </div>
+        <div className="feed-total" aria-label={`${totalUnread} unread articles`}>
+          {totalUnread}
+        </div>
+      </div>
+
+      <form className="feed-form" onSubmit={handleSubmit}>
+        <input
+          aria-label="Feed URL"
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+          placeholder="https://example.com/feed.xml"
+        />
+        <button type="submit" title="Add feed" disabled={isAdding}>
+          <Plus size={18} />
+        </button>
+      </form>
+
+      <button
+        className={`feed-item all-feeds ${selectedFeedId ? "" : "selected"}`}
+        type="button"
+        onClick={() => onSelectFeed(undefined)}
+      >
+        <span className="feed-icon">
+          <Rss size={18} />
+        </span>
+        <span className="feed-main">
+          <span className="feed-title">All feeds</span>
+          <span className="feed-url">Everything local</span>
+        </span>
+        <span className="unread-count">{totalUnread}</span>
+      </button>
+
+      <div className="feed-list">
+        {feeds.map((feed) => (
+          <button
+            className={`feed-item ${selectedFeedId === feed.id ? "selected" : ""}`}
+            type="button"
+            key={feed.id}
+            onClick={() => onSelectFeed(feed.id)}
+          >
+            <span className="feed-icon">
+              <Rss size={18} />
+            </span>
+            <span className="feed-main">
+              <span className="feed-title">{feed.title}</span>
+              <span className="feed-url">{feed.siteUrl ?? feed.url}</span>
+            </span>
+            <span className="unread-count">{feed.unreadCount}</span>
+          </button>
+        ))}
+      </div>
+
+      <button
+        className="refresh-button"
+        type="button"
+        disabled={!selectedFeedId || isRefreshing}
+        onClick={() => selectedFeedId && onRefreshFeed(selectedFeedId)}
+      >
+        <RefreshCw size={17} />
+        <span>Refresh selected</span>
+      </button>
+    </aside>
+  );
+}

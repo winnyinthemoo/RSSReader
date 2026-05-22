@@ -1,0 +1,24 @@
+# 2026-05-22 Agent 工作记录：真实 Feed 实现
+
+- 日期：2026-05-22
+- 负责人：Codex
+- 使用工具：PowerShell、apply_patch、Cargo、npm
+- 对应 Issue / PR：暂无
+- 任务目标：补齐 Feed 部分真实实现，让前端添加、刷新、展示文章时接入后端真实 RSS 抓取、解析和本地保存。
+- 关键 Prompt 摘要：用户说明后端已经 ok，但 Feed 部分还没有实现，要求继续完善前后端 Feed 能力。
+- Agent 修改内容摘要：
+  - 后端新增 `reqwest`、`feed-rs`、`ammonia`、`rusqlite` 依赖。
+  - 新增 Feed parser，支持请求并解析 RSS / Atom / JSON Feed，生成统一 Feed 与 Article 数据结构，并清洗 HTML。
+  - 将 Feed repository 从纯内存实现推进为 SQLite repository，启动时执行 `db/migrations/0001_create_feeds_and_articles.sql`。
+  - `feed_add` 支持真实抓取、解析、保存；重复 URL 直接返回本地已有 Feed。
+  - `feed_refresh` 支持重新抓取、去重插入新文章，并在失败时记录 Feed 错误状态。
+  - 新增 `article_mark_read` 后端命令和 HTTP dev endpoint，前端打开文章后同步更新后端已读状态。
+  - 前端 service 增加 `markArticleRead`，共享契约补充 `ArticleMarkReadRequest`。
+- 人工检查结果：已检查前后端字段契约、HTTP dev endpoint、SQLite migration 与 repository 映射。
+- 是否运行测试：
+  - 已运行 `RSSReader\scripts\backend-check.cmd`，通过。
+  - 已运行 `RSSReader\scripts\backend-test.cmd`，5 个 Rust 测试通过。
+  - 已运行 `npm.cmd run build`，前端构建通过。
+- 未解决问题：
+  - 当前正式 Tauri 宏与 serde 映射尚未接入；普通浏览器开发模式通过 HTTP dev server 工作，后续 Tauri 集成时需要补 `#[tauri::command]` 与序列化派生。
+  - 还未实现 OPML、全文抽取、标签、收藏持久化 UI 等后续功能。
