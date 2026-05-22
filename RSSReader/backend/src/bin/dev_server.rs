@@ -1,6 +1,7 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 
+use rssreader_backend::ai::http::try_handle as try_handle_ai;
 use rssreader_backend::feeds::{
     article_get, article_list, article_mark_read, feed_add, feed_list, feed_refresh, ArticleDetail,
     ArticleListFilter, ArticleListItem, ArticleListResult, FeedListResult, FeedRefreshResult,
@@ -51,6 +52,15 @@ fn handle_connection(mut stream: TcpStream) {
     if method == "OPTIONS" {
         write_empty(&mut stream, 204);
         return;
+    }
+
+    if path.starts_with("/api/ai") {
+        let handled = try_handle_ai(method, path, body, &mut |status, payload| {
+            write_json(&mut stream, status, payload);
+        });
+        if handled {
+            return;
+        }
     }
 
     match (method, path) {
@@ -124,6 +134,11 @@ fn parse_article_filter(path: &str) -> ArticleListFilter {
     filter
 }
 
+const CORS_RESPONSE_HEADERS: &str = "\
+Access-Control-Allow-Origin: *\r\n\
+Access-Control-Allow-Headers: content-type\r\n\
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n";
+
 fn write_json(stream: &mut TcpStream, status: u16, body: &str) {
     let status_text = match status {
         200 => "OK",
@@ -133,7 +148,7 @@ fn write_json(stream: &mut TcpStream, status: u16, body: &str) {
         _ => "Internal Server Error",
     };
     let response = format!(
-        "HTTP/1.1 {status} {status_text}\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: content-type\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nContent-Length: {}\r\n\r\n{}",
+        "HTTP/1.1 {status} {status_text}\r\nContent-Type: application/json\r\n{CORS_RESPONSE_HEADERS}Content-Length: {}\r\n\r\n{}",
         body.len(),
         body
     );
@@ -143,7 +158,7 @@ fn write_json(stream: &mut TcpStream, status: u16, body: &str) {
 
 fn write_empty(stream: &mut TcpStream, status: u16) {
     let response = format!(
-        "HTTP/1.1 {status} No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: content-type\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nContent-Length: 0\r\n\r\n"
+        "HTTP/1.1 {status} No Content\r\n{CORS_RESPONSE_HEADERS}Content-Length: 0\r\n\r\n"
     );
 
     let _ = stream.write_all(response.as_bytes());

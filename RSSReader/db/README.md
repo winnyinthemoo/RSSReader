@@ -1,10 +1,19 @@
 # Database
 
-`db/` 保存 SQLite schema、migration 和初始化说明。
+SQLite schema and migrations for RSSReader.
 
-当前 Feed MVP 的第一版 migration 位于 `migrations/0001_create_feeds_and_articles.sql`，包含：
+## Migrations
 
-- `feeds`：订阅源信息。
-- `articles`：文章信息、阅读状态和清洗后的正文。
+| File | Description |
+|------|-------------|
+| `0001_create_feeds_and_articles.sql` | Feeds and articles (MVP) |
+| `0002_ai_providers_models.sql` | AI provider and model profiles |
+| `0003_tags.sql` | Tags and article-tag relations |
+| `0004_ai_results_usage.sql` | Agent settings, summaries, translations, usage events |
 
-后端应通过 repository 层访问数据库，前端不得直接读取 SQLite 或拼接 SQL。
+Migrations run in order on application startup via `backend/src/database/mod.rs`.
+
+## Notes
+
+- API keys are **not** stored in SQLite. See `backend/src/ai/secrets.rs`.
+- AI persisted outputs live in `article_summaries`, `article_translation_*`, and `llm_usage_events`.

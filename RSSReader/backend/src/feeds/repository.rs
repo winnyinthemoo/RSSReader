@@ -1,6 +1,6 @@
 use rusqlite::{params, Connection, OptionalExtension};
 
-use crate::database::INITIAL_MIGRATION;
+use crate::database::run_migrations;
 
 use super::{ArticleDetail, ArticleListFilter, ArticleListItem, FeedStatus, FeedSummary};
 
@@ -21,9 +21,7 @@ impl FeedRepository {
     }
 
     fn from_connection(connection: Connection) -> Result<Self, String> {
-        connection
-            .execute_batch(INITIAL_MIGRATION)
-            .map_err(|error| format!("Failed to run database migration: {error}"))?;
+        run_migrations(&connection)?;
         Ok(Self { connection })
     }
 

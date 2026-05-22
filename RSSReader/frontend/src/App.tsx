@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ArticleDetail, ArticleListItem, FeedSummary } from "../../shared/feed";
 import { ArticleList } from "./features/articles/components/ArticleList";
 import { FeedSidebar } from "./features/feeds/components/FeedSidebar";
+import { AiSettingsPage } from "./features/ai/components/AiSettingsPage";
 import { ReaderView } from "./features/reader/components/ReaderView";
 import {
   addFeed,
@@ -22,6 +23,7 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [isAdding, setIsAdding] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showAiSettings, setShowAiSettings] = useState(false);
 
   useEffect(() => {
     void loadFeedsAndArticles();
@@ -139,6 +141,15 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      <button
+        className="ai-fab"
+        type="button"
+        title="AI settings"
+        onClick={() => setShowAiSettings(true)}
+      >
+        AI
+      </button>
+
       <FeedSidebar
         feeds={activeFeeds}
         selectedFeedId={selectedFeedId}
@@ -160,6 +171,10 @@ export default function App() {
       <ReaderView article={selectedArticle} />
 
       {errorMessage ? <div className="toast" role="alert">{errorMessage}</div> : null}
+
+      {showAiSettings ? (
+        <AiSettingsPage onClose={() => setShowAiSettings(false)} />
+      ) : null}
     </main>
   );
 }

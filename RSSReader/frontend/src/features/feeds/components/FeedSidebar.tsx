@@ -1,5 +1,5 @@
 import { Plus, RefreshCw, Rss } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 
 import vortexLogo from "../../../assets/vortex-logo.png";
 import type { FeedSummary } from "../../../../../shared/feed";
@@ -24,14 +24,19 @@ export function FeedSidebar({
   onRefreshFeed,
 }: FeedSidebarProps) {
   const [url, setUrl] = useState("");
+  const [formHint, setFormHint] = useState<string | undefined>();
+  const urlInputRef = useRef<HTMLInputElement>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!url.trim()) {
+      setFormHint("请先在左侧输入框填写 RSS/Atom 地址，再点 + 或按 Enter。");
+      urlInputRef.current?.focus();
       return;
     }
 
-    await onAddFeed(url);
+    setFormHint(undefined);
+    await onAddFeed(url.trim());
     setUrl("");
   }
 
@@ -53,15 +58,23 @@ export function FeedSidebar({
 
       <form className="feed-form" onSubmit={handleSubmit}>
         <input
+          ref={urlInputRef}
           aria-label="Feed URL"
           value={url}
-          onChange={(event) => setUrl(event.target.value)}
+          onChange={(event) => {
+            setUrl(event.target.value);
+            if (formHint) {
+              setFormHint(undefined);
+            }
+          }}
           placeholder="https://example.com/feed.xml"
+          disabled={isAdding}
         />
         <button type="submit" title="Add feed" disabled={isAdding}>
           <Plus size={18} />
         </button>
       </form>
+      {formHint ? <p className="feed-form-hint">{formHint}</p> : null}
 
       <button
         className={`feed-item all-feeds ${selectedFeedId ? "" : "selected"}`}
