@@ -17,6 +17,10 @@ export interface FeedAddRequest {
   url: string;
 }
 
+export interface FeedDeleteRequest {
+  feedId: string;
+}
+
 export interface FeedRefreshRequest {
   feedId: string;
 }

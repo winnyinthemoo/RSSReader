@@ -295,6 +295,23 @@ impl FeedRepository {
                     .map_err(|error| format!("Failed to count unread articles: {error}"))
             })
     }
+
+    pub fn delete_feed(&self, feed_id: &str) -> Result<(), String> {
+        self.connection
+            .execute("DELETE FROM articles WHERE feed_id = ?1", params![feed_id])
+            .map_err(|error| format!("Failed to delete articles: {error}"))?;
+
+        let deleted = self
+            .connection
+            .execute("DELETE FROM feeds WHERE id = ?1", params![feed_id])
+            .map_err(|error| format!("Failed to delete feed: {error}"))?;
+
+        if deleted == 0 {
+            return Err("Feed not found".to_string());
+        }
+
+        Ok(())
+    }
 }
 
 fn count_for_feed(connection: &Connection, expression: &str, feed_id: &str) -> Result<usize, String> {

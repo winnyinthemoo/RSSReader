@@ -2,7 +2,8 @@ use std::sync::{Mutex, OnceLock};
 
 use super::{
     ArticleDetail, ArticleListFilter, ArticleListResult, ArticleMarkReadRequest, FeedAddRequest,
-    FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedService, FeedWithArticles,
+    FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedService,
+    FeedWithArticles,
 };
 
 static FEED_SERVICE: OnceLock<Mutex<FeedService>> = OnceLock::new();
@@ -17,6 +18,10 @@ pub fn feed_add(url: String) -> Result<FeedWithArticles, String> {
 
 pub fn feed_refresh(feed_id: String) -> Result<FeedRefreshResult, String> {
     with_service(|service| service.refresh_feed(FeedRefreshRequest { feed_id }))
+}
+
+pub fn feed_delete(feed_id: String) -> Result<(), String> {
+    with_service(|service| service.delete_feed(FeedDeleteRequest { feed_id }))
 }
 
 pub fn article_list(filter: ArticleListFilter) -> ArticleListResult {

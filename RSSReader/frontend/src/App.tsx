@@ -7,6 +7,7 @@ import { AiSettingsPage } from "./features/ai/components/AiSettingsPage";
 import { ReaderView } from "./features/reader/components/ReaderView";
 import {
   addFeed,
+  deleteFeed,
   getArticle,
   listArticles,
   listFeeds,
@@ -23,6 +24,7 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [isAdding, setIsAdding] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showAiSettings, setShowAiSettings] = useState(false);
 
   useEffect(() => {
@@ -139,6 +141,24 @@ export default function App() {
     }
   }
 
+  async function handleDeleteFeed(feedId: string) {
+    try {
+      setIsDeleting(true);
+      await deleteFeed({ feedId });
+      setFeeds((currentFeeds) => currentFeeds.filter((feed) => feed.id !== feedId));
+      if (selectedFeedId === feedId) {
+        setSelectedFeedId(undefined);
+        setSelectedArticle(undefined);
+        setSelectedArticleId(undefined);
+      }
+      setErrorMessage(undefined);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   return (
     <main className="app-shell">
       <button
@@ -155,9 +175,11 @@ export default function App() {
         selectedFeedId={selectedFeedId}
         isAdding={isAdding}
         isRefreshing={isRefreshing}
+        isDeleting={isDeleting}
         onSelectFeed={setSelectedFeedId}
         onAddFeed={handleAddFeed}
         onRefreshFeed={handleRefreshFeed}
+        onDeleteFeed={handleDeleteFeed}
       />
 
       <ArticleList

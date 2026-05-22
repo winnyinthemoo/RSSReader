@@ -1,4 +1,4 @@
-import { Plus, RefreshCw, Rss } from "lucide-react";
+import { Plus, RefreshCw, Rss, Trash2 } from "lucide-react";
 import { FormEvent, useRef, useState } from "react";
 
 import vortexLogo from "../../../assets/vortex-logo.png";
@@ -9,9 +9,11 @@ interface FeedSidebarProps {
   selectedFeedId?: string;
   isAdding: boolean;
   isRefreshing: boolean;
+  isDeleting: boolean;
   onSelectFeed: (feedId?: string) => void;
   onAddFeed: (url: string) => Promise<void>;
   onRefreshFeed: (feedId: string) => Promise<void>;
+  onDeleteFeed: (feedId: string) => Promise<void>;
 }
 
 export function FeedSidebar({
@@ -19,9 +21,11 @@ export function FeedSidebar({
   selectedFeedId,
   isAdding,
   isRefreshing,
+  isDeleting,
   onSelectFeed,
   onAddFeed,
   onRefreshFeed,
+  onDeleteFeed,
 }: FeedSidebarProps) {
   const [url, setUrl] = useState("");
   const [formHint, setFormHint] = useState<string | undefined>();
@@ -93,21 +97,31 @@ export function FeedSidebar({
 
       <div className="feed-list">
         {feeds.map((feed) => (
-          <button
-            className={`feed-item ${selectedFeedId === feed.id ? "selected" : ""}`}
-            type="button"
-            key={feed.id}
-            onClick={() => onSelectFeed(feed.id)}
-          >
-            <span className="feed-icon">
-              <Rss size={18} />
-            </span>
-            <span className="feed-main">
-              <span className="feed-title">{feed.title}</span>
-              <span className="feed-url">{feed.siteUrl ?? feed.url}</span>
-            </span>
-            <span className="unread-count">{feed.unreadCount}</span>
-          </button>
+          <div className="feed-item-row" key={feed.id}>
+            <button
+              className={`feed-item ${selectedFeedId === feed.id ? "selected" : ""}`}
+              type="button"
+              onClick={() => onSelectFeed(feed.id)}
+            >
+              <span className="feed-icon">
+                <Rss size={18} />
+              </span>
+              <span className="feed-main">
+                <span className="feed-title">{feed.title}</span>
+                <span className="feed-url">{feed.siteUrl ?? feed.url}</span>
+              </span>
+              <span className="unread-count">{feed.unreadCount}</span>
+            </button>
+            <button
+              className="feed-delete-button"
+              type="button"
+              title="Delete feed"
+              disabled={isDeleting}
+              onClick={(e) => { e.stopPropagation(); onDeleteFeed(feed.id); }}
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
         ))}
       </div>
 

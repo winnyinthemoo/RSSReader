@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import type { SummaryDetailLevel } from "../../../../../shared/ai";
 import { getArticleSummary, startArticleSummary } from "../../../services/aiService";
@@ -105,7 +107,7 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
           </select>
         </label>
         <button
-          className="secondary-button"
+          className="secondary-button summary-generate-btn"
           type="button"
           disabled={disabled || !articleId || isBusy}
           onClick={() => void handleGenerate()}
@@ -123,7 +125,9 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
         ) : errorMessage ? (
           <p className="summary-error">{errorMessage}</p>
         ) : content ? (
-          <div className="summary-markdown">{content}</div>
+          <div className="summary-markdown">
+            <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
+          </div>
         ) : (
           <p className="muted">No summary yet. Click Generate.</p>
         )}

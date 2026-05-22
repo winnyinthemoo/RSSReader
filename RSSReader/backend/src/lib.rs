@@ -10,6 +10,6 @@ pub use ai::{
 };
 pub use feeds::{
     ArticleDetail, ArticleListFilter, ArticleListItem, ArticleListResult, ArticleMarkReadRequest,
-    FeedAddRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedService, FeedStatus,
+    FeedAddRequest, FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedService, FeedStatus,
     FeedSummary, FeedWithArticles,
 };
