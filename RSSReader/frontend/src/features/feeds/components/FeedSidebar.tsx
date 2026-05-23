@@ -1,49 +1,106 @@
-import { Plus, RefreshCw, Rss, Trash2 } from "lucide-react";
-import { FormEvent, useRef, useState } from "react";
+import {
+  Download,
+  FolderOpen,
+  Plus,
+  RefreshCw,
+  Rss,
+  Star,
+  Tags,
+  Trash2,
+  X,
+} from "lucide-react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 import vortexLogo from "../../../assets/vortex-logo.png";
-import type { FeedSummary } from "../../../../../shared/feed";
+import type { FeedAddRequest, FeedSummary, TagSummary } from "../../../../../shared/feed";
+
+type SidebarMode = "feeds" | "tags";
+type SidebarSelection =
+  | { type: "all" }
+  | { type: "feed"; feedId: string }
+  | { type: "starred" }
+  | { type: "tag"; tagId: string };
 
 interface FeedSidebarProps {
   feeds: FeedSummary[];
-  selectedFeedId?: string;
+  tags: TagSummary[];
+  starredCount: number;
+  selection: SidebarSelection;
+  mode: SidebarMode;
   isAdding: boolean;
   isRefreshing: boolean;
   isDeleting: boolean;
-  onSelectFeed: (feedId?: string) => void;
-  onAddFeed: (url: string) => Promise<void>;
+  onModeChange: (mode: SidebarMode) => void;
+  onSelectAll: () => void;
+  onSelectFeed: (feedId: string) => void;
+  onSelectStarred: () => void;
+  onSelectTag: (tagId: string) => void;
+  onAddFeed: (request: FeedAddRequest) => Promise<void>;
+  onExportOpml: () => void;
   onRefreshFeed: (feedId: string) => Promise<void>;
   onDeleteFeed: (feedId: string) => Promise<void>;
 }
 
 export function FeedSidebar({
   feeds,
-  selectedFeedId,
+  tags,
+  starredCount,
+  selection,
+  mode,
   isAdding,
   isRefreshing,
   isDeleting,
+  onModeChange,
+  onSelectAll,
   onSelectFeed,
+  onSelectStarred,
+  onSelectTag,
   onAddFeed,
+  onExportOpml,
   onRefreshFeed,
   onDeleteFeed,
 }: FeedSidebarProps) {
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [formHint, setFormHint] = useState<string | undefined>();
-  const urlInputRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isAddDialogOpen) {
+      window.setTimeout(() => nameInputRef.current?.focus(), 0);
+    }
+  }, [isAddDialogOpen]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!url.trim()) {
-      setFormHint("请先在左侧输入框填写 RSS/Atom 地址，再点 + 或按 Enter。");
-      urlInputRef.current?.focus();
+    const trimmedUrl = url.trim();
+    const trimmedName = name.trim();
+
+    if (!trimmedUrl) {
+      setFormHint("请输入 RSS/Atom 地址。");
       return;
     }
 
     setFormHint(undefined);
-    await onAddFeed(url.trim());
+    await onAddFeed({
+      url: trimmedUrl,
+      name: trimmedName || undefined,
+    });
+    setName("");
     setUrl("");
+    setIsAddDialogOpen(false);
   }
 
+  function handleCloseDialog() {
+    if (isAdding) {
+      return;
+    }
+    setIsAddDialogOpen(false);
+    setFormHint(undefined);
+  }
+
+  const selectedFeedId = selection.type === "feed" ? selection.feedId : undefined;
   const totalUnread = feeds.reduce((total, feed) => total + feed.unreadCount, 0);
 
   return (
@@ -60,33 +117,45 @@ export function FeedSidebar({
         </div>
       </div>
 
-      <form className="feed-form" onSubmit={handleSubmit}>
-        <input
-          ref={urlInputRef}
-          aria-label="Feed URL"
-          value={url}
-          onChange={(event) => {
-            setUrl(event.target.value);
-            if (formHint) {
-              setFormHint(undefined);
-            }
-          }}
-          placeholder="https://example.com/feed.xml"
-          disabled={isAdding}
-        />
-        <button type="submit" title="Add feed" disabled={isAdding}>
-          <Plus size={18} />
+      <div className="sidebar-mode-tabs" role="tablist" aria-label="Sidebar view">
+        <button
+          className={mode === "feeds" ? "active" : ""}
+          type="button"
+          role="tab"
+          aria-selected={mode === "feeds"}
+          onClick={() => onModeChange("feeds")}
+        >
+          <Rss size={16} />
+          <span>Feed</span>
         </button>
-      </form>
-      {formHint ? <p className="feed-form-hint">{formHint}</p> : null}
+        <button
+          className={mode === "tags" ? "active" : ""}
+          type="button"
+          role="tab"
+          aria-selected={mode === "tags"}
+          onClick={() => onModeChange("tags")}
+        >
+          <Tags size={16} />
+          <span>Tag</span>
+        </button>
+      </div>
+
+      <div className="sidebar-actions" aria-label="Feed actions">
+        <button type="button" title="Add feed" onClick={() => setIsAddDialogOpen(true)}>
+          <Plus size={16} />
+        </button>
+        <button type="button" title="Export OPML" disabled={feeds.length === 0} onClick={onExportOpml}>
+          <Download size={16} />
+        </button>
+      </div>
 
       <button
-        className={`feed-item all-feeds ${selectedFeedId ? "" : "selected"}`}
+        className={`feed-item all-feeds ${selection.type === "all" ? "selected" : ""}`}
         type="button"
-        onClick={() => onSelectFeed(undefined)}
+        onClick={onSelectAll}
       >
         <span className="feed-icon">
-          <Rss size={18} />
+          <FolderOpen size={18} />
         </span>
         <span className="feed-main">
           <span className="feed-title">All feeds</span>
@@ -95,35 +164,79 @@ export function FeedSidebar({
         <span className="unread-count">{totalUnread}</span>
       </button>
 
-      <div className="feed-list">
-        {feeds.map((feed) => (
-          <div className="feed-item-row" key={feed.id}>
-            <button
-              className={`feed-item ${selectedFeedId === feed.id ? "selected" : ""}`}
-              type="button"
-              onClick={() => onSelectFeed(feed.id)}
-            >
-              <span className="feed-icon">
-                <Rss size={18} />
-              </span>
-              <span className="feed-main">
-                <span className="feed-title">{feed.title}</span>
-                <span className="feed-url">{feed.siteUrl ?? feed.url}</span>
-              </span>
-              <span className="unread-count">{feed.unreadCount}</span>
-            </button>
-            <button
-              className="feed-delete-button"
-              type="button"
-              title="Delete feed"
-              disabled={isDeleting}
-              onClick={(e) => { e.stopPropagation(); onDeleteFeed(feed.id); }}
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
-        ))}
-      </div>
+      <button
+        className={`feed-item starred-feeds ${selection.type === "starred" ? "selected" : ""}`}
+        type="button"
+        onClick={onSelectStarred}
+      >
+        <span className="feed-icon starred-icon">
+          <Star size={17} fill="currentColor" />
+        </span>
+        <span className="feed-main">
+          <span className="feed-title">Starred</span>
+          <span className="feed-url">Saved articles</span>
+        </span>
+        <span className="unread-count">{starredCount}</span>
+      </button>
+
+      {mode === "feeds" ? (
+        <div className="feed-list">
+          {feeds.map((feed) => (
+            <div className="feed-item-row" key={feed.id}>
+              <button
+                className={`feed-item ${selectedFeedId === feed.id ? "selected" : ""}`}
+                type="button"
+                onClick={() => onSelectFeed(feed.id)}
+              >
+                <span className="feed-icon">
+                  <Rss size={18} />
+                </span>
+                <span className="feed-main">
+                  <span className="feed-title">{feed.title}</span>
+                  <span className="feed-url">{feed.siteUrl ?? feed.url}</span>
+                </span>
+                <span className="unread-count">{feed.unreadCount}</span>
+              </button>
+              <button
+                className="feed-delete-button"
+                type="button"
+                title="Delete feed"
+                disabled={isDeleting}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void onDeleteFeed(feed.id);
+                }}
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="feed-list">
+          {tags.length === 0 ? (
+            <div className="sidebar-empty">No tags yet.</div>
+          ) : (
+            tags.map((tag) => (
+              <button
+                className={`feed-item ${selection.type === "tag" && selection.tagId === tag.id ? "selected" : ""}`}
+                type="button"
+                key={tag.id}
+                onClick={() => onSelectTag(tag.id)}
+              >
+                <span className="feed-icon tag-icon">
+                  <Tags size={17} />
+                </span>
+                <span className="feed-main">
+                  <span className="feed-title">{tag.name}</span>
+                  <span className="feed-url">Tagged articles</span>
+                </span>
+                <span className="unread-count">{tag.articleCount}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
 
       <button
         className="refresh-button"
@@ -134,6 +247,63 @@ export function FeedSidebar({
         <RefreshCw size={17} />
         <span>Refresh selected</span>
       </button>
+
+      {isAddDialogOpen ? (
+        <div className="modal-backdrop" role="presentation" onMouseDown={handleCloseDialog}>
+          <form
+            className="add-feed-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add feed"
+            onSubmit={handleSubmit}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="dialog-header">
+              <h2>Add Feed</h2>
+              <button type="button" title="Close" onClick={handleCloseDialog}>
+                <X size={17} />
+              </button>
+            </div>
+
+            <label className="dialog-field">
+              <span>Name</span>
+              <input
+                ref={nameInputRef}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Optional display name"
+                disabled={isAdding}
+              />
+            </label>
+
+            <label className="dialog-field">
+              <span>URL</span>
+              <input
+                value={url}
+                onChange={(event) => {
+                  setUrl(event.target.value);
+                  if (formHint) {
+                    setFormHint(undefined);
+                  }
+                }}
+                placeholder="https://example.com/feed.xml"
+                disabled={isAdding}
+              />
+            </label>
+
+            {formHint ? <p className="feed-form-hint">{formHint}</p> : null}
+
+            <div className="dialog-actions">
+              <button className="secondary-button" type="button" onClick={handleCloseDialog}>
+                Cancel
+              </button>
+              <button className="primary-button" type="submit" disabled={isAdding}>
+                Add
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </aside>
   );
 }

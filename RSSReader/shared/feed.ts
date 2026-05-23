@@ -15,6 +15,7 @@ export interface FeedSummary {
 
 export interface FeedAddRequest {
   url: string;
+  name?: string;
 }
 
 export interface FeedDeleteRequest {
@@ -30,9 +31,22 @@ export interface ArticleMarkReadRequest {
   isRead: boolean;
 }
 
+export interface ArticleMarkFavoriteRequest {
+  articleId: string;
+  isFavorite: boolean;
+}
+
 export interface ArticleListFilter {
   feedId?: string;
   unreadOnly?: boolean;
+  favoritesOnly?: boolean;
+  tagId?: string;
+}
+
+export interface TagSummary {
+  id: string;
+  name: string;
+  articleCount: number;
 }
 
 export interface ArticleListItem {
@@ -59,6 +73,10 @@ export interface FeedWithArticles {
 
 export interface FeedListResult {
   feeds: FeedSummary[];
+}
+
+export interface TagListResult {
+  tags: TagSummary[];
 }
 
 export interface ArticleListResult {

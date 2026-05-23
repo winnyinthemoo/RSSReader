@@ -1,7 +1,8 @@
 use super::{
     fetch_and_parse_feed, ArticleDetail, ArticleListFilter, ArticleListItem,
-    ArticleMarkReadRequest, FeedAddRequest, FeedDeleteRequest, FeedListResult, FeedRefreshRequest,
-    FeedRefreshResult, FeedRepository, FeedStatus, FeedWithArticles,
+    ArticleMarkFavoriteRequest, ArticleMarkReadRequest, FeedAddRequest, FeedDeleteRequest,
+    FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedRepository, FeedStatus,
+    FeedWithArticles, TagListResult,
 };
 
 pub struct FeedService {
@@ -33,23 +34,33 @@ impl FeedService {
                 articles: self.repository.list_articles(ArticleListFilter {
                     feed_id: Some(existing.id),
                     unread_only: false,
+                    favorites_only: false,
+                    tag_id: None,
                 })?,
             });
         }
 
         let parsed = fetch_and_parse_feed(&normalized_url)?;
-        self.repository.save_feed(&parsed.feed)?;
+        let mut feed = parsed.feed;
+        if let Some(name) = request.name.as_deref().map(str::trim).filter(|name| !name.is_empty())
+        {
+            feed.title = name.to_string();
+        }
+
+        self.repository.save_feed(&feed)?;
         for article in &parsed.articles {
             self.repository.save_article(article)?;
         }
 
         let feed = self
             .repository
-            .get_feed(&parsed.feed.id)?
-            .unwrap_or(parsed.feed);
+            .get_feed(&feed.id)?
+            .unwrap_or(feed);
         let articles = self.repository.list_articles(ArticleListFilter {
             feed_id: Some(feed.id.clone()),
             unread_only: false,
+            favorites_only: false,
+            tag_id: None,
         })?;
 
         Ok(FeedWithArticles { feed, articles })
@@ -111,6 +122,20 @@ impl FeedService {
     pub fn mark_article_read(&mut self, request: ArticleMarkReadRequest) -> Result<(), String> {
         self.repository
             .mark_article_read(&request.article_id, request.is_read)
+    }
+
+    pub fn mark_article_favorite(
+        &mut self,
+        request: ArticleMarkFavoriteRequest,
+    ) -> Result<(), String> {
+        self.repository
+            .mark_article_favorite(&request.article_id, request.is_favorite)
+    }
+
+    pub fn list_tags(&self) -> TagListResult {
+        TagListResult {
+            tags: self.repository.list_tags().unwrap_or_default(),
+        }
     }
 
     pub fn delete_feed(&mut self, request: FeedDeleteRequest) -> Result<(), String> {
@@ -178,6 +203,8 @@ mod tests {
         let articles = service.list_articles(ArticleListFilter {
             feed_id: Some(feeds[0].id.clone()),
             unread_only: false,
+            favorites_only: false,
+            tag_id: None,
         });
 
         assert_eq!(feeds.len(), 1);

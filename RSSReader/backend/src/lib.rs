@@ -9,7 +9,8 @@ pub use ai::{
     UsageReportResult,
 };
 pub use feeds::{
-    ArticleDetail, ArticleListFilter, ArticleListItem, ArticleListResult, ArticleMarkReadRequest,
-    FeedAddRequest, FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedService, FeedStatus,
-    FeedSummary, FeedWithArticles,
+    ArticleDetail, ArticleListFilter, ArticleListItem, ArticleListResult,
+    ArticleMarkFavoriteRequest, ArticleMarkReadRequest, FeedAddRequest, FeedDeleteRequest,
+    FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedService, FeedStatus, FeedSummary,
+    FeedWithArticles, TagListResult, TagSummary,
 };

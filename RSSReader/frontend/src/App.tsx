@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type { ArticleDetail, ArticleListItem, FeedSummary } from "../../shared/feed";
+import type {
+  ArticleDetail,
+  ArticleListFilter,
+  ArticleListItem,
+  FeedAddRequest,
+  FeedSummary,
+  TagSummary,
+} from "../../shared/feed";
 import { ArticleList } from "./features/articles/components/ArticleList";
 import { FeedSidebar } from "./features/feeds/components/FeedSidebar";
 import { AiSettingsPage } from "./features/ai/components/AiSettingsPage";
@@ -11,14 +18,26 @@ import {
   getArticle,
   listArticles,
   listFeeds,
+  listTags,
+  markArticleFavorite,
   markArticleRead,
   refreshFeed,
 } from "./services/feedService";
 
+type SidebarMode = "feeds" | "tags";
+type SidebarSelection =
+  | { type: "all" }
+  | { type: "feed"; feedId: string }
+  | { type: "starred" }
+  | { type: "tag"; tagId: string };
+
 export default function App() {
   const [feeds, setFeeds] = useState<FeedSummary[]>([]);
+  const [tags, setTags] = useState<TagSummary[]>([]);
   const [articles, setArticles] = useState<ArticleListItem[]>([]);
-  const [selectedFeedId, setSelectedFeedId] = useState<string | undefined>();
+  const [starredCount, setStarredCount] = useState(0);
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>("feeds");
+  const [selection, setSelection] = useState<SidebarSelection>({ type: "all" });
   const [selectedArticle, setSelectedArticle] = useState<ArticleDetail | undefined>();
   const [selectedArticleId, setSelectedArticleId] = useState<string | undefined>();
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
@@ -28,27 +47,32 @@ export default function App() {
   const [showAiSettings, setShowAiSettings] = useState(false);
 
   useEffect(() => {
-    void loadFeedsAndArticles();
+    void loadFeedsTagsAndArticles();
   }, []);
 
   useEffect(() => {
-    void loadArticles(selectedFeedId);
-  }, [selectedFeedId]);
+    void loadArticles(selection);
+  }, [selection]);
 
   const activeFeeds = useMemo(
     () => feeds.filter((feed) => feed.status === "active"),
     [feeds],
   );
 
-  async function loadFeedsAndArticles() {
+  async function loadFeedsTagsAndArticles() {
     try {
-      const [feedResult, articleResult] = await Promise.all([
+      const filter = filterFromSelection(selection);
+      const [feedResult, tagResult, articleResult, starredResult] = await Promise.all([
         listFeeds(),
-        listArticles({ feedId: selectedFeedId }),
+        listTags(),
+        listArticles(filter),
+        listArticles({ favoritesOnly: true }),
       ]);
 
       setFeeds(feedResult.feeds);
+      setTags(tagResult.tags);
       setArticles(articleResult.articles);
+      setStarredCount(starredResult.articles.length);
       setErrorMessage(undefined);
 
       if (!selectedArticleId && articleResult.articles[0]) {
@@ -59,9 +83,9 @@ export default function App() {
     }
   }
 
-  async function loadArticles(feedId?: string) {
+  async function loadArticles(nextSelection: SidebarSelection) {
     try {
-      const result = await listArticles({ feedId });
+      const result = await listArticles(filterFromSelection(nextSelection));
       setArticles(result.articles);
       setErrorMessage(undefined);
 
@@ -79,12 +103,13 @@ export default function App() {
     }
   }
 
-  async function handleAddFeed(url: string) {
+  async function handleAddFeed(request: FeedAddRequest) {
     try {
       setIsAdding(true);
-      const result = await addFeed({ url });
+      const result = await addFeed(request);
       setFeeds((currentFeeds) => upsertFeed(currentFeeds, result.feed));
-      setSelectedFeedId(result.feed.id);
+      setSelection({ type: "feed", feedId: result.feed.id });
+      setSidebarMode("feeds");
       setArticles(result.articles);
       if (result.articles[0]) {
         await handleSelectArticle(result.articles[0].id);
@@ -92,6 +117,7 @@ export default function App() {
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
+      throw error;
     } finally {
       setIsAdding(false);
     }
@@ -102,7 +128,7 @@ export default function App() {
       setIsRefreshing(true);
       const result = await refreshFeed({ feedId });
       setFeeds((currentFeeds) => upsertFeed(currentFeeds, result.feed));
-      const articleResult = await listArticles({ feedId: selectedFeedId });
+      const articleResult = await listArticles(filterFromSelection(selection));
       setArticles(articleResult.articles);
       if (result.newArticles[0]) {
         await handleSelectArticle(result.newArticles[0].id);
@@ -141,13 +167,33 @@ export default function App() {
     }
   }
 
+  async function handleToggleFavorite(articleId: string, isFavorite: boolean) {
+    try {
+      await markArticleFavorite({ articleId, isFavorite });
+      setArticles((currentArticles) =>
+        currentArticles
+          .map((article) =>
+            article.id === articleId ? { ...article, isFavorite } : article,
+          )
+          .filter((article) => selection.type !== "starred" || article.isFavorite),
+      );
+      setStarredCount((count) => Math.max(count + (isFavorite ? 1 : -1), 0));
+      setSelectedArticle((currentArticle) =>
+        currentArticle?.id === articleId ? { ...currentArticle, isFavorite } : currentArticle,
+      );
+      setErrorMessage(undefined);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
   async function handleDeleteFeed(feedId: string) {
     try {
       setIsDeleting(true);
       await deleteFeed({ feedId });
       setFeeds((currentFeeds) => currentFeeds.filter((feed) => feed.id !== feedId));
-      if (selectedFeedId === feedId) {
-        setSelectedFeedId(undefined);
+      if (selection.type === "feed" && selection.feedId === feedId) {
+        setSelection({ type: "all" });
         setSelectedArticle(undefined);
         setSelectedArticleId(undefined);
       }
@@ -156,6 +202,15 @@ export default function App() {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setIsDeleting(false);
+    }
+  }
+
+  function handleExportOpml() {
+    try {
+      exportFeedsAsOpml(activeFeeds);
+      setErrorMessage(undefined);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
     }
   }
 
@@ -172,12 +227,20 @@ export default function App() {
 
       <FeedSidebar
         feeds={activeFeeds}
-        selectedFeedId={selectedFeedId}
+        tags={tags}
+        starredCount={starredCount}
+        selection={selection}
+        mode={sidebarMode}
         isAdding={isAdding}
         isRefreshing={isRefreshing}
         isDeleting={isDeleting}
-        onSelectFeed={setSelectedFeedId}
+        onModeChange={setSidebarMode}
+        onSelectAll={() => setSelection({ type: "all" })}
+        onSelectFeed={(feedId) => setSelection({ type: "feed", feedId })}
+        onSelectStarred={() => setSelection({ type: "starred" })}
+        onSelectTag={(tagId) => setSelection({ type: "tag", tagId })}
         onAddFeed={handleAddFeed}
+        onExportOpml={handleExportOpml}
         onRefreshFeed={handleRefreshFeed}
         onDeleteFeed={handleDeleteFeed}
       />
@@ -185,9 +248,11 @@ export default function App() {
       <ArticleList
         articles={articles}
         feeds={feeds}
+        tags={tags}
         selectedArticleId={selectedArticleId}
-        selectedFeedId={selectedFeedId}
+        selection={selection}
         onSelectArticle={handleSelectArticle}
+        onToggleFavorite={handleToggleFavorite}
       />
 
       <ReaderView article={selectedArticle} />
@@ -201,6 +266,20 @@ export default function App() {
   );
 }
 
+function filterFromSelection(selection: SidebarSelection): ArticleListFilter {
+  switch (selection.type) {
+    case "feed":
+      return { feedId: selection.feedId };
+    case "starred":
+      return { favoritesOnly: true };
+    case "tag":
+      return { tagId: selection.tagId };
+    case "all":
+    default:
+      return {};
+  }
+}
+
 function upsertFeed(feeds: FeedSummary[], nextFeed: FeedSummary) {
   const existingIndex = feeds.findIndex((feed) => feed.id === nextFeed.id);
   if (existingIndex === -1) {
@@ -208,6 +287,52 @@ function upsertFeed(feeds: FeedSummary[], nextFeed: FeedSummary) {
   }
 
   return feeds.map((feed) => (feed.id === nextFeed.id ? nextFeed : feed));
+}
+
+function exportFeedsAsOpml(feeds: FeedSummary[]) {
+  if (feeds.length === 0) {
+    throw new Error("No feeds to export.");
+  }
+
+  const now = new Date().toUTCString();
+  const outlines = feeds
+    .map((feed) => {
+      const title = escapeXml(feed.title);
+      const xmlUrl = escapeXml(feed.url);
+      const htmlUrl = escapeXml(feed.siteUrl ?? feed.url);
+      return `    <outline text="${title}" title="${title}" type="rss" xmlUrl="${xmlUrl}" htmlUrl="${htmlUrl}" />`;
+    })
+    .join("\n");
+
+  const opml = `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>Vortex subscriptions</title>
+    <dateCreated>${escapeXml(now)}</dateCreated>
+  </head>
+  <body>
+${outlines}
+  </body>
+</opml>
+`;
+
+  const blob = new Blob([opml], { type: "text/x-opml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `vortex-subscriptions-${new Date().toISOString().slice(0, 10)}.opml`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function getErrorMessage(error: unknown) {

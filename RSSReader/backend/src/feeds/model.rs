@@ -21,6 +21,7 @@ pub struct FeedSummary {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FeedAddRequest {
     pub url: String,
+    pub name: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -39,10 +40,25 @@ pub struct ArticleMarkReadRequest {
     pub is_read: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ArticleMarkFavoriteRequest {
+    pub article_id: String,
+    pub is_favorite: bool,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ArticleListFilter {
     pub feed_id: Option<String>,
     pub unread_only: bool,
+    pub favorites_only: bool,
+    pub tag_id: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TagSummary {
+    pub id: String,
+    pub name: String,
+    pub article_count: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -105,6 +121,11 @@ pub struct FeedWithArticles {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FeedListResult {
     pub feeds: Vec<FeedSummary>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TagListResult {
+    pub tags: Vec<TagSummary>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -3,9 +3,10 @@ use std::net::{TcpListener, TcpStream};
 
 use rssreader_backend::ai::http::try_handle as try_handle_ai;
 use rssreader_backend::feeds::{
-    article_get, article_list, article_mark_read, feed_add, feed_delete, feed_list, feed_refresh,
-    ArticleDetail, ArticleListFilter, ArticleListItem, ArticleListResult, FeedListResult,
-    FeedRefreshResult, FeedStatus, FeedSummary, FeedWithArticles,
+    article_get, article_list, article_mark_favorite, article_mark_read, feed_add, feed_delete,
+    feed_list, feed_refresh, tag_list, ArticleDetail, ArticleListFilter, ArticleListItem,
+    ArticleListResult, FeedListResult, FeedRefreshResult, FeedStatus, FeedSummary,
+    FeedWithArticles, TagListResult, TagSummary,
 };
 
 fn main() -> std::io::Result<()> {
@@ -65,13 +66,15 @@ fn handle_connection(mut stream: TcpStream) {
 
     match (method, path) {
         ("GET", "/api/feeds") => write_json(&mut stream, 200, &feed_list_json(&feed_list())),
+        ("GET", "/api/tags") => write_json(&mut stream, 200, &tag_list_json(&tag_list())),
         ("POST", "/api/feeds") => {
             let Some(url) = json_string_field(body, "url") else {
                 write_json(&mut stream, 400, &error_json("Missing url"));
                 return;
             };
+            let name = json_string_field(body, "name").filter(|name| !name.trim().is_empty());
 
-            match feed_add(url) {
+            match feed_add(url, name) {
                 Ok(result) => write_json(&mut stream, 200, &feed_with_articles_json(&result)),
                 Err(message) => write_json(&mut stream, 400, &error_json(&message)),
             }
@@ -110,6 +113,18 @@ fn handle_connection(mut stream: TcpStream) {
                 Err(message) => write_json(&mut stream, 404, &error_json(&message)),
             }
         }
+        ("POST", "/api/articles/mark-favorite") => {
+            let Some(article_id) = json_string_field(body, "articleId") else {
+                write_json(&mut stream, 400, &error_json("Missing articleId"));
+                return;
+            };
+            let is_favorite = json_bool_field(body, "isFavorite").unwrap_or(true);
+
+            match article_mark_favorite(article_id, is_favorite) {
+                Ok(()) => write_json(&mut stream, 200, "{\"ok\":true}"),
+                Err(message) => write_json(&mut stream, 404, &error_json(&message)),
+            }
+        }
         ("GET", path) if path.starts_with("/api/articles/") => {
             let article_id = url_decode(path.trim_start_matches("/api/articles/"));
             match article_get(article_id) {
@@ -137,6 +152,8 @@ fn parse_article_filter(path: &str) -> ArticleListFilter {
             match key {
                 "feedId" if !value.is_empty() => filter.feed_id = Some(url_decode(value)),
                 "unreadOnly" => filter.unread_only = value == "true",
+                "favoritesOnly" => filter.favorites_only = value == "true",
+                "tagId" if !value.is_empty() => filter.tag_id = Some(url_decode(value)),
                 _ => {}
             }
         }
@@ -182,6 +199,18 @@ fn feed_list_json(result: &FeedListResult) -> String {
             .feeds
             .iter()
             .map(feed_json)
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn tag_list_json(result: &TagListResult) -> String {
+    format!(
+        "{{\"tags\":[{}]}}",
+        result
+            .tags
+            .iter()
+            .map(tag_json)
             .collect::<Vec<_>>()
             .join(",")
     )
@@ -241,6 +270,15 @@ fn feed_json(feed: &FeedSummary) -> String {
             FeedStatus::Error => "error",
         }),
         json_option(&feed.error_message)
+    )
+}
+
+fn tag_json(tag: &TagSummary) -> String {
+    format!(
+        "{{\"id\":{},\"name\":{},\"articleCount\":{}}}",
+        json_string(&tag.id),
+        json_string(&tag.name),
+        tag.article_count
     )
 }
 

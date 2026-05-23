@@ -119,30 +119,6 @@ h2 {
   font-weight: 700;
 }
 
-.feed-form {
-  display: grid;
-  grid-template-columns: 1fr 34px;
-  gap: 6px;
-}
-
-.feed-form input {
-  width: 100%;
-  min-width: 0;
-  height: 36px;
-  border: 1px solid #cbd7cc;
-  border-radius: 8px;
-  padding: 0 11px;
-  color: #20221f;
-  background: #fbfcfa;
-  outline: none;
-}
-
-.feed-form input:focus {
-  border-color: #2f6f7c;
-  box-shadow: 0 0 0 3px rgba(47, 111, 124, 0.15);
-}
-
-.feed-form button,
 .refresh-button {
   display: inline-flex;
   align-items: center;
@@ -153,11 +129,6 @@ h2 {
   background: #2f6f7c;
 }
 
-.feed-form button {
-  height: 36px;
-}
-
-.feed-form button:disabled,
 .refresh-button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
@@ -168,6 +139,66 @@ h2 {
   color: #8a4a32;
   font-size: 0.78rem;
   line-height: 1.35;
+}
+
+.sidebar-mode-tabs,
+.sidebar-actions {
+  display: grid;
+  gap: 6px;
+}
+
+.sidebar-mode-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 3px;
+  border: 1px solid #d5ddd4;
+  border-radius: 8px;
+  background: #f3f6f2;
+}
+
+.sidebar-mode-tabs button,
+.sidebar-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  border-radius: 7px;
+  font-size: 0.82rem;
+}
+
+.sidebar-mode-tabs button {
+  height: 32px;
+  border: 0;
+  color: #59645d;
+  background: transparent;
+  font-weight: 700;
+}
+
+.sidebar-mode-tabs button.active {
+  color: #1f3e45;
+  background: #ffffff;
+  box-shadow: 0 1px 5px rgba(39, 52, 44, 0.08);
+}
+
+.sidebar-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sidebar-actions button {
+  height: 34px;
+  border: 1px solid #c8d4c9;
+  color: #2f6f7c;
+  background: #fbfcfa;
+}
+
+.sidebar-actions button:hover {
+  border-color: #93b6ad;
+  background: #f4faf6;
+}
+
+.sidebar-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .feed-list {
@@ -209,6 +240,16 @@ h2 {
   border-radius: 8px;
   color: #b54a2e;
   background: #f4d8cf;
+}
+
+.starred-icon {
+  color: #9b6a12;
+  background: #f5e6bd;
+}
+
+.tag-icon {
+  color: #2f6f7c;
+  background: #d9eceb;
 }
 
 .feed-main {
@@ -330,6 +371,22 @@ h2 {
 .article-title-line svg {
   flex: 0 0 auto;
   color: #c28f35;
+}
+
+.article-star-button {
+  display: grid;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  color: #8f9a8f;
+}
+
+.article-star-button:hover,
+.article-star-button.active {
+  color: #c28f35;
+  background: #fff5da;
 }
 
 .article-excerpt {
@@ -467,6 +524,90 @@ h2 {
 .empty-panel p {
   margin: 0;
   line-height: 1.6;
+}
+
+.sidebar-empty {
+  padding: 18px 10px;
+  color: #687064;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(28, 38, 32, 0.38);
+}
+
+.add-feed-dialog {
+  display: grid;
+  gap: 14px;
+  width: min(420px, calc(100vw - 36px));
+  border: 1px solid #d5ddd4;
+  border-radius: 10px;
+  padding: 18px;
+  background: #fbfcfa;
+  box-shadow: 0 18px 46px rgba(31, 38, 32, 0.2);
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dialog-header button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #5f6d64;
+  background: transparent;
+}
+
+.dialog-header button:hover {
+  border-color: #d5ddd4;
+  background: #f0f4ef;
+}
+
+.dialog-field {
+  display: grid;
+  gap: 6px;
+}
+
+.dialog-field span {
+  color: #3f4d45;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.dialog-field input {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #cbd7cc;
+  border-radius: 8px;
+  padding: 0 11px;
+  color: #20221f;
+  background: #ffffff;
+  outline: none;
+}
+
+.dialog-field input:focus {
+  border-color: #2f6f7c;
+  box-shadow: 0 0 0 3px rgba(47, 111, 124, 0.15);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .toast {

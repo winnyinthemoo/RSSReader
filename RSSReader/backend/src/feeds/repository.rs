@@ -2,7 +2,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::database::run_migrations;
 
-use super::{ArticleDetail, ArticleListFilter, ArticleListItem, FeedStatus, FeedSummary};
+use super::{ArticleDetail, ArticleListFilter, ArticleListItem, FeedStatus, FeedSummary, TagSummary};
 
 pub struct FeedRepository {
     connection: Connection,
@@ -205,11 +205,26 @@ impl FeedRepository {
             JOIN feeds f ON f.id = a.feed_id",
         );
         let mut clauses = Vec::new();
+        let mut params = Vec::new();
         if filter.feed_id.is_some() {
-            clauses.push("a.feed_id = ?1");
+            params.push(filter.feed_id.clone().unwrap_or_default());
+            clauses.push(format!("a.feed_id = ?{}", params.len()));
         }
         if filter.unread_only {
-            clauses.push("a.is_read = 0");
+            clauses.push("a.is_read = 0".to_string());
+        }
+        if filter.favorites_only {
+            clauses.push("a.is_favorite = 1".to_string());
+        }
+        if filter.tag_id.is_some() {
+            params.push(filter.tag_id.clone().unwrap_or_default());
+            clauses.push(format!(
+                "EXISTS (
+                    SELECT 1 FROM article_tags at
+                    WHERE at.article_id = a.id AND at.tag_id = ?{}
+                )",
+                params.len()
+            ));
         }
         if !clauses.is_empty() {
             query.push_str(" WHERE ");
@@ -222,14 +237,14 @@ impl FeedRepository {
             .prepare(&query)
             .map_err(|error| format!("Failed to list articles: {error}"))?;
 
-        let rows = if let Some(feed_id) = filter.feed_id {
+        let rows = if params.is_empty() {
             statement
-                .query_map(params![feed_id], article_item_from_row)
+                .query_map([], article_item_from_row)
                 .map_err(|error| format!("Failed to list articles: {error}"))?
                 .collect::<Result<Vec<_>, _>>()
         } else {
             statement
-                .query_map([], article_item_from_row)
+                .query_map(rusqlite::params_from_iter(params.iter()), article_item_from_row)
                 .map_err(|error| format!("Failed to list articles: {error}"))?
                 .collect::<Result<Vec<_>, _>>()
         };
@@ -276,6 +291,50 @@ impl FeedRepository {
         }
 
         Ok(())
+    }
+
+    pub fn mark_article_favorite(
+        &self,
+        article_id: &str,
+        is_favorite: bool,
+    ) -> Result<(), String> {
+        let updated = self
+            .connection
+            .execute(
+                "UPDATE articles SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3",
+                params![bool_to_i64(is_favorite), now_marker(), article_id],
+            )
+            .map_err(|error| format!("Failed to update starred article: {error}"))?;
+
+        if updated == 0 {
+            return Err("Article not found".to_string());
+        }
+
+        Ok(())
+    }
+
+    pub fn list_tags(&self) -> Result<Vec<TagSummary>, String> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT
+                    t.id,
+                    t.name,
+                    COUNT(at.article_id) AS article_count
+                FROM tags t
+                LEFT JOIN article_tags at ON at.tag_id = t.id
+                GROUP BY t.id
+                ORDER BY t.name COLLATE NOCASE ASC",
+            )
+            .map_err(|error| format!("Failed to list tags: {error}"))?;
+
+        let tags = statement
+            .query_map([], tag_summary_from_row)
+            .map_err(|error| format!("Failed to list tags: {error}"))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("Failed to read tag row: {error}"))?;
+
+        Ok(tags)
     }
 
     pub fn count_articles_for_feed(&self, feed_id: &str) -> Result<usize, String> {
@@ -366,6 +425,14 @@ fn article_detail_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArticleD
         is_read: row.get::<_, i64>(8)? != 0,
         is_favorite: row.get::<_, i64>(9)? != 0,
         sanitized_html: row.get(10)?,
+    })
+}
+
+fn tag_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TagSummary> {
+    Ok(TagSummary {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        article_count: row.get::<_, i64>(2)? as usize,
     })
 }
 

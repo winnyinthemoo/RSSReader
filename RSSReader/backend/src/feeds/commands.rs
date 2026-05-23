@@ -1,9 +1,9 @@
 use std::sync::{Mutex, OnceLock};
 
 use super::{
-    ArticleDetail, ArticleListFilter, ArticleListResult, ArticleMarkReadRequest, FeedAddRequest,
-    FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedService,
-    FeedWithArticles,
+    ArticleDetail, ArticleListFilter, ArticleListResult, ArticleMarkFavoriteRequest,
+    ArticleMarkReadRequest, FeedAddRequest, FeedDeleteRequest, FeedListResult, FeedRefreshRequest,
+    FeedRefreshResult, FeedService, FeedWithArticles, TagListResult,
 };
 
 static FEED_SERVICE: OnceLock<Mutex<FeedService>> = OnceLock::new();
@@ -12,8 +12,8 @@ pub fn feed_list() -> FeedListResult {
     with_service(|service| service.list_feeds())
 }
 
-pub fn feed_add(url: String) -> Result<FeedWithArticles, String> {
-    with_service(|service| service.add_feed(FeedAddRequest { url }))
+pub fn feed_add(url: String, name: Option<String>) -> Result<FeedWithArticles, String> {
+    with_service(|service| service.add_feed(FeedAddRequest { url, name }))
 }
 
 pub fn feed_refresh(feed_id: String) -> Result<FeedRefreshResult, String> {
@@ -45,6 +45,19 @@ pub fn article_mark_read(article_id: String, is_read: bool) -> Result<(), String
             is_read,
         })
     })
+}
+
+pub fn article_mark_favorite(article_id: String, is_favorite: bool) -> Result<(), String> {
+    with_service(|service| {
+        service.mark_article_favorite(ArticleMarkFavoriteRequest {
+            article_id,
+            is_favorite,
+        })
+    })
+}
+
+pub fn tag_list() -> TagListResult {
+    with_service(|service| service.list_tags())
 }
 
 fn with_service<T>(handler: impl FnOnce(&mut FeedService) -> T) -> T {

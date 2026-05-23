@@ -1,1 +1,1 @@
-pub use crate::feeds::{ArticleDetail, ArticleListFilter, ArticleListItem};
+pub use crate::feeds::{ArticleDetail, ArticleListFilter, ArticleListItem, TagSummary};

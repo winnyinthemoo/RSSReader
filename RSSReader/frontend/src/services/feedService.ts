@@ -2,6 +2,7 @@ import type {
   ArticleDetail,
   ArticleListFilter,
   ArticleListResult,
+  ArticleMarkFavoriteRequest,
   ArticleMarkReadRequest,
   FeedAddRequest,
   FeedDeleteRequest,
@@ -9,6 +10,7 @@ import type {
   FeedRefreshRequest,
   FeedRefreshResult,
   FeedWithArticles,
+  TagListResult,
 } from "../../../shared/feed";
 
 type TauriInvoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
@@ -41,10 +43,19 @@ export async function listFeeds(): Promise<FeedListResult> {
   return requestJson<FeedListResult>("/api/feeds");
 }
 
+export async function listTags(): Promise<TagListResult> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<TagListResult>("tag_list");
+  }
+
+  return requestJson<TagListResult>("/api/tags");
+}
+
 export async function addFeed(request: FeedAddRequest): Promise<FeedWithArticles> {
   const invoke = getInvoke();
   if (invoke) {
-    return invoke<FeedWithArticles>("feed_add", { url: request.url });
+    return invoke<FeedWithArticles>("feed_add", { url: request.url, name: request.name });
   }
 
   return requestJson<FeedWithArticles>("/api/feeds", {
@@ -90,6 +101,12 @@ export async function listArticles(filter: ArticleListFilter = {}): Promise<Arti
   if (filter.unreadOnly) {
     params.set("unreadOnly", "true");
   }
+  if (filter.favoritesOnly) {
+    params.set("favoritesOnly", "true");
+  }
+  if (filter.tagId) {
+    params.set("tagId", filter.tagId);
+  }
 
   const query = params.toString();
   return requestJson<ArticleListResult>(`/api/articles${query ? `?${query}` : ""}`);
@@ -114,6 +131,21 @@ export async function markArticleRead(request: ArticleMarkReadRequest): Promise<
   }
 
   await requestJson<{ ok: boolean }>("/api/articles/mark-read", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export async function markArticleFavorite(request: ArticleMarkFavoriteRequest): Promise<void> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<void>("article_mark_favorite", {
+      articleId: request.articleId,
+      isFavorite: request.isFavorite,
+    });
+  }
+
+  await requestJson<{ ok: boolean }>("/api/articles/mark-favorite", {
     method: "POST",
     body: JSON.stringify(request),
   });

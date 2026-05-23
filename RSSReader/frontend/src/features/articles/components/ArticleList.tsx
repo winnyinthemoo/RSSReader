@@ -1,30 +1,39 @@
 import { Circle, Star } from "lucide-react";
 
-import type { ArticleListItem, FeedSummary } from "../../../../../shared/feed";
+import type { ArticleListItem, FeedSummary, TagSummary } from "../../../../../shared/feed";
+
+type SidebarSelection =
+  | { type: "all" }
+  | { type: "feed"; feedId: string }
+  | { type: "starred" }
+  | { type: "tag"; tagId: string };
 
 interface ArticleListProps {
   articles: ArticleListItem[];
   feeds: FeedSummary[];
+  tags: TagSummary[];
   selectedArticleId?: string;
-  selectedFeedId?: string;
+  selection: SidebarSelection;
   onSelectArticle: (articleId: string) => void;
+  onToggleFavorite: (articleId: string, isFavorite: boolean) => void;
 }
 
 export function ArticleList({
   articles,
   feeds,
+  tags,
   selectedArticleId,
-  selectedFeedId,
+  selection,
   onSelectArticle,
+  onToggleFavorite,
 }: ArticleListProps) {
-  const selectedFeed = feeds.find((feed) => feed.id === selectedFeedId);
-  const title = selectedFeed?.title ?? "All articles";
+  const title = getArticleListTitle(selection, feeds, tags);
 
   return (
     <section className="article-list-pane">
       <div className="pane-header article-header">
         <div>
-          <p className="eyebrow">Inbox</p>
+          <p className="eyebrow">{selection.type === "starred" ? "Saved" : "Inbox"}</p>
           <h2>{title}</h2>
         </div>
         <span className="article-count">{articles.length}</span>
@@ -54,7 +63,26 @@ export function ArticleList({
               </span>
               <span className="article-title-line">
                 <span>{article.title}</span>
-                {article.isFavorite ? <Star size={16} fill="currentColor" /> : null}
+                <span
+                  className={`article-star-button${article.isFavorite ? " active" : ""}`}
+                  role="button"
+                  tabIndex={0}
+                  title={article.isFavorite ? "Remove from starred" : "Add to starred"}
+                  aria-pressed={article.isFavorite}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onToggleFavorite(article.id, !article.isFavorite);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onToggleFavorite(article.id, !article.isFavorite);
+                    }
+                  }}
+                >
+                  <Star size={16} fill={article.isFavorite ? "currentColor" : "transparent"} />
+                </span>
               </span>
               <span className="article-excerpt">{article.excerpt}</span>
             </button>
@@ -63,6 +91,24 @@ export function ArticleList({
       </div>
     </section>
   );
+}
+
+function getArticleListTitle(
+  selection: SidebarSelection,
+  feeds: FeedSummary[],
+  tags: TagSummary[],
+) {
+  switch (selection.type) {
+    case "feed":
+      return feeds.find((feed) => feed.id === selection.feedId)?.title ?? "Feed";
+    case "starred":
+      return "Starred";
+    case "tag":
+      return tags.find((tag) => tag.id === selection.tagId)?.name ?? "Tag";
+    case "all":
+    default:
+      return "All articles";
+  }
 }
 
 function formatDate(value?: string) {
