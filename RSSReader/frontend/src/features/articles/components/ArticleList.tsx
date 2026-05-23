@@ -62,7 +62,7 @@ export function ArticleList({
                 <span>{formatDate(article.publishedAt)}</span>
               </span>
               <span className="article-title-line">
-                <span>{article.title}</span>
+                <span className="article-title-text">{article.title}</span>
                 <span
                   className={`article-star-button${article.isFavorite ? " active" : ""}`}
                   role="button"
