@@ -49,6 +49,16 @@ A web implementation of an RSS reader with AI
 ## 协作流程
 Issue -> Branch -> 开发 -> Commit -> Push -> Pull Request -> Review -> Merge
 
+## 效果展示
+全局展示
+![](./RSSReader/screenshots/all.png)
+Summary
+![](./RSSReader/screenshots/summary.png)
+Model
+![](./RSSReader/screenshots/model.png)
+Tag
+![](./RSSReader/screenshots/tag.png)
+
 
 ## 环境要求
 
