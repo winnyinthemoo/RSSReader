@@ -4,6 +4,11 @@ import type {
   ArticleListResult,
   ArticleMarkFavoriteRequest,
   ArticleMarkReadRequest,
+  ArticleNote,
+  ArticleNoteSaveRequest,
+  ArticleTagDeleteRequest,
+  ArticleTagsResult,
+  ArticleTagsSaveRequest,
   FeedAddRequest,
   FeedDeleteRequest,
   FeedListResult,
@@ -146,6 +151,74 @@ export async function markArticleFavorite(request: ArticleMarkFavoriteRequest): 
   }
 
   await requestJson<{ ok: boolean }>("/api/articles/mark-favorite", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export async function listArticleTags(articleId: string): Promise<ArticleTagsResult> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<ArticleTagsResult>("article_list_tags", { articleId });
+  }
+
+  return requestJson<ArticleTagsResult>(`/api/articles/${encodeURIComponent(articleId)}/tags`);
+}
+
+export async function saveArticleTags(
+  request: ArticleTagsSaveRequest,
+): Promise<ArticleTagsResult> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<ArticleTagsResult>("article_save_tags", {
+      articleId: request.articleId,
+      tags: request.tags,
+      source: request.source,
+    });
+  }
+
+  return requestJson<ArticleTagsResult>("/api/articles/tags", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export async function deleteArticleTag(request: ArticleTagDeleteRequest): Promise<void> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<void>("article_delete_tag", {
+      articleId: request.articleId,
+      tagId: request.tagId,
+    });
+  }
+
+  await requestJson<{ ok: boolean }>("/api/articles/tags/delete", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export async function getArticleNote(articleId: string): Promise<ArticleNote | null> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<ArticleNote | null>("article_get_note", { articleId });
+  }
+
+  return requestJson<ArticleNote | null>(`/api/articles/${encodeURIComponent(articleId)}/note`);
+}
+
+export async function saveArticleNote(
+  request: ArticleNoteSaveRequest,
+): Promise<ArticleNote> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<ArticleNote>("article_save_note", {
+      articleId: request.articleId,
+      content: request.content,
+    });
+  }
+
+  return requestJson<ArticleNote>("/api/articles/note", {
     method: "POST",
     body: JSON.stringify(request),
   });

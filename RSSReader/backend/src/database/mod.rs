@@ -7,6 +7,7 @@ pub const MIGRATION_0002: &str =
 pub const MIGRATION_0003: &str = include_str!("../../../db/migrations/0003_tags.sql");
 pub const MIGRATION_0004: &str =
     include_str!("../../../db/migrations/0004_ai_results_usage.sql");
+pub const MIGRATION_0005: &str = include_str!("../../../db/migrations/0005_article_notes.sql");
 
 /// Legacy alias used by feed repository.
 pub const INITIAL_MIGRATION: &str = MIGRATION_0001;
@@ -16,6 +17,7 @@ const ALL_MIGRATIONS: &[&str] = &[
     MIGRATION_0002,
     MIGRATION_0003,
     MIGRATION_0004,
+    MIGRATION_0005,
 ];
 
 pub fn run_migrations(connection: &Connection) -> Result<(), String> {

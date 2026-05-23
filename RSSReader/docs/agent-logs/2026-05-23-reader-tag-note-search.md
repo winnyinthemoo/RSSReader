@@ -1,0 +1,23 @@
+# 2026-05-23 Agent 工作记录：Reader Tag、Note、Search
+
+- 日期：2026-05-23
+- 负责人：Codex
+- 使用工具：PowerShell、apply_patch、npm.cmd、cargo check/test 脚本
+- 对应 Issue / PR：暂无
+- 任务目标：实现 Reader 工具栏中的 Tag、Note、Search 三个功能。
+- 关键 Prompt 摘要：用户要求“实现Tag、Note、搜索部分”。
+- Agent 修改内容摘要：
+  - Reader 工具栏 Tag 按钮打开标签面板，支持查看当前文章标签、手动新增逗号分隔标签、删除标签。
+  - Reader 工具栏 Note 按钮打开笔记面板，支持当前文章本地笔记读取和保存。
+  - Reader 工具栏 Search 区域改为常驻长条输入框，支持当前 Markdown 正文搜索、高亮匹配和上下跳转，不再新建搜索侧边面板，也不显示关闭按钮。
+  - 新增 `article_notes` SQLite migration。
+  - 后端补充文章标签查询/保存/删除、文章笔记读取/保存的 command、service、repository 和 dev-server HTTP 路由。
+  - 前端 `feedService` 补充对应 Tauri/HTTP 调用。
+- 人工检查结果：待人工检查。
+- 是否运行测试：
+  - 已运行 `npm.cmd run build`，前端构建通过。
+  - 已运行 `RSSReader/scripts/backend-check.cmd`，后端 check 通过，有既有 AI 模块 dead_code warning。
+  - 已运行 `RSSReader/scripts/backend-test.cmd`，15 个测试通过。
+- 未解决问题：
+  - Search 高亮基于 Markdown 源文本位置插入 `<mark>`，复杂 Markdown 语法中仍建议后续做更精细的 AST 级高亮。
+  - 前端构建仍提示 chunk 超过 500 kB，属于后续打包优化事项。

@@ -1,5 +1,7 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronDown,
+  ChevronUp,
   Columns2,
   ExternalLink,
   FileText,
@@ -11,6 +13,7 @@ import {
   Star,
   Tags,
   WholeWord,
+  X,
 } from "lucide-react";
 import TurndownService from "turndown";
 import Markdown from "react-markdown";
@@ -20,8 +23,15 @@ import rehypeRaw from "rehype-raw";
 import { BilingualTranslationView } from "../../ai/components/BilingualTranslationView";
 import { SummaryPanel } from "../../ai/components/SummaryPanel";
 import type { TranslationView } from "../../../../../shared/ai";
-import type { ArticleDetail } from "../../../../../shared/feed";
+import type { ArticleDetail, ArticleTag } from "../../../../../shared/feed";
 import { getArticleTranslation, startTranslation } from "../../../services/aiService";
+import {
+  deleteArticleTag,
+  getArticleNote,
+  listArticleTags,
+  saveArticleNote,
+  saveArticleTags,
+} from "../../../services/feedService";
 
 interface ReaderViewProps {
   article?: ArticleDetail;
@@ -63,6 +73,7 @@ function IFrameFallback({ url }: { url: string }) {
 
 type ThemeBg = "white" | "sepia" | "dark" | "green";
 type FontSize = "sm" | "md" | "lg" | "xl";
+type ReaderPanel = "tag" | "note";
 
 const THEME_BG_OPTIONS: { key: ThemeBg; label: string; color: string; text: string }[] = [
   { key: "white", label: "White", color: "#fcfdfb", text: "#2f312d" },
@@ -96,6 +107,14 @@ export function ReaderView({ article }: ReaderViewProps) {
   const [themeBg, setThemeBg] = useState<ThemeBg>("white");
   const [fontSize, setFontSize] = useState<FontSize>("md");
   const [showThemePanel, setShowThemePanel] = useState(false);
+  const [activePanel, setActivePanel] = useState<ReaderPanel | undefined>();
+  const [tags, setTags] = useState<ArticleTag[]>([]);
+  const [tagInput, setTagInput] = useState("");
+  const [tagStatus, setTagStatus] = useState<string | undefined>();
+  const [noteContent, setNoteContent] = useState("");
+  const [noteStatus, setNoteStatus] = useState<string | undefined>();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeSearchIndex, setActiveSearchIndex] = useState(0);
 
   // AI translation state
   const [bilingualOpen, setBilingualOpen] = useState(false);
@@ -124,6 +143,9 @@ export function ReaderView({ article }: ReaderViewProps) {
     setBilingualOpen(false);
     setTranslation(undefined);
     setTranslationError(undefined);
+    setActivePanel(undefined);
+    setSearchQuery("");
+    setActiveSearchIndex(0);
   }, [article?.id]);
 
   // Load cached translation when panel opens
@@ -163,6 +185,39 @@ export function ReaderView({ article }: ReaderViewProps) {
     if (!article?.sanitizedHtml) return "";
     return normalizeMarkdown(article.sanitizedHtml);
   }, [article?.sanitizedHtml]);
+
+  const searchMatches = useMemo(() => {
+    if (!searchQuery.trim() || !markdown) {
+      return [] as Array<{ start: number; end: number }>;
+    }
+
+    const query = searchQuery.trim().toLowerCase();
+    const source = markdown.toLowerCase();
+    const matches: Array<{ start: number; end: number }> = [];
+    let cursor = 0;
+    while (cursor < source.length) {
+      const index = source.indexOf(query, cursor);
+      if (index === -1) {
+        break;
+      }
+      matches.push({ start: index, end: index + query.length });
+      cursor = index + query.length;
+    }
+    return matches;
+  }, [markdown, searchQuery]);
+
+  useEffect(() => {
+    setActiveSearchIndex(0);
+  }, [searchQuery, article?.id]);
+
+  useEffect(() => {
+    if (activePanel === "tag" && article?.id) {
+      void loadArticleTags(article.id);
+    }
+    if (activePanel === "note" && article?.id) {
+      void loadArticleNote(article.id);
+    }
+  }, [activePanel, article?.id]);
 
   const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
@@ -237,6 +292,94 @@ export function ReaderView({ article }: ReaderViewProps) {
     }
   }
 
+  async function loadArticleTags(articleId: string) {
+    try {
+      const result = await listArticleTags(articleId);
+      setTags(result.tags);
+      setTagStatus(undefined);
+    } catch (error) {
+      setTagStatus(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function handleSaveTags() {
+    if (!article?.id || !tagInput.trim()) {
+      return;
+    }
+
+    const nextTags = tagInput
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+
+    try {
+      const result = await saveArticleTags({
+        articleId: article.id,
+        tags: nextTags,
+        source: "manual",
+      });
+      setTags(result.tags);
+      setTagInput("");
+      setTagStatus("Saved");
+    } catch (error) {
+      setTagStatus(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function handleDeleteTag(tagId: string) {
+    if (!article?.id) {
+      return;
+    }
+
+    try {
+      await deleteArticleTag({ articleId: article.id, tagId });
+      setTags((currentTags) => currentTags.filter((tag) => tag.id !== tagId));
+      setTagStatus("Removed");
+    } catch (error) {
+      setTagStatus(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function loadArticleNote(articleId: string) {
+    try {
+      const note = await getArticleNote(articleId);
+      setNoteContent(note?.content ?? "");
+      setNoteStatus(undefined);
+    } catch (error) {
+      setNoteStatus(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function handleSaveNote() {
+    if (!article?.id) {
+      return;
+    }
+
+    try {
+      await saveArticleNote({
+        articleId: article.id,
+        content: noteContent,
+      });
+      setNoteStatus("Saved");
+    } catch (error) {
+      setNoteStatus(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function handleSearchStep(direction: 1 | -1) {
+    if (searchMatches.length === 0) {
+      return;
+    }
+
+    setActiveSearchIndex((currentIndex) =>
+      (currentIndex + direction + searchMatches.length) % searchMatches.length,
+    );
+  }
+
+  function handleToggleReaderPanel(panel: ReaderPanel) {
+    setActivePanel((currentPanel) => (currentPanel === panel ? undefined : panel));
+  }
+
   if (!article) {
     return (
       <section className="reader-pane">
@@ -277,7 +420,31 @@ export function ReaderView({ article }: ReaderViewProps) {
         onTargetLanguageChange={setTargetLanguage}
         onTranslate={() => void handleTranslate()}
         translateDisabled={translationLoading}
+        activePanel={activePanel}
+        searchQuery={searchQuery}
+        searchMatchCount={searchMatches.length}
+        activeSearchIndex={activeSearchIndex}
+        onTogglePanel={handleToggleReaderPanel}
+        onSearchQueryChange={setSearchQuery}
+        onSearchStep={handleSearchStep}
       />
+      {activePanel ? (
+        <ReaderSidePanel
+          activePanel={activePanel}
+          articleId={article.id}
+          tags={tags}
+          tagInput={tagInput}
+          tagStatus={tagStatus}
+          noteContent={noteContent}
+          noteStatus={noteStatus}
+          onClose={() => setActivePanel(undefined)}
+          onTagInputChange={setTagInput}
+          onSaveTags={() => void handleSaveTags()}
+          onDeleteTag={(tagId) => void handleDeleteTag(tagId)}
+          onNoteChange={setNoteContent}
+          onSaveNote={() => void handleSaveNote()}
+        />
+      ) : null}
       {bilingualOpen ? (
         <>
           <ReaderHeader article={article} />
@@ -293,6 +460,8 @@ export function ReaderView({ article }: ReaderViewProps) {
           <ReaderHeader article={article} />
           <MarkdownArticle
             markdown={markdown}
+            activeSearchIndex={activeSearchIndex}
+            searchMatches={searchMatches}
           />
         </div>
       ) : viewMode === "web" ? (
@@ -317,6 +486,8 @@ export function ReaderView({ article }: ReaderViewProps) {
               <MarkdownArticle
                 markdown={markdown}
                 variant="compare"
+                activeSearchIndex={activeSearchIndex}
+                searchMatches={searchMatches}
               />
             </div>
           </div>
@@ -374,12 +545,21 @@ function ReaderHeader({
 interface MarkdownArticleProps {
   markdown: string;
   variant?: "default" | "compare";
+  activeSearchIndex?: number;
+  searchMatches?: Array<{ start: number; end: number }>;
 }
 
 function MarkdownArticle({
   markdown,
   variant = "default",
+  activeSearchIndex = 0,
+  searchMatches = [],
 }: MarkdownArticleProps) {
+  const displayedMarkdown = useMemo(
+    () => highlightMarkdown(markdown, searchMatches, activeSearchIndex),
+    [markdown, searchMatches, activeSearchIndex],
+  );
+
   return (
     <div
       className={`reader-content reader-content-md${
@@ -387,9 +567,104 @@ function MarkdownArticle({
       }`}
     >
       <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-        {markdown}
+        {displayedMarkdown}
       </Markdown>
     </div>
+  );
+}
+
+interface ReaderSidePanelProps {
+  activePanel: ReaderPanel;
+  articleId?: string;
+  tags: ArticleTag[];
+  tagInput: string;
+  tagStatus?: string;
+  noteContent: string;
+  noteStatus?: string;
+  onClose: () => void;
+  onTagInputChange: (value: string) => void;
+  onSaveTags: () => void;
+  onDeleteTag: (tagId: string) => void;
+  onNoteChange: (value: string) => void;
+  onSaveNote: () => void;
+}
+
+function ReaderSidePanel({
+  activePanel,
+  articleId,
+  tags,
+  tagInput,
+  tagStatus,
+  noteContent,
+  noteStatus,
+  onClose,
+  onTagInputChange,
+  onSaveTags,
+  onDeleteTag,
+  onNoteChange,
+  onSaveNote,
+}: ReaderSidePanelProps) {
+  const title = activePanel === "tag" ? "Tags" : "Note";
+
+  return (
+    <aside className="reader-side-panel" aria-label={title}>
+      <header className="reader-side-panel-header">
+        <strong>{title}</strong>
+        <button className="tool-button" type="button" title="Close" onClick={onClose}>
+          <X size={16} />
+        </button>
+      </header>
+
+      {activePanel === "tag" ? (
+        <div className="reader-panel-body">
+          {!articleId ? <p className="muted">Select an article first.</p> : null}
+          <div className="tag-chip-list">
+            {tags.length === 0 ? (
+              <span className="muted">No tags yet.</span>
+            ) : (
+              tags.map((tag) => (
+                <span className="tag-chip" key={tag.id}>
+                  {tag.name}
+                  <button type="button" title="Remove tag" onClick={() => onDeleteTag(tag.id)}>
+                    <X size={12} />
+                  </button>
+                </span>
+              ))
+            )}
+          </div>
+          <label className="reader-panel-field">
+            <span>Add tags</span>
+            <input
+              value={tagInput}
+              onChange={(event) => onTagInputChange(event.target.value)}
+              placeholder="AI, Rust, Product"
+            />
+          </label>
+          <button className="secondary-button" type="button" onClick={onSaveTags}>
+            Save tags
+          </button>
+          {tagStatus ? <p className="reader-panel-status">{tagStatus}</p> : null}
+        </div>
+      ) : null}
+
+      {activePanel === "note" ? (
+        <div className="reader-panel-body">
+          <label className="reader-panel-field">
+            <span>Article note</span>
+            <textarea
+              value={noteContent}
+              onChange={(event) => onNoteChange(event.target.value)}
+              placeholder="Write a local note for this article..."
+            />
+          </label>
+          <button className="secondary-button" type="button" onClick={onSaveNote}>
+            Save note
+          </button>
+          {noteStatus ? <p className="reader-panel-status">{noteStatus}</p> : null}
+        </div>
+      ) : null}
+
+    </aside>
   );
 }
 
@@ -407,6 +682,13 @@ interface ReaderToolbarProps {
   onTargetLanguageChange?: (value: string) => void;
   onTranslate: () => void;
   translateDisabled?: boolean;
+  activePanel?: ReaderPanel;
+  searchQuery?: string;
+  searchMatchCount?: number;
+  activeSearchIndex?: number;
+  onTogglePanel?: (panel: ReaderPanel) => void;
+  onSearchQueryChange?: (value: string) => void;
+  onSearchStep?: (direction: 1 | -1) => void;
 }
 
 function ReaderToolbar({
@@ -423,8 +705,20 @@ function ReaderToolbar({
   onTargetLanguageChange,
   onTranslate,
   translateDisabled,
+  activePanel,
+  searchQuery = "",
+  searchMatchCount = 0,
+  activeSearchIndex = 0,
+  onTogglePanel,
+  onSearchQueryChange,
+  onSearchStep,
 }: ReaderToolbarProps) {
   const themePanelRef = useRef<HTMLDivElement>(null);
+  const searchCountLabel = searchQuery.trim()
+    ? searchMatchCount > 0
+      ? `${Math.min(activeSearchIndex + 1, searchMatchCount)} / ${searchMatchCount}`
+      : "0 / 0"
+    : "";
 
   useEffect(() => {
     if (!showThemePanel) return;
@@ -439,7 +733,7 @@ function ReaderToolbar({
 
   return (
     <div className="reader-toolbar" aria-label="Reader tools">
-      <div className="tool-group" aria-label="Display mode">
+      <div className="tool-group reader-view-tools" aria-label="Display mode">
         <button
           className={`tool-button${viewMode === "markdown" ? " active" : ""}`}
           type="button"
@@ -466,7 +760,7 @@ function ReaderToolbar({
         </button>
       </div>
 
-      <div className="tool-group" aria-label="Article actions">
+      <div className="tool-group reader-action-tools" aria-label="Article actions">
         {bilingualOpen && onTargetLanguageChange ? (
           <select
             className="translation-lang-select"
@@ -488,10 +782,20 @@ function ReaderToolbar({
         >
           <Languages size={17} />
         </button>
-        <button className="tool-button" type="button" title="Tag">
+        <button
+          className={`tool-button${activePanel === "tag" ? " active" : ""}`}
+          type="button"
+          title="Tag"
+          onClick={() => onTogglePanel?.("tag")}
+        >
           <Tags size={17} />
         </button>
-        <button className="tool-button" type="button" title="Note">
+        <button
+          className={`tool-button${activePanel === "note" ? " active" : ""}`}
+          type="button"
+          title="Note"
+          onClick={() => onTogglePanel?.("note")}
+        >
           <NotebookPen size={17} />
         </button>
         <div style={{ position: "relative" }}>
@@ -513,13 +817,75 @@ function ReaderToolbar({
         </button>
       </div>
 
-      <div className="tool-group search-group" aria-label="Search">
-        <button className="tool-button" type="button" title="Search">
-          <Search size={17} />
-        </button>
+      <div className="tool-group search-group open" aria-label="Search">
+        <div className="reader-search-bar" role="search" aria-disabled={!onSearchQueryChange}>
+          <Search size={16} />
+          <input
+            value={searchQuery}
+            disabled={!onSearchQueryChange}
+            onChange={(event) => onSearchQueryChange?.(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                onSearchStep?.(event.shiftKey ? -1 : 1);
+              }
+            }}
+            placeholder="Search current article"
+            aria-label="Search current article"
+          />
+          <span className="reader-search-count">{searchCountLabel}</span>
+          <button
+            className="tool-button"
+            type="button"
+            title="Previous match"
+            disabled={!onSearchStep || searchMatchCount === 0}
+            onClick={() => onSearchStep?.(-1)}
+          >
+            <ChevronUp size={15} />
+          </button>
+          <button
+            className="tool-button"
+            type="button"
+            title="Next match"
+            disabled={!onSearchStep || searchMatchCount === 0}
+            onClick={() => onSearchStep?.(1)}
+          >
+            <ChevronDown size={15} />
+          </button>
+        </div>
       </div>
     </div>
   );
+}
+
+function highlightMarkdown(
+  markdown: string,
+  matches: Array<{ start: number; end: number }>,
+  activeIndex: number,
+) {
+  if (matches.length === 0) {
+    return markdown;
+  }
+
+  let output = "";
+  let cursor = 0;
+  for (let index = 0; index < matches.length; index += 1) {
+    const match = matches[index];
+    output += markdown.slice(cursor, match.start);
+    const text = markdown.slice(match.start, match.end);
+    const className = index === activeIndex ? "reader-search-hit active" : "reader-search-hit";
+    output += `<mark class="${className}">${escapeHtml(text)}</mark>`;
+    cursor = match.end;
+  }
+  output += markdown.slice(cursor);
+  return output;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 const ThemePanel = forwardRef<HTMLDivElement, {

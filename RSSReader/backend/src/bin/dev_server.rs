@@ -3,10 +3,11 @@ use std::net::{TcpListener, TcpStream};
 
 use rssreader_backend::ai::http::try_handle as try_handle_ai;
 use rssreader_backend::feeds::{
-    article_get, article_list, article_mark_favorite, article_mark_read, feed_add, feed_delete,
-    feed_list, feed_refresh, tag_list, ArticleDetail, ArticleListFilter, ArticleListItem,
-    ArticleListResult, FeedListResult, FeedRefreshResult, FeedStatus, FeedSummary,
-    FeedWithArticles, TagListResult, TagSummary,
+    article_delete_tag, article_get, article_get_note, article_list, article_list_tags,
+    article_mark_favorite, article_mark_read, article_save_note, article_save_tags, feed_add,
+    feed_delete, feed_list, feed_refresh, tag_list, ArticleDetail, ArticleListFilter,
+    ArticleListItem, ArticleListResult, ArticleNote, ArticleTagsResult, FeedListResult,
+    FeedRefreshResult, FeedStatus, FeedSummary, FeedWithArticles, TagListResult, TagSummary,
 };
 
 fn main() -> std::io::Result<()> {
@@ -123,6 +124,69 @@ fn handle_connection(mut stream: TcpStream) {
             match article_mark_favorite(article_id, is_favorite) {
                 Ok(()) => write_json(&mut stream, 200, "{\"ok\":true}"),
                 Err(message) => write_json(&mut stream, 404, &error_json(&message)),
+            }
+        }
+        ("GET", path) if path.starts_with("/api/articles/") && path.ends_with("/tags") => {
+            let article_id = url_decode(
+                path.trim_start_matches("/api/articles/")
+                    .trim_end_matches("/tags")
+                    .trim_end_matches('/'),
+            );
+            write_json(
+                &mut stream,
+                200,
+                &article_tags_result_json(&article_list_tags(article_id)),
+            );
+        }
+        ("POST", "/api/articles/tags") => {
+            let Some(article_id) = json_string_field(body, "articleId") else {
+                write_json(&mut stream, 400, &error_json("Missing articleId"));
+                return;
+            };
+            let tags = json_string_array_field(body, "tags");
+            let source = json_string_field(body, "source").unwrap_or_else(|| "manual".to_string());
+
+            match article_save_tags(article_id, tags, source) {
+                Ok(result) => write_json(&mut stream, 200, &article_tags_result_json(&result)),
+                Err(message) => write_json(&mut stream, 400, &error_json(&message)),
+            }
+        }
+        ("POST", "/api/articles/tags/delete") => {
+            let Some(article_id) = json_string_field(body, "articleId") else {
+                write_json(&mut stream, 400, &error_json("Missing articleId"));
+                return;
+            };
+            let Some(tag_id) = json_string_field(body, "tagId") else {
+                write_json(&mut stream, 400, &error_json("Missing tagId"));
+                return;
+            };
+
+            match article_delete_tag(article_id, tag_id) {
+                Ok(()) => write_json(&mut stream, 200, "{\"ok\":true}"),
+                Err(message) => write_json(&mut stream, 400, &error_json(&message)),
+            }
+        }
+        ("GET", path) if path.starts_with("/api/articles/") && path.ends_with("/note") => {
+            let article_id = url_decode(
+                path.trim_start_matches("/api/articles/")
+                    .trim_end_matches("/note")
+                    .trim_end_matches('/'),
+            );
+            match article_get_note(article_id) {
+                Some(note) => write_json(&mut stream, 200, &article_note_json(&note)),
+                None => write_json(&mut stream, 200, "null"),
+            }
+        }
+        ("POST", "/api/articles/note") => {
+            let Some(article_id) = json_string_field(body, "articleId") else {
+                write_json(&mut stream, 400, &error_json("Missing articleId"));
+                return;
+            };
+            let content = json_string_field(body, "content").unwrap_or_default();
+
+            match article_save_note(article_id, content) {
+                Ok(note) => write_json(&mut stream, 200, &article_note_json(&note)),
+                Err(message) => write_json(&mut stream, 400, &error_json(&message)),
             }
         }
         ("GET", path) if path.starts_with("/api/articles/") => {
@@ -282,6 +346,35 @@ fn tag_json(tag: &TagSummary) -> String {
     )
 }
 
+fn article_tags_result_json(result: &ArticleTagsResult) -> String {
+    format!(
+        "{{\"tags\":[{}]}}",
+        result
+            .tags
+            .iter()
+            .map(|tag| {
+                format!(
+                    "{{\"id\":{},\"name\":{},\"source\":{}}}",
+                    json_string(&tag.id),
+                    json_string(&tag.name),
+                    json_string(&tag.source)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn article_note_json(note: &ArticleNote) -> String {
+    format!(
+        "{{\"articleId\":{},\"content\":{},\"createdAt\":{},\"updatedAt\":{}}}",
+        json_string(&note.article_id),
+        json_string(&note.content),
+        json_string(&note.created_at),
+        json_string(&note.updated_at)
+    )
+}
+
 fn article_item_json(article: &ArticleListItem) -> String {
     format!(
         "{{\"id\":{},\"feedId\":{},\"feedTitle\":{},\"title\":{},\"url\":{},\"author\":{},\"publishedAt\":{},\"excerpt\":{},\"isRead\":{},\"isFavorite\":{}}}",
@@ -396,6 +489,57 @@ fn json_bool_field(body: &str, field: &str) -> Option<bool> {
     } else {
         None
     }
+}
+
+fn json_string_array_field(body: &str, field: &str) -> Vec<String> {
+    let needle = format!("\"{field}\"");
+    let Some(start) = body.find(&needle) else {
+        return Vec::new();
+    };
+    let after_field = &body[start + needle.len()..];
+    let Some(colon) = after_field.find(':') else {
+        return Vec::new();
+    };
+    let after_colon = after_field[colon + 1..].trim_start();
+    let Some(array_start) = after_colon.find('[') else {
+        return Vec::new();
+    };
+    let after_array_start = &after_colon[array_start + 1..];
+
+    let mut values = Vec::new();
+    let mut value = String::new();
+    let mut escaped = false;
+    let mut in_string = false;
+
+    for ch in after_array_start.chars() {
+        if in_string {
+            if escaped {
+                match ch {
+                    '"' => value.push('"'),
+                    '\\' => value.push('\\'),
+                    'n' => value.push('\n'),
+                    'r' => value.push('\r'),
+                    't' => value.push('\t'),
+                    other => value.push(other),
+                }
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                values.push(value.clone());
+                value.clear();
+                in_string = false;
+            } else {
+                value.push(ch);
+            }
+        } else if ch == '"' {
+            in_string = true;
+        } else if ch == ']' {
+            break;
+        }
+    }
+
+    values
 }
 
 fn url_decode(value: &str) -> String {

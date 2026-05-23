@@ -2,7 +2,10 @@ use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::database::run_migrations;
 
-use super::{ArticleDetail, ArticleListFilter, ArticleListItem, FeedStatus, FeedSummary, TagSummary};
+use super::{
+    ArticleDetail, ArticleListFilter, ArticleListItem, ArticleNote, ArticleTag, FeedStatus,
+    FeedSummary, TagSummary,
+};
 
 pub struct FeedRepository {
     connection: Connection,
@@ -337,6 +340,130 @@ impl FeedRepository {
         Ok(tags)
     }
 
+    pub fn list_article_tags(&self, article_id: &str) -> Result<Vec<ArticleTag>, String> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT t.id, t.name, at.source
+                FROM article_tags at
+                JOIN tags t ON t.id = at.tag_id
+                WHERE at.article_id = ?1
+                ORDER BY t.name COLLATE NOCASE ASC",
+            )
+            .map_err(|error| format!("Failed to list article tags: {error}"))?;
+
+        let tags = statement
+            .query_map(params![article_id], article_tag_from_row)
+            .map_err(|error| format!("Failed to list article tags: {error}"))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("Failed to read article tag row: {error}"))?;
+
+        Ok(tags)
+    }
+
+    pub fn save_article_tag(
+        &self,
+        article_id: &str,
+        display_name: &str,
+        normalized_name: &str,
+        source: &str,
+    ) -> Result<(), String> {
+        let now = now_marker();
+        let tag_id: String = if let Some(existing) = self
+            .connection
+            .query_row(
+                "SELECT id FROM tags WHERE normalized_name = ?1",
+                params![normalized_name],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| format!("Failed to find tag: {error}"))?
+        {
+            existing
+        } else {
+            let id = format!("tag-{}", uuid_like_id(display_name));
+            self.connection
+                .execute(
+                    "INSERT INTO tags (id, name, normalized_name, usage_count, created_at)
+                    VALUES (?1, ?2, ?3, 0, ?4)",
+                    params![id, display_name, normalized_name, now],
+                )
+                .map_err(|error| format!("Failed to create tag: {error}"))?;
+            id
+        };
+
+        let inserted = self
+            .connection
+            .execute(
+                "INSERT OR IGNORE INTO article_tags (article_id, tag_id, source, created_at)
+                VALUES (?1, ?2, ?3, ?4)",
+                params![article_id, tag_id, source, now],
+            )
+            .map_err(|error| format!("Failed to save article tag: {error}"))?;
+
+        if inserted > 0 {
+            self.connection
+                .execute(
+                    "UPDATE tags SET usage_count = usage_count + 1 WHERE id = ?1",
+                    params![tag_id],
+                )
+                .map_err(|error| format!("Failed to update tag usage: {error}"))?;
+        }
+
+        Ok(())
+    }
+
+    pub fn delete_article_tag(&self, article_id: &str, tag_id: &str) -> Result<(), String> {
+        let deleted = self
+            .connection
+            .execute(
+                "DELETE FROM article_tags WHERE article_id = ?1 AND tag_id = ?2",
+                params![article_id, tag_id],
+            )
+            .map_err(|error| format!("Failed to delete article tag: {error}"))?;
+
+        if deleted > 0 {
+            self.connection
+                .execute(
+                    "UPDATE tags SET usage_count = MAX(usage_count - 1, 0) WHERE id = ?1",
+                    params![tag_id],
+                )
+                .map_err(|error| format!("Failed to update tag usage: {error}"))?;
+        }
+
+        Ok(())
+    }
+
+    pub fn get_article_note(&self, article_id: &str) -> Result<Option<ArticleNote>, String> {
+        self.connection
+            .query_row(
+                "SELECT article_id, content, created_at, updated_at
+                FROM article_notes
+                WHERE article_id = ?1",
+                params![article_id],
+                article_note_from_row,
+            )
+            .optional()
+            .map_err(|error| format!("Failed to get article note: {error}"))
+    }
+
+    pub fn save_article_note(&self, article_id: &str, content: &str) -> Result<ArticleNote, String> {
+        let now = now_marker();
+        self.connection
+            .execute(
+                "INSERT INTO article_notes (article_id, content, created_at, updated_at)
+                VALUES (?1, ?2, ?3, ?3)
+                ON CONFLICT(article_id) DO UPDATE SET
+                    content = excluded.content,
+                    updated_at = excluded.updated_at",
+                params![article_id, content, now],
+            )
+            .map_err(|error| format!("Failed to save article note: {error}"))?;
+
+        self.get_article_note(article_id)?
+            .ok_or_else(|| "Article note not found after save".to_string())
+    }
+
     pub fn count_articles_for_feed(&self, feed_id: &str) -> Result<usize, String> {
         count_for_feed(&self.connection, "COUNT(*)", feed_id)
     }
@@ -436,6 +563,23 @@ fn tag_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TagSummary>
     })
 }
 
+fn article_tag_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArticleTag> {
+    Ok(ArticleTag {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        source: row.get(2)?,
+    })
+}
+
+fn article_note_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArticleNote> {
+    Ok(ArticleNote {
+        article_id: row.get(0)?,
+        content: row.get(1)?,
+        created_at: row.get(2)?,
+        updated_at: row.get(3)?,
+    })
+}
+
 fn feed_status_to_string(status: &FeedStatus) -> &'static str {
     match status {
         FeedStatus::Active => "active",
@@ -463,6 +607,15 @@ fn now_marker() -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_secs().to_string())
         .unwrap_or_else(|_| "0".to_string())
+}
+
+fn uuid_like_id(value: &str) -> String {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for byte in value.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{hash:x}")
 }
 
 fn default_database_path() -> Result<std::path::PathBuf, String> {

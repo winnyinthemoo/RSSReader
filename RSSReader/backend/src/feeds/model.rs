@@ -62,6 +62,45 @@ pub struct TagSummary {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ArticleTag {
+    pub id: String,
+    pub name: String,
+    pub source: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ArticleTagsResult {
+    pub tags: Vec<ArticleTag>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ArticleTagsSaveRequest {
+    pub article_id: String,
+    pub tags: Vec<String>,
+    pub source: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ArticleTagDeleteRequest {
+    pub article_id: String,
+    pub tag_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ArticleNote {
+    pub article_id: String,
+    pub content: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ArticleNoteSaveRequest {
+    pub article_id: String,
+    pub content: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ArticleListItem {
     pub id: String,
     pub feed_id: String,

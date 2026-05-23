@@ -49,6 +49,39 @@ export interface TagSummary {
   articleCount: number;
 }
 
+export interface ArticleTag {
+  id: string;
+  name: string;
+  source: string;
+}
+
+export interface ArticleTagsResult {
+  tags: ArticleTag[];
+}
+
+export interface ArticleTagsSaveRequest {
+  articleId: string;
+  tags: string[];
+  source: "manual" | "ai";
+}
+
+export interface ArticleTagDeleteRequest {
+  articleId: string;
+  tagId: string;
+}
+
+export interface ArticleNote {
+  articleId: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ArticleNoteSaveRequest {
+  articleId: string;
+  content: string;
+}
+
 export interface ArticleListItem {
   id: string;
   feedId: string;

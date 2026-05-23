@@ -1,8 +1,9 @@
 use super::{
-    fetch_and_parse_feed, ArticleDetail, ArticleListFilter, ArticleListItem,
-    ArticleMarkFavoriteRequest, ArticleMarkReadRequest, FeedAddRequest, FeedDeleteRequest,
-    FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedRepository, FeedStatus,
-    FeedWithArticles, TagListResult,
+    fetch_and_parse_feed, ArticleDetail, ArticleListFilter, ArticleListItem, ArticleNote,
+    ArticleNoteSaveRequest, ArticleMarkFavoriteRequest, ArticleMarkReadRequest, ArticleTagDeleteRequest,
+    ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest, FeedDeleteRequest, FeedListResult,
+    FeedRefreshRequest, FeedRefreshResult, FeedRepository, FeedStatus, FeedWithArticles,
+    TagListResult,
 };
 
 pub struct FeedService {
@@ -138,6 +139,56 @@ impl FeedService {
         }
     }
 
+    pub fn list_article_tags(&self, article_id: &str) -> ArticleTagsResult {
+        ArticleTagsResult {
+            tags: self
+                .repository
+                .list_article_tags(article_id)
+                .unwrap_or_default(),
+        }
+    }
+
+    pub fn save_article_tags(
+        &mut self,
+        request: ArticleTagsSaveRequest,
+    ) -> Result<ArticleTagsResult, String> {
+        for tag in &request.tags {
+            let display = tag.trim();
+            if display.is_empty() {
+                continue;
+            }
+            let normalized = normalize_tag_name(display);
+            if normalized.is_empty() {
+                continue;
+            }
+            self.repository.save_article_tag(
+                &request.article_id,
+                display,
+                &normalized,
+                &request.source,
+            )?;
+        }
+
+        Ok(self.list_article_tags(&request.article_id))
+    }
+
+    pub fn delete_article_tag(&mut self, request: ArticleTagDeleteRequest) -> Result<(), String> {
+        self.repository
+            .delete_article_tag(&request.article_id, &request.tag_id)
+    }
+
+    pub fn get_article_note(&self, article_id: &str) -> Option<ArticleNote> {
+        self.repository.get_article_note(article_id).ok().flatten()
+    }
+
+    pub fn save_article_note(
+        &mut self,
+        request: ArticleNoteSaveRequest,
+    ) -> Result<ArticleNote, String> {
+        self.repository
+            .save_article_note(&request.article_id, &request.content)
+    }
+
     pub fn delete_feed(&mut self, request: FeedDeleteRequest) -> Result<(), String> {
         self.repository.delete_feed(&request.feed_id)
     }
@@ -150,6 +201,14 @@ fn normalize_feed_url(url: &str) -> Result<String, String> {
     } else {
         Err("Feed URL must start with http:// or https://".to_string())
     }
+}
+
+fn normalize_tag_name(raw: &str) -> String {
+    raw.split(|ch: char| !ch.is_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .map(str::to_lowercase)
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn now_marker() -> String {
