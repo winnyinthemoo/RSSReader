@@ -1,0 +1,28 @@
+# 2026-05-23 Agent 工作记录：左侧栏入口与 Summary 悬浮面板
+
+- 日期：2026-05-23
+- 负责人：Codex
+- 使用工具：PowerShell、apply_patch、npm.cmd、cargo check/test 脚本
+- 对应 Issue / PR：暂无
+- 任务目标：
+  - 左侧顶部增加 Feed / Tag 两个选择入口。
+  - 左侧增加 Starred、加入 Feed 和导出 OPML 功能。
+  - 加入 Feed 改为弹窗，包含 name 和 url。
+  - Summary 不再放在正文底部，改为悬浮 `>` 按钮点击展开。
+- 关键 Prompt 摘要：
+  - 用户要求在左侧增加 Feed/Tag、Starred、加入和 OPML 导出。
+  - 后续补充要求 Summary 不要滑动到底部查看，而是悬浮 `>` 点击展示。
+- Agent 修改内容摘要：
+  - 更新 `FeedSidebar`：增加 Feed/Tag 切换、Starred、Add Feed 弹窗、OPML 导出按钮。
+  - 更新 `App`、`feedService` 和共享类型：支持 tag 列表、starred 过滤、星标更新、OPML 前端导出。
+  - 更新后端 feed 模块和 dev server：支持 feed name、tag_list、favoritesOnly/tagId 过滤和 article_mark_favorite。
+  - 更新 `SummaryPanel` 和 `ReaderView`：Summary 改为右下角悬浮按钮，展开后显示摘要面板。
+  - 更新 `styles.css`：补充左侧栏、弹窗、星标、Summary 悬浮面板样式。
+- 人工检查结果：待人工检查。
+- 是否运行测试：
+  - 已运行 `npm.cmd run build`，前端构建通过。
+  - 已运行 `RSSReader/scripts/backend-check.cmd`，后端 check 通过，有既有 AI 模块 dead_code warning。
+  - 已运行 `RSSReader/scripts/backend-test.cmd`，15 个测试通过。
+- 未解决问题：
+  - 前端构建仍提示 chunk 超过 500 kB，属于后续打包优化事项。
+  - Browser 插件缺少 `scripts/browser-client.mjs`，本次未完成内置浏览器截图验证。

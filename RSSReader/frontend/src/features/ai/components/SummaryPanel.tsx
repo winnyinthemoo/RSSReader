@@ -13,6 +13,7 @@ interface SummaryPanelProps {
 type SummaryStatus = "idle" | "loading-cache" | "generating" | "ready" | "error";
 
 export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const [targetLanguage, setTargetLanguage] = useState("zh-Hans");
   const [detailLevel, setDetailLevel] = useState<SummaryDetailLevel>("medium");
   const [content, setContent] = useState("");
@@ -50,8 +51,17 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
   }, [articleId, targetLanguage, detailLevel]);
 
   useEffect(() => {
-    void loadCachedSummary();
-  }, [loadCachedSummary]);
+    setIsOpen(false);
+    setContent("");
+    setStatus("idle");
+    setErrorMessage(undefined);
+  }, [articleId]);
+
+  useEffect(() => {
+    if (isOpen) {
+      void loadCachedSummary();
+    }
+  }, [isOpen, loadCachedSummary]);
 
   async function handleGenerate() {
     if (!articleId) {
@@ -78,61 +88,79 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
   const isBusy = status === "loading-cache" || status === "generating";
 
   return (
-    <section className="summary-panel" aria-label="Article summary">
-      <header className="summary-toolbar">
-        <strong>Summary</strong>
-        <label>
-          Language
-          <select
-            value={targetLanguage}
-            onChange={(event) => setTargetLanguage(event.target.value)}
-            disabled={disabled || isBusy}
-          >
-            <option value="zh-Hans">简体中文</option>
-            <option value="en">English</option>
-          </select>
-        </label>
-        <label>
-          Detail
-          <select
-            value={detailLevel}
-            onChange={(event) =>
-              setDetailLevel(event.target.value as SummaryDetailLevel)
-            }
-            disabled={disabled || isBusy}
-          >
-            <option value="short">Short</option>
-            <option value="medium">Medium</option>
-            <option value="detailed">Detailed</option>
-          </select>
-        </label>
-        <button
-          className="secondary-button summary-generate-btn"
-          type="button"
-          disabled={disabled || !articleId || isBusy}
-          onClick={() => void handleGenerate()}
-        >
-          {status === "generating" ? "Generating…" : "Generate"}
-        </button>
-      </header>
-      <div className="summary-content">
-        {!articleId ? (
-          <p className="muted">Select an article to generate a summary.</p>
-        ) : status === "loading-cache" ? (
-          <p className="muted">Loading saved summary…</p>
-        ) : status === "generating" ? (
-          <p className="muted">Generating summary (may take up to a minute)…</p>
-        ) : errorMessage ? (
-          <p className="summary-error">{errorMessage}</p>
-        ) : content ? (
-          <div className="summary-markdown">
-            <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
+    <aside
+      className={`summary-floating ${isOpen ? "open" : "collapsed"}`}
+      aria-label="Article summary"
+    >
+      <button
+        className="summary-float-header"
+        type="button"
+        title={isOpen ? "Hide summary" : "Show summary"}
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        <span className="summary-chevron">{isOpen ? "<" : ">"}</span>
+        <span>Summary</span>
+      </button>
+
+      {isOpen ? (
+        <section className="summary-panel">
+          <header className="summary-toolbar">
+            <strong>Summary</strong>
+            <label>
+              Language
+              <select
+                value={targetLanguage}
+                onChange={(event) => setTargetLanguage(event.target.value)}
+                disabled={disabled || isBusy}
+              >
+                <option value="zh-Hans">简体中文</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <label>
+              Detail
+              <select
+                value={detailLevel}
+                onChange={(event) =>
+                  setDetailLevel(event.target.value as SummaryDetailLevel)
+                }
+                disabled={disabled || isBusy}
+              >
+                <option value="short">Short</option>
+                <option value="medium">Medium</option>
+                <option value="detailed">Detailed</option>
+              </select>
+            </label>
+            <button
+              className="secondary-button summary-generate-btn"
+              type="button"
+              disabled={disabled || !articleId || isBusy}
+              onClick={() => void handleGenerate()}
+            >
+              {status === "generating" ? "Generating..." : "Generate"}
+            </button>
+          </header>
+          <div className="summary-content">
+            {!articleId ? (
+              <p className="muted">Select an article to generate a summary.</p>
+            ) : status === "loading-cache" ? (
+              <p className="muted">Loading saved summary...</p>
+            ) : status === "generating" ? (
+              <p className="muted">Generating summary (may take up to a minute)...</p>
+            ) : errorMessage ? (
+              <p className="summary-error">{errorMessage}</p>
+            ) : content ? (
+              <div className="summary-markdown">
+                <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
+              </div>
+            ) : (
+              <p className="muted">No summary yet. Click Generate.</p>
+            )}
           </div>
-        ) : (
-          <p className="muted">No summary yet. Click Generate.</p>
-        )}
-      </div>
-    </section>
+        </section>
+      ) : null}
+    </aside>
   );
 }
 

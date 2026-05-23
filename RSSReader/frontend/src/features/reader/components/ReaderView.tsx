@@ -287,7 +287,6 @@ export function ReaderView({ article }: ReaderViewProps) {
             isLoading={translationLoading}
             errorMessage={translationError}
           />
-          <SummaryPanel articleId={article.id} />
         </>
       ) : viewMode === "markdown" ? (
         <div className="reader-themed-page" data-theme={themeBg} data-font-size={fontSize}>
@@ -295,7 +294,6 @@ export function ReaderView({ article }: ReaderViewProps) {
           <MarkdownArticle
             markdown={markdown}
           />
-          <SummaryPanel articleId={article.id} />
         </div>
       ) : viewMode === "web" ? (
         <div className="reader-web-view">
@@ -340,6 +338,7 @@ export function ReaderView({ article }: ReaderViewProps) {
           </div>
         </div>
       )}
+      <SummaryPanel articleId={article.id} />
     </article>
   );
 }

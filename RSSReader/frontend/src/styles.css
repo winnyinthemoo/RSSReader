@@ -673,6 +673,16 @@ h2 {
   .reader-header h2 {
     font-size: 1.85rem;
   }
+
+  .summary-panel .summary-toolbar {
+    align-items: stretch;
+  }
+
+  .summary-panel .summary-toolbar label,
+  .summary-panel .summary-toolbar select,
+  .summary-generate-btn {
+    width: 100%;
+  }
 }
 
 /* --- AI module (skeleton) --- */
@@ -1107,14 +1117,61 @@ h2 {
   color: #6d7a72;
 }
 
-.summary-panel {
-  border-top: 1px solid #e2e8e0;
+.summary-floating {
+  flex: 0 0 auto;
+  width: 100%;
+  margin: 0;
+  border-top: 1px solid #d5ddd4;
+  background: #f8faf7;
+}
+
+.summary-float-header {
+  display: inline-flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  padding: 0 18px;
+  color: #2f6f7c;
   background: #f3f6f2;
+  font-weight: 700;
+  text-align: left;
+}
+
+.summary-floating.open .summary-float-header {
+  border-bottom: 1px solid #d5ddd4;
+}
+
+.summary-float-header:hover {
+  background: #eef5f0;
+}
+
+.summary-chevron {
+  width: 14px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.summary-panel {
+  overflow: hidden;
+  border: 0;
+  background: #f8faf7;
+}
+
+.summary-panel .summary-toolbar {
+  padding: 12px 14px;
+}
+
+.summary-panel .summary-toolbar label {
+  font-size: 0.82rem;
 }
 
 .summary-content {
   padding: 14px 20px 20px;
   min-height: 72px;
+  max-height: min(280px, calc(100vh - 260px));
+  overflow-y: auto;
 }
 
 .summary-markdown {
