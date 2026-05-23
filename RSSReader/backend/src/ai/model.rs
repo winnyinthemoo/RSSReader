@@ -264,6 +264,7 @@ pub struct UsageReportRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UsageReportRow {
     pub key: String,
     pub label: String,
@@ -274,10 +275,20 @@ pub struct UsageReportRow {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageDailyRow {
+    pub date: String,
+    pub request_count: u64,
+    pub total_tokens: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UsageReportResult {
     pub dimension: String,
     pub window_days: u32,
     pub rows: Vec<UsageReportRow>,
+    pub daily_rows: Vec<UsageDailyRow>,
     pub total_requests: u64,
     pub total_tokens: u64,
 }

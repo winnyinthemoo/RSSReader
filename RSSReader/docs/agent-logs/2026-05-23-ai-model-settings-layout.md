@@ -1,0 +1,23 @@
+# 2026-05-23 AI Model Settings Layout
+
+- 日期：2026-05-23
+- 负责人：Codex
+- 使用工具：PowerShell、apply_patch、Vite build、Codex Browser
+- 对应 Issue / PR：未关联
+- 任务目标：重构 AI 模型设置界面，提供 Providers、Models、Agents 三个顶部分类；在 Providers / Models 中展示左侧已添加项、右侧属性设置和结果区；在 Agents 中提供 Summary、Translation、Tag 三类 Agent 的模型与参数设置；补充用量展示。
+- 关键 Prompt 摘要：用户要求 AI 模型部分采用顶部分类导航，主区域左侧展示已添加模型或配置项，右侧展示 Properties、Result，并加入 Agent 和用量展示。
+- Agent 修改内容摘要：
+  - 重写 `frontend/src/features/ai/components/AiSettingsPage.tsx` 为三分类设置页。
+  - 新增 Providers、Models 的编辑、创建、删除、测试连接入口。
+  - 新增 Summary、Translation、Tag Agent 的模型选择与参数设置区域。
+  - 将 Usage 用量展示嵌入当前分类内容区。
+  - 补充 `frontend/src/services/aiService.ts` 的 Provider / Model 更新与删除请求。
+  - 补充 `backend/src/ai/http.rs` 的 Provider / Model 更新与删除 HTTP 路由。
+  - 更新 `frontend/src/styles.css` 中 AI 设置页布局和用量表样式。
+- 人工检查结果：已检查顶部分类、左右布局、Properties / Result / Usage 结构；本地 dev 地址返回 200。浏览器刷新验证时受应用内浏览器 URL 策略限制，未继续绕过。
+- 是否运行测试：
+  - 已运行 `npm run build`，通过，存在 Vite 大 chunk 提醒。
+  - 尝试运行 `cargo check`，失败原因是当前环境找不到 `cargo` 命令。
+- 未解决问题：
+  - Rust 后端未能在当前环境完成编译检查，需要安装或配置 Cargo 后再执行 `cargo check`。
+  - Vite 仍提示部分 chunk 超过 500 kB，可后续考虑拆包。

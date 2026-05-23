@@ -5,7 +5,7 @@ use crate::database::run_migrations;
 use super::super::error::{AiError, AiResult};
 use super::super::model::{
     AgentSettingsRecord, AgentType, AiModel, AiProvider, ArticleSummaryRecord, SummaryDetailLevel,
-    TranslationSegmentView, TranslationView, UsageReportRow,
+    TranslationSegmentView, TranslationView, UsageDailyRow, UsageReportRow,
 };
 
 pub struct AiRepository {
@@ -253,9 +253,61 @@ impl AiRepository {
     }
 
     pub fn usage_report(&self, dimension: &str, window_days: u32) -> AiResult<Vec<UsageReportRow>> {
-        let _ = (dimension, window_days);
-        // Skeleton: return empty until usage write path is implemented.
-        Ok(Vec::new())
+        let group_expr = usage_dimension_expr(dimension);
+        let sql = format!(
+            "SELECT
+                COALESCE({group_expr}, 'unknown') AS usage_key,
+                COALESCE({group_expr}, 'Unknown') AS usage_label,
+                COUNT(*) AS request_count,
+                COALESCE(SUM(total_tokens), 0) AS total_tokens,
+                SUM(CASE WHEN request_status = 'succeeded' THEN 1 ELSE 0 END) AS succeeded_count,
+                SUM(CASE WHEN request_status = 'failed' THEN 1 ELSE 0 END) AS failed_count
+             FROM llm_usage_events
+             WHERE CAST(created_at AS INTEGER) >= CAST(strftime('%s', 'now', ?1) AS INTEGER)
+             GROUP BY usage_key, usage_label
+             ORDER BY request_count DESC, usage_label COLLATE NOCASE"
+        );
+        let window = format!("-{} days", window_days.saturating_sub(1));
+        let mut stmt = self.connection.prepare(&sql)?;
+        let rows = stmt.query_map(params![window], |row| {
+            Ok(UsageReportRow {
+                key: row.get(0)?,
+                label: row.get(1)?,
+                request_count: row.get::<_, i64>(2)?.max(0) as u64,
+                total_tokens: row.get::<_, i64>(3)?.max(0) as u64,
+                succeeded_count: row.get::<_, i64>(4)?.max(0) as u64,
+                failed_count: row.get::<_, i64>(5)?.max(0) as u64,
+            })
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub fn usage_daily_report(&self, window_days: u32) -> AiResult<Vec<UsageDailyRow>> {
+        let window = format!("-{} days", window_days.saturating_sub(1));
+        let mut stmt = self.connection.prepare(
+            "WITH RECURSIVE days(day, remaining) AS (
+                SELECT date('now', ?1), ?2
+                UNION ALL
+                SELECT date(day, '+1 day'), remaining - 1 FROM days WHERE remaining > 1
+             )
+             SELECT
+                days.day,
+                COALESCE(COUNT(events.id), 0) AS request_count,
+                COALESCE(SUM(events.total_tokens), 0) AS total_tokens
+             FROM days
+             LEFT JOIN llm_usage_events events
+                ON date(events.created_at, 'unixepoch') = days.day
+             GROUP BY days.day
+             ORDER BY days.day",
+        )?;
+        let rows = stmt.query_map(params![window, window_days.max(1)], |row| {
+            Ok(UsageDailyRow {
+                date: row.get(0)?,
+                request_count: row.get::<_, i64>(1)?.max(0) as u64,
+                total_tokens: row.get::<_, i64>(2)?.max(0) as u64,
+            })
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 
     pub fn list_tag_names(&self) -> AiResult<Vec<String>> {
@@ -459,6 +511,15 @@ fn parse_detail_level(value: String) -> SummaryDetailLevel {
         "short" => SummaryDetailLevel::Short,
         "detailed" => SummaryDetailLevel::Detailed,
         _ => SummaryDetailLevel::Medium,
+    }
+}
+
+fn usage_dimension_expr(dimension: &str) -> &'static str {
+    match dimension {
+        "provider" => "provider_id",
+        "model" => "COALESCE(model_id, model_name_snapshot)",
+        "agent" => "task_type",
+        _ => "task_type",
     }
 }
 

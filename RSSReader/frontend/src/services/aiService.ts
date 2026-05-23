@@ -38,6 +38,19 @@ export async function createAiProvider(
   });
 }
 
+export async function updateAiProvider(
+  providerId: string,
+  request: UpdateAiProviderRequest,
+): Promise<AiProvider> {
+  return requestJson<AiProvider>(
+    `/api/ai/providers/${encodeURIComponent(providerId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(request),
+    },
+  );
+}
+
 export async function deleteAiProvider(providerId: string): Promise<void> {
   await requestJson<{ ok: boolean }>(
     `/api/ai/providers/${encodeURIComponent(providerId)}`,
@@ -54,6 +67,23 @@ export async function createAiModel(request: CreateAiModelRequest): Promise<AiMo
     method: "POST",
     body: JSON.stringify(request),
   });
+}
+
+export async function updateAiModel(
+  modelId: string,
+  request: UpdateAiModelRequest,
+): Promise<AiModel> {
+  return requestJson<AiModel>(`/api/ai/models/${encodeURIComponent(modelId)}`, {
+    method: "PUT",
+    body: JSON.stringify(request),
+  });
+}
+
+export async function deleteAiModel(modelId: string): Promise<void> {
+  await requestJson<{ ok: boolean }>(
+    `/api/ai/models/${encodeURIComponent(modelId)}`,
+    { method: "DELETE" },
+  );
 }
 
 export async function testAiProvider(

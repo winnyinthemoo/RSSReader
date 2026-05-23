@@ -167,10 +167,17 @@ export interface UsageReportRow {
   failedCount: number;
 }
 
+export interface UsageDailyRow {
+  date: string;
+  requestCount: number;
+  totalTokens: number;
+}
+
 export interface UsageReportResult {
   dimension: string;
   windowDays: number;
   rows: UsageReportRow[];
+  dailyRows?: UsageDailyRow[];
   totalRequests: number;
   totalTokens: number;
 }

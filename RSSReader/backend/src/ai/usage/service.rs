@@ -14,13 +14,16 @@ impl UsageService {
     }
 
     pub fn report(&self, dimension: &str, window_days: u32) -> AiResult<UsageReportResult> {
+        let window_days = window_days.max(1);
         let rows = self.repository.usage_report(dimension, window_days)?;
+        let daily_rows = self.repository.usage_daily_report(window_days)?;
         let total_requests = rows.iter().map(|row| row.request_count).sum();
         let total_tokens = rows.iter().map(|row| row.total_tokens).sum();
         Ok(UsageReportResult {
             dimension: dimension.to_string(),
             window_days,
             rows,
+            daily_rows,
             total_requests,
             total_tokens,
         })

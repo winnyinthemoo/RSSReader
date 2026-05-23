@@ -147,28 +147,27 @@ export function ReaderView({ article }: ReaderViewProps) {
   }
 
   useEffect(() => {
-    startIframeTimer(webIframeLoaded, setWebIframeError, webTimerRef);
-    startIframeTimer(cmpIframeLoaded, setCmpIframeError, cmpTimerRef);
+    if (viewMode === "web" && article?.url) {
+      startIframeTimer(webIframeLoaded, setWebIframeError, webTimerRef);
+    }
+    if (viewMode === "compare" && article?.url) {
+      startIframeTimer(cmpIframeLoaded, setCmpIframeError, cmpTimerRef);
+    }
     return () => {
       if (webTimerRef.current) clearTimeout(webTimerRef.current);
       if (cmpTimerRef.current) clearTimeout(cmpTimerRef.current);
     };
-  }, [article?.url]);
+  }, [article?.url, viewMode]);
 
   const markdown = useMemo(() => {
     if (!article?.sanitizedHtml) return "";
     return normalizeMarkdown(article.sanitizedHtml);
   }, [article?.sanitizedHtml]);
 
-  const markdownSource = useMemo(() => {
-    if (!article?.sanitizedHtml) return "";
-    const prepared = article.sanitizedHtml.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-    const md = turndown.turndown(prepared);
-    return md.replace(/\\([*])/g, "$1");
-  }, [article?.sanitizedHtml]);
-
   const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
+    webIframeLoaded.current = false;
+    cmpIframeLoaded.current = false;
     setWebIframeError(false);
     setCmpIframeError(false);
   };
@@ -279,42 +278,24 @@ export function ReaderView({ article }: ReaderViewProps) {
         onTranslate={() => void handleTranslate()}
         translateDisabled={translationLoading}
       />
-      <header className="reader-header">
-        <p className="eyebrow">{article.feedTitle}</p>
-        <h2>{article.title}</h2>
-        <div className="reader-meta">
-          <span>{article.author ?? "Unknown author"}</span>
-          <span>{formatFullDate(article.publishedAt)}</span>
-          {article.isFavorite ? (
-            <span className="favorite-label">
-              <Star size={15} fill="currentColor" />
-              Saved
-            </span>
-          ) : null}
-          <a href={article.url} target="_blank" rel="noreferrer" title="Open original article">
-            <ExternalLink size={16} />
-          </a>
-        </div>
-      </header>
-
       {bilingualOpen ? (
-        <BilingualTranslationView
-          articleHtml={article.sanitizedHtml}
-          translation={translation}
-          isLoading={translationLoading}
-          errorMessage={translationError}
-        />
+        <>
+          <ReaderHeader article={article} />
+          <BilingualTranslationView
+            articleHtml={article.sanitizedHtml}
+            translation={translation}
+            isLoading={translationLoading}
+            errorMessage={translationError}
+          />
+          <SummaryPanel articleId={article.id} />
+        </>
       ) : viewMode === "markdown" ? (
-        <div className="reader-content reader-content-md" data-theme={themeBg} data-font-size={fontSize}>
-          <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-            {markdown}
-          </Markdown>
-          {markdown && (
-            <details className="md-source-toggle">
-              <summary>View Markdown source</summary>
-              <pre className="md-source">{markdownSource}</pre>
-            </details>
-          )}
+        <div className="reader-themed-page" data-theme={themeBg} data-font-size={fontSize}>
+          <ReaderHeader article={article} />
+          <MarkdownArticle
+            markdown={markdown}
+          />
+          <SummaryPanel articleId={article.id} />
         </div>
       ) : viewMode === "web" ? (
         <div className="reader-web-view">
@@ -333,10 +314,12 @@ export function ReaderView({ article }: ReaderViewProps) {
         <div className={`reader-compare${isDragging ? " dragging" : ""}`} ref={compareRef}>
           <div className="compare-pane" style={{ width: `${splitRatio}%` }}>
             <div className="compare-pane-label">Converted (Markdown)</div>
-            <div className="compare-pane-content">
-              <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                {markdown}
-              </Markdown>
+            <div className="compare-pane-content" data-theme={themeBg} data-font-size={fontSize}>
+              <ReaderHeader article={article} variant="compact" />
+              <MarkdownArticle
+                markdown={markdown}
+                variant="compare"
+              />
             </div>
           </div>
           <div className="compare-divider" onMouseDown={handleDividerMouseDown}>
@@ -357,9 +340,57 @@ export function ReaderView({ article }: ReaderViewProps) {
           </div>
         </div>
       )}
-
-      <SummaryPanel articleId={article.id} />
     </article>
+  );
+}
+
+function ReaderHeader({
+  article,
+  variant = "default",
+}: {
+  article: ArticleDetail;
+  variant?: "default" | "compact";
+}) {
+  return (
+    <header className={`reader-header${variant === "compact" ? " compact" : ""}`}>
+      <p className="eyebrow">{article.feedTitle}</p>
+      <h2>{article.title}</h2>
+      <div className="reader-meta">
+        <span>{article.author ?? "Unknown author"}</span>
+        <span>{formatFullDate(article.publishedAt)}</span>
+        {article.isFavorite ? (
+          <span className="favorite-label">
+            <Star size={15} fill="currentColor" />
+            Saved
+          </span>
+        ) : null}
+        <a href={article.url} target="_blank" rel="noreferrer" title="Open original article">
+          <ExternalLink size={16} />
+        </a>
+      </div>
+    </header>
+  );
+}
+
+interface MarkdownArticleProps {
+  markdown: string;
+  variant?: "default" | "compare";
+}
+
+function MarkdownArticle({
+  markdown,
+  variant = "default",
+}: MarkdownArticleProps) {
+  return (
+    <div
+      className={`reader-content reader-content-md${
+        variant === "compare" ? " compare-markdown-content" : ""
+      }`}
+    >
+      <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+        {markdown}
+      </Markdown>
+    </div>
   );
 }
 

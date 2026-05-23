@@ -1,0 +1,21 @@
+# 2026-05-23 AI Usage Chart And Reader Theme
+
+- 日期：2026-05-23
+- 负责人：Codex
+- 使用工具：PowerShell、apply_patch、Vite build
+- 对应 Issue / PR：未关联
+- 任务目标：稳定 AI 设置页切换时的整体尺寸，将 Usage 改为图标和每日折线图展示；让 Reader 主题覆盖 Markdown 标题区域。
+- 关键 Prompt 摘要：用户反馈 AI 部分在 Providers、Models、Agents 切换时界面大小会变化，希望 Usage 用小图标和折线图展示每天用量；Theme 需要覆盖整个 Markdown 页面，目前标题未被包含。
+- Agent 修改内容摘要：
+  - 固定 AI 设置弹窗和主内容区域高度，减少标签切换时的尺寸跳动。
+  - 将 Usage 展示改为 `LineChart` 图标和 7 天每日 token 折线图。
+  - 为 Usage 共享契约新增 `dailyRows`，后端 Usage 查询补充每日聚合数据。
+  - Reader Markdown 模式新增主题容器，让标题、正文和摘要区域共享同一主题背景。
+  - 对比视图左侧 Markdown 区域也应用同一主题容器。
+- 人工检查结果：已检查代码差异和静态结构，确认 Usage 使用折线图展示，Reader 标题容器带有 `data-theme`。
+- 是否运行测试：
+  - 已运行 `npm run build`，通过，存在 Vite 大 chunk 提醒。
+  - 尝试运行 `cargo check`，失败原因是当前环境找不到 `cargo` 命令。
+- 未解决问题：
+  - 需要在安装 Cargo 的环境中补跑 Rust 检查。
+  - Vite chunk 体积提醒仍待后续拆包处理。

@@ -26,6 +26,14 @@ pub fn try_handle(
             let payload = parse_json_body::<CreateAiProviderRequest>(body);
             respond(write_json, payload.and_then(|request| ai_create_provider(request)));
         }
+        ("PUT", path) if provider_id_from_path(path).is_some() => {
+            let provider_id = provider_id_from_path(path).unwrap();
+            let payload = parse_json_body::<UpdateAiProviderRequest>(body);
+            respond(
+                write_json,
+                payload.and_then(|request| ai_update_provider(provider_id, request)),
+            );
+        }
         ("DELETE", path) if provider_id_from_path(path).is_some() => {
             let provider_id = provider_id_from_path(path).unwrap();
             match ai_delete_provider(provider_id) {
@@ -39,6 +47,21 @@ pub fn try_handle(
         ("POST", "/api/ai/models") => {
             let payload = parse_json_body::<CreateAiModelRequest>(body);
             respond(write_json, payload.and_then(|request| ai_create_model(request)));
+        }
+        ("PUT", path) if model_id_from_path(path).is_some() => {
+            let model_id = model_id_from_path(path).unwrap();
+            let payload = parse_json_body::<UpdateAiModelRequest>(body);
+            respond(
+                write_json,
+                payload.and_then(|request| ai_update_model(model_id, request)),
+            );
+        }
+        ("DELETE", path) if model_id_from_path(path).is_some() => {
+            let model_id = model_id_from_path(path).unwrap();
+            match ai_delete_model(model_id) {
+                Ok(()) => write_json(200, r#"{"ok":true}"#),
+                Err(message) => write_json(400, &error_json(&message)),
+            }
         }
         ("POST", "/api/ai/providers/test") => {
             let payload = parse_json_body::<ProviderTestRequest>(body);
@@ -139,6 +162,16 @@ fn path_without_query(path: &str) -> &str {
 fn provider_id_from_path(path: &str) -> Option<String> {
     let path = path_without_query(path);
     let prefix = "/api/ai/providers/";
+    let id = path.strip_prefix(prefix)?;
+    if id.is_empty() || id.contains('/') {
+        return None;
+    }
+    Some(url_decode(id))
+}
+
+fn model_id_from_path(path: &str) -> Option<String> {
+    let path = path_without_query(path);
+    let prefix = "/api/ai/models/";
     let id = path.strip_prefix(prefix)?;
     if id.is_empty() || id.contains('/') {
         return None;
