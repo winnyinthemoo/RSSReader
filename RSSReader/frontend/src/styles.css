@@ -570,7 +570,7 @@ h2 {
 
 .reader-search-bar {
   display: grid;
-  grid-template-columns: 18px minmax(160px, 1fr) minmax(42px, auto) 28px 28px;
+  grid-template-columns: 18px minmax(140px, 1fr) 28px minmax(42px, auto) 28px 28px;
   align-items: center;
   gap: 6px;
   width: 100%;
@@ -608,6 +608,10 @@ h2 {
   width: 28px;
   height: 28px;
   border-radius: 7px;
+}
+
+.reader-search-clear:disabled {
+  visibility: hidden;
 }
 
 .reader-search-bar .tool-button:disabled {

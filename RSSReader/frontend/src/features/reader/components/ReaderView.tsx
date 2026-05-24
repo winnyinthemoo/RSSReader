@@ -593,13 +593,30 @@ function MarkdownArticle({
   activeSearchIndex = 0,
   searchMatches = [],
 }: MarkdownArticleProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
   const displayedMarkdown = useMemo(
     () => highlightMarkdown(markdown, searchMatches, activeSearchIndex),
     [markdown, searchMatches, activeSearchIndex],
   );
 
+  useEffect(() => {
+    if (searchMatches.length === 0) {
+      return;
+    }
+
+    const activeHit = contentRef.current?.querySelector<HTMLElement>(
+      ".reader-search-hit.active",
+    );
+    activeHit?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    });
+  }, [activeSearchIndex, searchMatches]);
+
   return (
     <div
+      ref={contentRef}
       className={`reader-content reader-content-md${
         variant === "compare" ? " compare-markdown-content" : ""
       }`}
@@ -868,11 +885,35 @@ function ReaderToolbar({
               if (event.key === "Enter") {
                 event.preventDefault();
                 onSearchStep?.(event.shiftKey ? -1 : 1);
+                return;
+              }
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                onSearchStep?.(1);
+                return;
+              }
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                onSearchStep?.(-1);
+                return;
+              }
+              if (event.key === "Escape" && searchQuery) {
+                event.preventDefault();
+                onSearchQueryChange?.("");
               }
             }}
             placeholder="Search current article"
             aria-label="Search current article"
           />
+          <button
+            className="tool-button reader-search-clear"
+            type="button"
+            title="Clear search"
+            disabled={!onSearchQueryChange || !searchQuery}
+            onClick={() => onSearchQueryChange?.("")}
+          >
+            <X size={14} />
+          </button>
           <span className="reader-search-count">{searchCountLabel}</span>
           <button
             className="tool-button"
