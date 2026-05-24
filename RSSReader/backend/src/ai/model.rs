@@ -240,17 +240,20 @@ pub struct StartTranslationRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaggingSuggestRequest {
     pub article_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaggingSuggestResult {
     pub tags: Vec<String>,
     pub fallback_notice: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AssignTagsRequest {
     pub article_id: String,
     pub tags: Vec<String>,
@@ -258,6 +261,7 @@ pub struct AssignTagsRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UsageReportRequest {
     pub dimension: String,
     pub window_days: u32,

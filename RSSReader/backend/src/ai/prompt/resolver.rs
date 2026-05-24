@@ -12,24 +12,20 @@ pub enum AgentPromptKind {
 }
 
 impl AgentPromptKind {
-    pub fn builtin_path(self) -> &'static str {
+    pub fn builtin_content(self) -> &'static str {
         match self {
-            Self::Summary => concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../resources/Agent/Prompts/summary.default.yaml"
-            ),
-            Self::TranslationStandard => concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../resources/Agent/Prompts/translation.default.yaml"
-            ),
-            Self::TranslationHyMt => concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../resources/Agent/Prompts/translation.hy-mt.yaml"
-            ),
-            Self::Tagging => concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../resources/Agent/Prompts/tagging.default.yaml"
-            ),
+            Self::Summary => {
+                include_str!("../../../../resources/Agent/Prompts/summary.default.yaml")
+            }
+            Self::TranslationStandard => {
+                include_str!("../../../../resources/Agent/Prompts/translation.default.yaml")
+            }
+            Self::TranslationHyMt => {
+                include_str!("../../../../resources/Agent/Prompts/translation.hy-mt.yaml")
+            }
+            Self::Tagging => {
+                include_str!("../../../../resources/Agent/Prompts/tagging.default.yaml")
+            }
         }
     }
 
@@ -87,9 +83,7 @@ pub fn ensure_custom_prompt_file(kind: AgentPromptKind) -> AiResult<(PathBuf, bo
     if target.exists() {
         return Ok((target, false));
     }
-    let builtin = std::fs::read_to_string(kind.builtin_path())
-        .map_err(|error| AiError::Prompt(format!("Failed to read builtin prompt: {error}")))?;
-    std::fs::write(&target, builtin)
+    std::fs::write(&target, kind.builtin_content())
         .map_err(|error| AiError::Prompt(format!("Failed to write custom prompt: {error}")))?;
     Ok((target, true))
 }

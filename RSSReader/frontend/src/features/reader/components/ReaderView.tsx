@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import TurndownService from "turndown";
 import Markdown from "react-markdown";
+import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 
@@ -88,6 +89,22 @@ const FONT_SIZE_OPTIONS: { key: FontSize; label: string; value: string }[] = [
   { key: "lg", label: "L", value: "1.2rem" },
   { key: "xl", label: "XL", value: "1.35rem" },
 ];
+
+const markdownComponents: Components = {
+  a({ node: _node, href, children, ...props }) {
+    const shouldOpenOutsideApp = Boolean(href && !href.startsWith("#"));
+    return (
+      <a
+        {...props}
+        href={href}
+        target={shouldOpenOutsideApp ? "_blank" : undefined}
+        rel={shouldOpenOutsideApp ? "noreferrer" : undefined}
+      >
+        {children}
+      </a>
+    );
+  },
+};
 
 export function ReaderView({ article }: ReaderViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("markdown");
@@ -566,7 +583,11 @@ function MarkdownArticle({
         variant === "compare" ? " compare-markdown-content" : ""
       }`}
     >
-      <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
+        components={markdownComponents}
+      >
         {displayedMarkdown}
       </Markdown>
     </div>

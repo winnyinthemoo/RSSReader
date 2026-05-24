@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use super::super::error::{AiError, AiResult};
 use super::super::model::ProviderTestResult;
 
-const LLM_HTTP_TIMEOUT: Duration = Duration::from_secs(60);
+const LLM_HTTP_TIMEOUT: Duration = Duration::from_secs(20);
 
 pub struct OpenAiCompatClient {
     base_url: String,

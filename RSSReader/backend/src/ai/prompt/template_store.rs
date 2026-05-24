@@ -37,9 +37,7 @@ impl AgentPromptTemplate {
 
 impl PromptTemplateStore {
     pub fn load_builtin(kind: AgentPromptKind) -> AiResult<AgentPromptTemplate> {
-        let content = fs::read_to_string(kind.builtin_path())
-            .map_err(|error| AiError::Prompt(format!("Failed to read builtin prompt: {error}")))?;
-        Self::parse_yaml(&content)
+        Self::parse_yaml(kind.builtin_content())
     }
 
     pub fn load_custom(path: &Path) -> AiResult<AgentPromptTemplate> {
