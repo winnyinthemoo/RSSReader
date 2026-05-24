@@ -35,6 +35,7 @@ import {
 
 interface ReaderViewProps {
   article?: ArticleDetail;
+  onTagsChanged?: () => void;
 }
 
 const turndown = new TurndownService({
@@ -51,20 +52,19 @@ function normalizeMarkdown(html: string): string {
   return unescaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
 
-type ViewMode = "markdown" | "web" | "compare";
+type ViewMode = "markdown" | "source" | "compare";
 
-function IFrameFallback({ url }: { url: string }) {
+function OriginalPageFallback({ url }: { url: string }) {
   return (
     <div className="reader-iframe-fallback">
       <div className="fallback-header">
-        <p className="eyebrow">Unable to load original page</p>
+        <p className="eyebrow">Original page unavailable in app</p>
         <p className="fallback-desc">
-          {url.includes("bloomberg.com")
-            ? "Bloomberg blocks embedding."
-            : "This site does not allow embedding in an iframe."}
+          This is the real article URL. Some sites block embedded views or may be unavailable on
+          the current network.
         </p>
         <a className="fallback-link" href={url} target="_blank" rel="noreferrer">
-          Open in new tab &rarr;
+          Open original page
         </a>
       </div>
     </div>
@@ -89,16 +89,14 @@ const FONT_SIZE_OPTIONS: { key: FontSize; label: string; value: string }[] = [
   { key: "xl", label: "XL", value: "1.35rem" },
 ];
 
-export function ReaderView({ article }: ReaderViewProps) {
+export function ReaderView({ article, onTagsChanged }: ReaderViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("markdown");
-
-  const [webIframeError, setWebIframeError] = useState(false);
-  const webIframeLoaded = useRef(false);
-  const webTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  const [cmpIframeError, setCmpIframeError] = useState(false);
-  const cmpIframeLoaded = useRef(false);
-  const cmpTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [sourceIframeError, setSourceIframeError] = useState(false);
+  const sourceIframeLoaded = useRef(false);
+  const sourceTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [compareIframeError, setCompareIframeError] = useState(false);
+  const compareIframeLoaded = useRef(false);
+  const compareTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [splitRatio, setSplitRatio] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
@@ -108,6 +106,7 @@ export function ReaderView({ article }: ReaderViewProps) {
   const [fontSize, setFontSize] = useState<FontSize>("md");
   const [showThemePanel, setShowThemePanel] = useState(false);
   const [activePanel, setActivePanel] = useState<ReaderPanel | undefined>();
+  const sidePanelRef = useRef<HTMLElement>(null);
   const [tags, setTags] = useState<ArticleTag[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [tagStatus, setTagStatus] = useState<string | undefined>();
@@ -155,32 +154,6 @@ export function ReaderView({ article }: ReaderViewProps) {
     }
   }, [bilingualOpen, loadCachedTranslation, article?.id, targetLanguage]);
 
-  function startIframeTimer(
-    loadFlag: { current: boolean },
-    setError: (v: boolean) => void,
-    timerRef: { current: ReturnType<typeof setTimeout> | undefined },
-  ) {
-    clearTimeout(timerRef.current);
-    loadFlag.current = false;
-    setError(false);
-    timerRef.current = setTimeout(() => {
-      if (!loadFlag.current) setError(true);
-    }, 10000);
-  }
-
-  useEffect(() => {
-    if (viewMode === "web" && article?.url) {
-      startIframeTimer(webIframeLoaded, setWebIframeError, webTimerRef);
-    }
-    if (viewMode === "compare" && article?.url) {
-      startIframeTimer(cmpIframeLoaded, setCmpIframeError, cmpTimerRef);
-    }
-    return () => {
-      if (webTimerRef.current) clearTimeout(webTimerRef.current);
-      if (cmpTimerRef.current) clearTimeout(cmpTimerRef.current);
-    };
-  }, [article?.url, viewMode]);
-
   const markdown = useMemo(() => {
     if (!article?.sanitizedHtml) return "";
     return normalizeMarkdown(article.sanitizedHtml);
@@ -219,12 +192,53 @@ export function ReaderView({ article }: ReaderViewProps) {
     }
   }, [activePanel, article?.id]);
 
+  useEffect(() => {
+    if (!activePanel) {
+      return;
+    }
+
+    function handleOutsideClick(event: MouseEvent) {
+      const target = event.target as Node;
+      if (sidePanelRef.current?.contains(target)) {
+        return;
+      }
+      if (target instanceof Element && target.closest("[data-reader-panel-trigger]")) {
+        return;
+      }
+      setActivePanel(undefined);
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [activePanel]);
+
+  useEffect(() => {
+    if (viewMode === "source" && article?.url) {
+      startIframeTimer(sourceIframeLoaded, setSourceIframeError, sourceTimerRef);
+    }
+    if (viewMode === "compare" && article?.url) {
+      startIframeTimer(compareIframeLoaded, setCompareIframeError, compareTimerRef);
+    }
+
+    return () => {
+      if (sourceTimerRef.current) clearTimeout(sourceTimerRef.current);
+      if (compareTimerRef.current) clearTimeout(compareTimerRef.current);
+    };
+  }, [article?.url, viewMode]);
+
   const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
-    webIframeLoaded.current = false;
-    cmpIframeLoaded.current = false;
-    setWebIframeError(false);
-    setCmpIframeError(false);
+    if (mode === "source") {
+      setSearchQuery("");
+      setActiveSearchIndex(0);
+    }
+    if (mode !== "markdown") {
+      setBilingualOpen(false);
+    }
+    sourceIframeLoaded.current = false;
+    compareIframeLoaded.current = false;
+    setSourceIframeError(false);
+    setCompareIframeError(false);
   };
 
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
@@ -263,6 +277,7 @@ export function ReaderView({ article }: ReaderViewProps) {
       return;
     }
 
+    setViewMode("markdown");
     setBilingualOpen(true);
     setTranslationError(undefined);
 
@@ -321,6 +336,7 @@ export function ReaderView({ article }: ReaderViewProps) {
       setTags(result.tags);
       setTagInput("");
       setTagStatus("Saved");
+      onTagsChanged?.();
     } catch (error) {
       setTagStatus(error instanceof Error ? error.message : String(error));
     }
@@ -335,6 +351,7 @@ export function ReaderView({ article }: ReaderViewProps) {
       await deleteArticleTag({ articleId: article.id, tagId });
       setTags((currentTags) => currentTags.filter((tag) => tag.id !== tagId));
       setTagStatus("Removed");
+      onTagsChanged?.();
     } catch (error) {
       setTagStatus(error instanceof Error ? error.message : String(error));
     }
@@ -378,6 +395,21 @@ export function ReaderView({ article }: ReaderViewProps) {
 
   function handleToggleReaderPanel(panel: ReaderPanel) {
     setActivePanel((currentPanel) => (currentPanel === panel ? undefined : panel));
+  }
+
+  function startIframeTimer(
+    loadFlag: { current: boolean },
+    setError: (value: boolean) => void,
+    timerRef: { current: ReturnType<typeof setTimeout> | undefined },
+  ) {
+    clearTimeout(timerRef.current);
+    loadFlag.current = false;
+    setError(false);
+    timerRef.current = setTimeout(() => {
+      if (!loadFlag.current) {
+        setError(true);
+      }
+    }, 10000);
   }
 
   if (!article) {
@@ -425,11 +457,12 @@ export function ReaderView({ article }: ReaderViewProps) {
         searchMatchCount={searchMatches.length}
         activeSearchIndex={activeSearchIndex}
         onTogglePanel={handleToggleReaderPanel}
-        onSearchQueryChange={setSearchQuery}
-        onSearchStep={handleSearchStep}
+        onSearchQueryChange={viewMode === "source" ? undefined : setSearchQuery}
+        onSearchStep={viewMode === "source" ? undefined : handleSearchStep}
       />
       {activePanel ? (
         <ReaderSidePanel
+          ref={sidePanelRef}
           activePanel={activePanel}
           articleId={article.id}
           tags={tags}
@@ -445,42 +478,44 @@ export function ReaderView({ article }: ReaderViewProps) {
           onSaveNote={() => void handleSaveNote()}
         />
       ) : null}
-      {bilingualOpen ? (
-        <>
-          <ReaderHeader article={article} />
-          <BilingualTranslationView
-            articleHtml={article.sanitizedHtml}
-            translation={translation}
-            isLoading={translationLoading}
-            errorMessage={translationError}
-          />
-        </>
-      ) : viewMode === "markdown" ? (
+      {viewMode === "markdown" ? (
         <div className="reader-themed-page" data-theme={themeBg} data-font-size={fontSize}>
           <ReaderHeader article={article} />
-          <MarkdownArticle
-            markdown={markdown}
-            activeSearchIndex={activeSearchIndex}
-            searchMatches={searchMatches}
-          />
+          {bilingualOpen ? (
+            <BilingualTranslationView
+              articleHtml={article.sanitizedHtml}
+              translation={translation}
+              isLoading={translationLoading}
+              errorMessage={translationError}
+            />
+          ) : (
+            <MarkdownArticle
+              markdown={markdown}
+              activeSearchIndex={activeSearchIndex}
+              searchMatches={searchMatches}
+            />
+          )}
         </div>
-      ) : viewMode === "web" ? (
+      ) : viewMode === "source" ? (
         <div className="reader-web-view">
-          {webIframeError ? (
-            <IFrameFallback url={article.url} />
+          {sourceIframeError ? (
+            <OriginalPageFallback url={article.url} />
           ) : (
             <iframe
               className="reader-iframe"
               src={article.url}
-              title="Original article"
-              onLoad={() => { webIframeLoaded.current = true; setWebIframeError(false); }}
+              title="Original article page"
+              onLoad={() => {
+                sourceIframeLoaded.current = true;
+                setSourceIframeError(false);
+              }}
             />
           )}
         </div>
       ) : (
         <div className={`reader-compare${isDragging ? " dragging" : ""}`} ref={compareRef}>
           <div className="compare-pane" style={{ width: `${splitRatio}%` }}>
-            <div className="compare-pane-label">Converted (Markdown)</div>
+            <div className="compare-pane-label">Readable Markdown</div>
             <div className="compare-pane-content" data-theme={themeBg} data-font-size={fontSize}>
               <ReaderHeader article={article} variant="compact" />
               <MarkdownArticle
@@ -495,15 +530,18 @@ export function ReaderView({ article }: ReaderViewProps) {
             <div className="compare-divider-handle" />
           </div>
           <div className="compare-pane" style={{ width: `${100 - splitRatio}%` }}>
-            <div className="compare-pane-label">Original</div>
-            {cmpIframeError ? (
-              <IFrameFallback url={article.url} />
+            <div className="compare-pane-label">Original page</div>
+            {compareIframeError ? (
+              <OriginalPageFallback url={article.url} />
             ) : (
               <iframe
                 className="reader-iframe"
                 src={article.url}
-                title="Original article"
-                onLoad={() => { cmpIframeLoaded.current = true; setCmpIframeError(false); }}
+                title="Original article page"
+                onLoad={() => {
+                  compareIframeLoaded.current = true;
+                  setCompareIframeError(false);
+                }}
               />
             )}
           </div>
@@ -589,7 +627,7 @@ interface ReaderSidePanelProps {
   onSaveNote: () => void;
 }
 
-function ReaderSidePanel({
+const ReaderSidePanel = forwardRef<HTMLElement, ReaderSidePanelProps>(function ReaderSidePanel({
   activePanel,
   articleId,
   tags,
@@ -603,11 +641,11 @@ function ReaderSidePanel({
   onDeleteTag,
   onNoteChange,
   onSaveNote,
-}: ReaderSidePanelProps) {
+}, ref) {
   const title = activePanel === "tag" ? "Tags" : "Note";
 
   return (
-    <aside className="reader-side-panel" aria-label={title}>
+    <aside className="reader-side-panel" aria-label={title} ref={ref}>
       <header className="reader-side-panel-header">
         <strong>{title}</strong>
         <button className="tool-button" type="button" title="Close" onClick={onClose}>
@@ -666,7 +704,7 @@ function ReaderSidePanel({
 
     </aside>
   );
-}
+});
 
 interface ReaderToolbarProps {
   viewMode: ViewMode;
@@ -743,17 +781,17 @@ function ReaderToolbar({
           <FileText size={17} />
         </button>
         <button
-          className={`tool-button${viewMode === "web" ? " active" : ""}`}
+          className={`tool-button${viewMode === "source" ? " active" : ""}`}
           type="button"
-          title="Web view"
-          onClick={() => onViewModeChange("web")}
+          title="Original page"
+          onClick={() => onViewModeChange("source")}
         >
           <WholeWord size={17} />
         </button>
         <button
           className={`tool-button${viewMode === "compare" ? " active" : ""}`}
           type="button"
-          title="Compare view"
+          title="Compare with original page"
           onClick={() => onViewModeChange("compare")}
         >
           <Columns2 size={17} />
@@ -786,6 +824,7 @@ function ReaderToolbar({
           className={`tool-button${activePanel === "tag" ? " active" : ""}`}
           type="button"
           title="Tag"
+          data-reader-panel-trigger
           onClick={() => onTogglePanel?.("tag")}
         >
           <Tags size={17} />
@@ -794,6 +833,7 @@ function ReaderToolbar({
           className={`tool-button${activePanel === "note" ? " active" : ""}`}
           type="button"
           title="Note"
+          data-reader-panel-trigger
           onClick={() => onTogglePanel?.("note")}
         >
           <NotebookPen size={17} />

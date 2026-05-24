@@ -205,6 +205,22 @@ export default function App() {
     }
   }
 
+  async function handleTagsChanged() {
+    try {
+      const tagResult = await listTags();
+      setTags(tagResult.tags);
+
+      if (selection.type === "tag") {
+        const articleResult = await listArticles(filterFromSelection(selection));
+        setArticles(articleResult.articles);
+      }
+
+      setErrorMessage(undefined);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
   function handleExportOpml() {
     try {
       exportFeedsAsOpml(activeFeeds);
@@ -255,7 +271,7 @@ export default function App() {
         onToggleFavorite={handleToggleFavorite}
       />
 
-      <ReaderView article={selectedArticle} />
+      <ReaderView article={selectedArticle} onTagsChanged={() => void handleTagsChanged()} />
 
       {errorMessage ? <div className="toast" role="alert">{errorMessage}</div> : null}
 
