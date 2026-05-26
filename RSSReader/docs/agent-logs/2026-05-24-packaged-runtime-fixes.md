@@ -1,0 +1,22 @@
+# 2026-05-24 Agent 工作记录：打包版运行时问题修复
+
+- 日期：2026-05-24
+- 负责人：Codex
+- 使用工具：Codex、PowerShell、apply_patch、npm、cargo、Tauri bundler
+- 对应 Issue / PR：未指定
+- 任务目标：修复 Windows 打包版中启动报错、重启后数据看似丢失、文章链接跳出后状态丢失、AI 操作卡住等问题。
+- 关键 Prompt 摘要：用户反馈安装包可运行，但打包后出现右下角 `Something went wrong`、重启后订阅源和设置不显示、点击文章链接返回后数据消失、AI test connection / 翻译 / 摘要无响应。
+- Agent 修改内容摘要：
+  - 为 `ArticleListFilter` 的 serde 反序列化字段补默认值，修复 Tauri invoke 调用 `article_list({})` 或部分过滤条件时缺字段失败的问题。
+  - 让 Markdown 正文链接默认使用新窗口打开，避免外部链接替换当前应用 WebView。
+  - 将 Tauri 中可能发起网络请求的命令放入后台阻塞线程，包括添加/刷新 RSS、AI test connection、摘要、翻译和标签建议。
+  - 将 LLM HTTP 超时从 60 秒降为 20 秒，减少网络异常时看似卡死的等待时间。
+  - 重新生成 Windows NSIS 安装包。
+- 人工检查结果：待人工安装验收。
+- 是否运行测试：
+  - 已运行 `npm run frontend:build`，通过，有 Vite chunk size warning。
+  - 已运行 `backend/cargo check`，通过，有既有 AI 模块 dead_code warning。
+  - 已运行 `backend/cargo test`，15 个测试通过。
+  - 已运行 `src-tauri/cargo check`，通过，有既有 AI 模块 dead_code warning。
+  - 已运行 `npm run tauri:build:windows`，通过，重新生成 `src-tauri/target/release/bundle/nsis/Vortex_0.1.0_x64-setup.exe`。
+- 未解决问题：当前仍是未签名内部测试包；AI 请求是否成功仍取决于用户配置的 Provider、API Key、网络环境和模型服务响应。

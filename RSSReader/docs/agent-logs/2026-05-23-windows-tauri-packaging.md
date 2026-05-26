@@ -1,0 +1,23 @@
+# 2026-05-23 Agent 工作记录：Windows Tauri 打包
+
+- 日期：2026-05-23
+- 负责人：Codex
+- 使用工具：Codex、PowerShell、apply_patch、npm、cargo
+- 对应 Issue / PR：未指定
+- 任务目标：为当前 RSS Reader 项目补齐 Windows Tauri 打包入口，生成可用于内部测试的 Windows 安装包。
+- 关键 Prompt 摘要：用户说明已跑通当前项目，希望由 Agent 完成 Windows 打包，并要求尽量不污染已有前后端代码。
+- Agent 修改内容摘要：
+  - 新增根目录 `package.json`，提供 Tauri 打包脚本。
+  - 新增 `src-tauri/` 桌面壳、Tauri 配置、默认权限和 Windows NSIS 打包配置。
+  - 将 Feed 共享模型补充 `serde` 序列化/反序列化，供 Tauri Commands 使用。
+  - 让前端 AI service 在 Tauri 环境下优先调用 Tauri Commands，避免安装包依赖独立 HTTP dev server。
+  - 将内置 AI Prompt 改为编译期内嵌读取，避免安装包在用户机器上依赖源码路径。
+  - 新增 `build/windows-packaging.md` 记录 Windows 打包流程。
+- 人工检查结果：已生成 Windows NSIS 安装包，待人工安装验收。
+- 是否运行测试：
+  - 已运行 `npm run frontend:build`，通过，有 Vite chunk size warning。
+  - 已运行 `backend/cargo check`，通过，有既有 AI 模块 dead_code warning。
+  - 已运行 `backend/cargo test`，15 个测试通过。
+  - 已运行 `src-tauri/cargo check`，通过，有既有 AI 模块 dead_code warning。
+  - 已运行 `npm run tauri:build:windows`，通过，生成 `src-tauri/target/release/bundle/nsis/Vortex_0.1.0_x64-setup.exe`。
+- 未解决问题：当前为未签名内部测试包；macOS / Linux 打包建议后续通过 GitHub Actions 矩阵构建完成；前端主 chunk 超过 500 kB，仅为构建提示。
