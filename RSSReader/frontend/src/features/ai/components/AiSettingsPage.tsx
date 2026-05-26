@@ -589,6 +589,7 @@ function ProvidersTab({
       </aside>
 
       <section className="ai-properties">
+        <UsageSummary dimension="provider" report={usageReport} />
         <PanelTitle title="Properties" subtitle="Provider connection and local secret settings." />
         <div className="ai-form-grid">
           <label className="ai-field">
@@ -655,8 +656,6 @@ function ProvidersTab({
             <p className="muted">No test result yet.</p>
           )}
         </section>
-
-        <UsageSummary dimension="provider" report={usageReport} />
       </section>
     </div>
   );
@@ -725,6 +724,7 @@ function ModelsTab({
       </aside>
 
       <section className="ai-properties">
+        <UsageSummary dimension="model" report={usageReport} />
         <PanelTitle title="Properties" subtitle="Model name and provider binding." />
         <div className="ai-form-grid">
           <label className="ai-field">
@@ -780,8 +780,6 @@ function ModelsTab({
               : "Create a model after adding a provider."}
           </p>
         </section>
-
-        <UsageSummary dimension="model" report={usageReport} />
       </section>
     </div>
   );
@@ -853,6 +851,7 @@ function AgentsTab({
       </aside>
 
       <section className="ai-properties">
+        <UsageSummary dimension="agent" report={usageReport} />
         <PanelTitle title={`${agentLabel(activeAgent)} Properties`} subtitle="Choose the model and defaults used by this agent." />
         {activeAgent === "summary" ? (
           <div className="ai-form-grid">
@@ -915,8 +914,6 @@ function AgentsTab({
             Save {agentLabel(activeAgent)}
           </button>
         </div>
-
-        <UsageSummary dimension="agent" report={usageReport} />
       </section>
     </div>
   );
@@ -933,21 +930,39 @@ function UsageSummary({ dimension, report }: UsageSummaryProps) {
   const dailyRows = buildUsageDailyRows(visibleReport);
   const points = buildUsageChartPoints(dailyRows);
   const linePoints = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const topRows = visibleReport?.rows.slice(0, 3) ?? [];
+  const activeItemCount = visibleReport?.rows.length ?? 0;
 
   return (
     <section className="ai-usage-panel">
-      <div className="model-call-toolbar">
+      <div className="ai-usage-hero">
         <div className="usage-icon" aria-hidden="true">
-          <LineChart size={18} />
+          <LineChart size={20} />
         </div>
         <div className="model-call-title">
-          <h3>Usage</h3>
+          <p className="eyebrow">7-day usage</p>
+          <h3>{dimensionLabel(dimension)} Activity</h3>
           <p>
-            {dimensionLabel(dimension)} / Total requests: {visibleReport?.totalRequests ?? 0} /
-            Total tokens: {visibleReport?.totalTokens ?? 0}
+            Recent AI calls grouped by {dimensionLabel(dimension).toLowerCase()}.
           </p>
         </div>
       </div>
+
+      <div className="usage-stat-grid">
+        <div className="usage-stat-card">
+          <span>Requests</span>
+          <strong>{formatCompactNumber(visibleReport?.totalRequests ?? 0)}</strong>
+        </div>
+        <div className="usage-stat-card">
+          <span>Tokens</span>
+          <strong>{formatCompactNumber(visibleReport?.totalTokens ?? 0)}</strong>
+        </div>
+        <div className="usage-stat-card">
+          <span>Active</span>
+          <strong>{formatCompactNumber(activeItemCount)}</strong>
+        </div>
+      </div>
+
       <div className="usage-chart" aria-label="Daily token usage">
         <svg viewBox="0 0 320 112" role="img">
           <defs>
@@ -974,6 +989,19 @@ function UsageSummary({ dimension, report }: UsageSummaryProps) {
             <span key={row.date}>{formatUsageDay(row.date)}</span>
           ))}
         </div>
+      </div>
+
+      <div className="usage-leaders" aria-label="Top usage rows">
+        {topRows.length === 0 ? (
+          <p className="muted">No usage events yet.</p>
+        ) : (
+          topRows.map((row) => (
+            <div className="usage-leader-row" key={row.key}>
+              <span>{row.label}</span>
+              <strong>{formatCompactNumber(row.totalTokens)} tokens</strong>
+            </div>
+          ))
+        )}
       </div>
     </section>
   );
@@ -1080,6 +1108,13 @@ function formatUsageDay(value: string) {
     return `${parts[1]}/${parts[2]}`;
   }
   return value;
+}
+
+function formatCompactNumber(value: number) {
+  return new Intl.NumberFormat("en", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
 }
 
 function tabUsageDimension(tab: AiSettingsTab): UsageDimension {
