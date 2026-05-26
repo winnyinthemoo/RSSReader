@@ -2213,11 +2213,11 @@ h2 {
 }
 
 .reader-header h2 {
-  margin-bottom: 18px;
-  font-size: clamp(2.1rem, 4vw, 4.2rem);
-  font-weight: 760;
-  line-height: 0.98;
-  letter-spacing: -0.065em;
+  margin-bottom: 16px;
+  font-size: clamp(1.9rem, 2.65vw, 3.05rem);
+  font-weight: 740;
+  line-height: 1.06;
+  letter-spacing: -0.052em;
 }
 
 .reader-content {

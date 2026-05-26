@@ -5,6 +5,7 @@ import {
   Columns2,
   ExternalLink,
   FileText,
+  Globe2,
   Languages,
   NotebookPen,
   Palette,
@@ -12,7 +13,6 @@ import {
   Share2,
   Star,
   Tags,
-  WholeWord,
   X,
 } from "lucide-react";
 import TurndownService from "turndown";
@@ -824,7 +824,7 @@ function ReaderToolbar({
           title="Original page"
           onClick={() => onViewModeChange("source")}
         >
-          <WholeWord size={17} />
+          <Globe2 size={17} />
         </button>
         <button
           className={`tool-button${viewMode === "compare" ? " active" : ""}`}
