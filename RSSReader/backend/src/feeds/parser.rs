@@ -58,7 +58,9 @@ fn feed_to_domain(feed_url: &str, feed: Feed) -> ParsedFeed {
 
     let feed = FeedSummary {
         id: feed_id,
-        title: feed_title,
+        title: feed_title.clone(),
+        source_title: Some(feed_title),
+        custom_title: None,
         url: feed_url.to_string(),
         site_url,
         description,

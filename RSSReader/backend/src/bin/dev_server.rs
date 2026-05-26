@@ -1,5 +1,6 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::time::Duration;
 
 use rssreader_backend::ai::http::try_handle as try_handle_ai;
 use rssreader_backend::feeds::{
@@ -28,16 +29,13 @@ fn main() -> std::io::Result<()> {
 }
 
 fn handle_connection(mut stream: TcpStream) {
-    let mut buffer = [0; 32_768];
-    let bytes_read = match stream.read(&mut buffer) {
-        Ok(bytes_read) => bytes_read,
+    let request = match read_http_request(&mut stream) {
+        Ok(request) => request,
         Err(error) => {
-            eprintln!("Read failed: {error}");
+            eprintln!("{error}");
             return;
         }
     };
-
-    let request = String::from_utf8_lossy(&buffer[..bytes_read]);
     let (head, body) = request.split_once("\r\n\r\n").unwrap_or((&request, ""));
     let mut lines = head.lines();
     let request_line = lines.next().unwrap_or_default();
@@ -202,6 +200,55 @@ fn handle_connection(mut stream: TcpStream) {
         }
         _ => write_json(&mut stream, 404, &error_json("Not found")),
     }
+}
+
+fn read_http_request(stream: &mut TcpStream) -> Result<String, String> {
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+    let mut bytes = Vec::new();
+    let mut chunk = [0; 4096];
+
+    loop {
+        let bytes_read = stream
+            .read(&mut chunk)
+            .map_err(|error| format!("Read failed: {error}"))?;
+        if bytes_read == 0 {
+            break;
+        }
+
+        bytes.extend_from_slice(&chunk[..bytes_read]);
+        if bytes.len() > 1_048_576 {
+            return Err("Read failed: request too large".to_string());
+        }
+
+        let Some(header_end) = find_header_end(&bytes) else {
+            continue;
+        };
+        let head = String::from_utf8_lossy(&bytes[..header_end]);
+        let body_start = header_end + 4;
+        let content_length = content_length_from_head(&head);
+        if bytes.len().saturating_sub(body_start) >= content_length {
+            break;
+        }
+    }
+
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+fn find_header_end(bytes: &[u8]) -> Option<usize> {
+    bytes.windows(4).position(|window| window == b"\r\n\r\n")
+}
+
+fn content_length_from_head(head: &str) -> usize {
+    head.lines()
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            if name.eq_ignore_ascii_case("content-length") {
+                value.trim().parse::<usize>().ok()
+            } else {
+                None
+            }
+        })
+        .unwrap_or(0)
 }
 
 fn parse_article_filter(path: &str) -> ArticleListFilter {

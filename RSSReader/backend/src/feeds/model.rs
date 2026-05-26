@@ -8,6 +8,8 @@ pub enum FeedStatus {
 pub struct FeedSummary {
     pub id: String,
     pub title: String,
+    pub source_title: Option<String>,
+    pub custom_title: Option<String>,
     pub url: String,
     pub site_url: Option<String>,
     pub description: Option<String>,

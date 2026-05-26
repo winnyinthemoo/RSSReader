@@ -33,12 +33,14 @@ impl FeedRepository {
         self.connection
             .execute(
                 "INSERT INTO feeds (
-                    id, title, url, site_url, description, status, error_message,
-                    last_fetched_at, created_at, updated_at
+                    id, title, source_title, custom_title, url, site_url, description,
+                    status, error_message, last_fetched_at, created_at, updated_at
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)
                 ON CONFLICT(id) DO UPDATE SET
                     title = excluded.title,
+                    source_title = excluded.source_title,
+                    custom_title = excluded.custom_title,
                     url = excluded.url,
                     site_url = excluded.site_url,
                     description = excluded.description,
@@ -49,6 +51,8 @@ impl FeedRepository {
                 params![
                     feed.id,
                     feed.title,
+                    feed.source_title,
+                    feed.custom_title,
                     feed.url,
                     feed.site_url,
                     feed.description,
@@ -116,7 +120,9 @@ impl FeedRepository {
             .prepare(
                 "SELECT
                     f.id,
-                    f.title,
+                    COALESCE(f.custom_title, f.source_title, f.title) AS title,
+                    f.source_title,
+                    f.custom_title,
                     f.url,
                     f.site_url,
                     f.description,
@@ -128,7 +134,7 @@ impl FeedRepository {
                 FROM feeds f
                 LEFT JOIN articles a ON a.feed_id = f.id
                 GROUP BY f.id
-                ORDER BY f.title COLLATE NOCASE ASC",
+                ORDER BY title COLLATE NOCASE ASC",
             )
             .map_err(|error| format!("Failed to list feeds: {error}"))?;
 
@@ -146,7 +152,9 @@ impl FeedRepository {
             .query_row(
                 "SELECT
                     f.id,
-                    f.title,
+                    COALESCE(f.custom_title, f.source_title, f.title) AS title,
+                    f.source_title,
+                    f.custom_title,
                     f.url,
                     f.site_url,
                     f.description,
@@ -171,7 +179,9 @@ impl FeedRepository {
             .query_row(
                 "SELECT
                     f.id,
-                    f.title,
+                    COALESCE(f.custom_title, f.source_title, f.title) AS title,
+                    f.source_title,
+                    f.custom_title,
                     f.url,
                     f.site_url,
                     f.description,
@@ -196,7 +206,7 @@ impl FeedRepository {
             "SELECT
                 a.id,
                 a.feed_id,
-                f.title AS feed_title,
+                COALESCE(f.custom_title, f.source_title, f.title) AS feed_title,
                 a.title,
                 a.url,
                 a.author,
@@ -261,7 +271,7 @@ impl FeedRepository {
                 "SELECT
                     a.id,
                     a.feed_id,
-                    f.title AS feed_title,
+                    COALESCE(f.custom_title, f.source_title, f.title) AS feed_title,
                     a.title,
                     a.url,
                     a.author,
@@ -509,18 +519,20 @@ fn count_for_feed(connection: &Connection, expression: &str, feed_id: &str) -> R
 }
 
 fn feed_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<FeedSummary> {
-    let status: String = row.get(5)?;
+    let status: String = row.get(7)?;
     Ok(FeedSummary {
         id: row.get(0)?,
         title: row.get(1)?,
-        url: row.get(2)?,
-        site_url: row.get(3)?,
-        description: row.get(4)?,
+        source_title: row.get(2)?,
+        custom_title: row.get(3)?,
+        url: row.get(4)?,
+        site_url: row.get(5)?,
+        description: row.get(6)?,
         status: feed_status_from_string(&status),
-        error_message: row.get(6)?,
-        last_fetched_at: row.get(7)?,
-        article_count: row.get::<_, i64>(8)? as usize,
-        unread_count: row.get::<_, i64>(9)? as usize,
+        error_message: row.get(8)?,
+        last_fetched_at: row.get(9)?,
+        article_count: row.get::<_, i64>(10)? as usize,
+        unread_count: row.get::<_, i64>(11)? as usize,
     })
 }
 
@@ -627,4 +639,50 @@ fn default_database_path() -> Result<std::path::PathBuf, String> {
         .map_err(|error| format!("Failed to resolve current directory: {error}"))?;
     path.push("vortex.sqlite3");
     Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_feed(custom_title: Option<&str>) -> FeedSummary {
+        FeedSummary {
+            id: "feed-custom-title".to_string(),
+            title: custom_title.unwrap_or("Bloomberg AI").to_string(),
+            source_title: Some("Bloomberg AI".to_string()),
+            custom_title: custom_title.map(str::to_string),
+            url: "https://example.com/rss.xml".to_string(),
+            site_url: Some("https://example.com".to_string()),
+            description: None,
+            unread_count: 0,
+            article_count: 0,
+            last_fetched_at: Some("1".to_string()),
+            status: FeedStatus::Active,
+            error_message: None,
+        }
+    }
+
+    #[test]
+    fn save_feed_returns_custom_title_after_source_title_update() {
+        let repository = FeedRepository::open_in_memory().expect("repository opens");
+        repository
+            .save_feed(&sample_feed(Some("ai科技")))
+            .expect("custom feed saves");
+
+        let mut refreshed = sample_feed(Some("ai科技"));
+        refreshed.source_title = Some("Bloomberg AI".to_string());
+        refreshed.title = "ai科技".to_string();
+        repository
+            .save_feed(&refreshed)
+            .expect("refreshed feed saves");
+
+        let feed = repository
+            .get_feed("feed-custom-title")
+            .expect("feed query succeeds")
+            .expect("feed exists");
+
+        assert_eq!(feed.title, "ai科技");
+        assert_eq!(feed.custom_title.as_deref(), Some("ai科技"));
+        assert_eq!(feed.source_title.as_deref(), Some("Bloomberg AI"));
+    }
 }

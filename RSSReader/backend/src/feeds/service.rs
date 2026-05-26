@@ -29,7 +29,14 @@ impl FeedService {
 
     pub fn add_feed(&mut self, request: FeedAddRequest) -> Result<FeedWithArticles, String> {
         let normalized_url = normalize_feed_url(&request.url)?;
-        if let Some(existing) = self.repository.get_feed_by_url(&normalized_url)? {
+        if let Some(mut existing) = self.repository.get_feed_by_url(&normalized_url)? {
+            if let Some(name) = request.name.as_deref().map(str::trim).filter(|name| !name.is_empty())
+            {
+                existing.custom_title = Some(name.to_string());
+                existing.title = name.to_string();
+                self.repository.save_feed(&existing)?;
+            }
+
             return Ok(FeedWithArticles {
                 feed: existing.clone(),
                 articles: self.repository.list_articles(ArticleListFilter {
@@ -45,6 +52,7 @@ impl FeedService {
         let mut feed = parsed.feed;
         if let Some(name) = request.name.as_deref().map(str::trim).filter(|name| !name.is_empty())
         {
+            feed.custom_title = Some(name.to_string());
             feed.title = name.to_string();
         }
 
@@ -87,7 +95,12 @@ impl FeedService {
         };
         let mut new_articles = Vec::new();
 
-        feed.title = parsed.feed.title;
+        feed.source_title = parsed.feed.source_title.or(Some(parsed.feed.title));
+        feed.title = feed
+            .custom_title
+            .clone()
+            .or_else(|| feed.source_title.clone())
+            .unwrap_or_else(|| feed.title.clone());
         feed.site_url = parsed.feed.site_url;
         feed.description = parsed.feed.description;
         feed.last_fetched_at = parsed.feed.last_fetched_at;
@@ -97,7 +110,9 @@ impl FeedService {
 
         for article in &parsed.articles {
             if !self.repository.has_article(&article.id)? {
-                new_articles.push(article.list_item());
+                let mut item = article.list_item();
+                item.feed_title = feed.title.clone();
+                new_articles.push(item);
                 self.repository.save_article(article)?;
             }
         }
