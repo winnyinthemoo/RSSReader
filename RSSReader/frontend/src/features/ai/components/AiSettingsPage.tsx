@@ -403,7 +403,6 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
       <section className="ai-settings-panel ai-manager-panel">
         <header className="ai-settings-header ai-manager-header">
           <div>
-            <p className="eyebrow">AI</p>
             <h2>Model Settings</h2>
           </div>
           <button className="secondary-button" type="button" onClick={onClose}>

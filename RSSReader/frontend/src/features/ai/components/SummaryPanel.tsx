@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ChevronDown, Copy, Sparkles } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -19,6 +20,7 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
   const [content, setContent] = useState("");
   const [status, setStatus] = useState<SummaryStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
+  const [copyStatus, setCopyStatus] = useState<string | undefined>();
 
   const loadCachedSummary = useCallback(async () => {
     if (!articleId) {
@@ -55,6 +57,7 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
     setContent("");
     setStatus("idle");
     setErrorMessage(undefined);
+    setCopyStatus(undefined);
   }, [articleId]);
 
   useEffect(() => {
@@ -79,9 +82,24 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
       });
       setContent(chunk.delta);
       setStatus("ready");
+      setCopyStatus(undefined);
     } catch (error) {
       setStatus("error");
       setErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  async function handleCopySummary() {
+    if (!content.trim()) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopyStatus("Copied");
+      window.setTimeout(() => setCopyStatus(undefined), 1600);
+    } catch (error) {
+      setCopyStatus(getErrorMessage(error));
     }
   }
 
@@ -99,39 +117,46 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
         aria-expanded={isOpen}
         onClick={() => setIsOpen((current) => !current)}
       >
-        <span className="summary-chevron">{isOpen ? "<" : ">"}</span>
+        <span className="summary-icon" aria-hidden="true">
+          <Sparkles size={15} />
+        </span>
         <span>Summary</span>
+        <ChevronDown className="summary-caret" size={16} aria-hidden="true" />
       </button>
 
       {isOpen ? (
         <section className="summary-panel">
           <header className="summary-toolbar">
-            <strong>Summary</strong>
-            <label>
-              Language
-              <select
-                value={targetLanguage}
-                onChange={(event) => setTargetLanguage(event.target.value)}
-                disabled={disabled || isBusy}
-              >
-                <option value="zh-Hans">简体中文</option>
-                <option value="en">English</option>
-              </select>
-            </label>
-            <label>
-              Detail
-              <select
-                value={detailLevel}
-                onChange={(event) =>
-                  setDetailLevel(event.target.value as SummaryDetailLevel)
-                }
-                disabled={disabled || isBusy}
-              >
-                <option value="short">Short</option>
-                <option value="medium">Medium</option>
-                <option value="detailed">Detailed</option>
-              </select>
-            </label>
+            <div className="summary-title-group">
+              <span>Generate a local reading digest for this article.</span>
+            </div>
+            <div className="summary-controls">
+              <label>
+                Language
+                <select
+                  value={targetLanguage}
+                  onChange={(event) => setTargetLanguage(event.target.value)}
+                  disabled={disabled || isBusy}
+                >
+                  <option value="zh-Hans">简体中文</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+              <label>
+                Detail
+                <select
+                  value={detailLevel}
+                  onChange={(event) =>
+                    setDetailLevel(event.target.value as SummaryDetailLevel)
+                  }
+                  disabled={disabled || isBusy}
+                >
+                  <option value="short">Short</option>
+                  <option value="medium">Medium</option>
+                  <option value="detailed">Detailed</option>
+                </select>
+              </label>
+            </div>
             <button
               className="secondary-button summary-generate-btn"
               type="button"
@@ -142,6 +167,18 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
             </button>
           </header>
           <div className="summary-content">
+            {content ? (
+              <button
+                className="summary-content-copy"
+                type="button"
+                title="Copy summary"
+                disabled={isBusy}
+                onClick={() => void handleCopySummary()}
+              >
+                <Copy size={15} />
+                <span>{copyStatus ?? "Copy"}</span>
+              </button>
+            ) : null}
             {!articleId ? (
               <p className="muted">Select an article to generate a summary.</p>
             ) : status === "loading-cache" ? (

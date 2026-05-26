@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type {
   ArticleDetail,
@@ -32,25 +31,6 @@ type SidebarSelection =
   | { type: "starred" }
   | { type: "tag"; tagId: string };
 
-interface FloatingPosition {
-  x: number;
-  y: number;
-}
-
-interface AiFabDragState {
-  pointerId: number;
-  startX: number;
-  startY: number;
-  originX: number;
-  originY: number;
-  width: number;
-  height: number;
-  moved: boolean;
-}
-
-const AI_FAB_POSITION_KEY = "rssreader.aiFabPosition";
-const AI_FAB_MARGIN = 12;
-
 export default function App() {
   const [feeds, setFeeds] = useState<FeedSummary[]>([]);
   const [tags, setTags] = useState<TagSummary[]>([]);
@@ -65,31 +45,9 @@ export default function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAiSettings, setShowAiSettings] = useState(false);
-  const [aiFabPosition, setAiFabPosition] = useState<FloatingPosition | undefined>();
-  const [isAiFabDragging, setIsAiFabDragging] = useState(false);
-  const aiFabDragRef = useRef<AiFabDragState | undefined>(undefined);
-  const suppressAiFabClickRef = useRef(false);
 
   useEffect(() => {
     void loadFeedsTagsAndArticles();
-  }, []);
-
-  useEffect(() => {
-    const savedPosition = readSavedAiFabPosition();
-    if (savedPosition) {
-      setAiFabPosition(clampFloatingPosition(savedPosition, 56, 40));
-    }
-  }, []);
-
-  useEffect(() => {
-    function handleResize() {
-      setAiFabPosition((currentPosition) =>
-        currentPosition ? clampFloatingPosition(currentPosition, 56, 40) : currentPosition,
-      );
-    }
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
@@ -272,94 +230,8 @@ export default function App() {
     }
   }
 
-  function handleAiFabPointerDown(event: PointerEvent<HTMLButtonElement>) {
-    if (event.button !== 0) {
-      return;
-    }
-
-    const rect = event.currentTarget.getBoundingClientRect();
-    aiFabDragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: rect.left,
-      originY: rect.top,
-      width: rect.width,
-      height: rect.height,
-      moved: false,
-    };
-    setIsAiFabDragging(true);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function handleAiFabPointerMove(event: PointerEvent<HTMLButtonElement>) {
-    const dragState = aiFabDragRef.current;
-    if (!dragState || dragState.pointerId !== event.pointerId) {
-      return;
-    }
-
-    const deltaX = event.clientX - dragState.startX;
-    const deltaY = event.clientY - dragState.startY;
-    if (Math.hypot(deltaX, deltaY) > 4) {
-      dragState.moved = true;
-    }
-
-    const nextPosition = clampFloatingPosition(
-      {
-        x: dragState.originX + deltaX,
-        y: dragState.originY + deltaY,
-      },
-      dragState.width,
-      dragState.height,
-    );
-    setAiFabPosition(nextPosition);
-  }
-
-  function handleAiFabPointerUp(event: PointerEvent<HTMLButtonElement>) {
-    const dragState = aiFabDragRef.current;
-    if (!dragState || dragState.pointerId !== event.pointerId) {
-      return;
-    }
-
-    if (dragState.moved) {
-      suppressAiFabClickRef.current = true;
-      const rect = event.currentTarget.getBoundingClientRect();
-      saveAiFabPosition({ x: rect.left, y: rect.top });
-    }
-
-    aiFabDragRef.current = undefined;
-    setIsAiFabDragging(false);
-    event.currentTarget.releasePointerCapture(event.pointerId);
-  }
-
-  function handleAiFabClick() {
-    if (suppressAiFabClickRef.current) {
-      suppressAiFabClickRef.current = false;
-      return;
-    }
-    setShowAiSettings(true);
-  }
-
   return (
     <main className="app-shell">
-      <button
-        className={`ai-fab${isAiFabDragging ? " dragging" : ""}`}
-        type="button"
-        title="AI settings"
-        style={
-          aiFabPosition
-            ? { left: aiFabPosition.x, top: aiFabPosition.y, right: "auto", bottom: "auto" }
-            : undefined
-        }
-        onClick={handleAiFabClick}
-        onPointerDown={handleAiFabPointerDown}
-        onPointerMove={handleAiFabPointerMove}
-        onPointerUp={handleAiFabPointerUp}
-        onPointerCancel={handleAiFabPointerUp}
-      >
-        AI
-      </button>
-
       <FeedSidebar
         feeds={activeFeeds}
         tags={tags}
@@ -390,7 +262,11 @@ export default function App() {
         onToggleFavorite={handleToggleFavorite}
       />
 
-      <ReaderView article={selectedArticle} onTagsChanged={() => void handleTagsChanged()} />
+      <ReaderView
+        article={selectedArticle}
+        onTagsChanged={() => void handleTagsChanged()}
+        onOpenAiSettings={() => setShowAiSettings(true)}
+      />
 
       {errorMessage ? <div className="toast" role="alert">{errorMessage}</div> : null}
 
@@ -476,42 +352,4 @@ function getErrorMessage(error: unknown) {
   }
 
   return "Something went wrong.";
-}
-
-function clampFloatingPosition(
-  position: FloatingPosition,
-  width: number,
-  height: number,
-): FloatingPosition {
-  return {
-    x: clamp(position.x, AI_FAB_MARGIN, window.innerWidth - width - AI_FAB_MARGIN),
-    y: clamp(position.y, AI_FAB_MARGIN, window.innerHeight - height - AI_FAB_MARGIN),
-  };
-}
-
-function clamp(value: number, min: number, max: number) {
-  if (max < min) {
-    return min;
-  }
-  return Math.min(Math.max(value, min), max);
-}
-
-function readSavedAiFabPosition() {
-  try {
-    const rawValue = window.localStorage.getItem(AI_FAB_POSITION_KEY);
-    if (!rawValue) {
-      return undefined;
-    }
-    const value = JSON.parse(rawValue) as Partial<FloatingPosition>;
-    if (typeof value.x === "number" && typeof value.y === "number") {
-      return value as FloatingPosition;
-    }
-  } catch {
-    window.localStorage.removeItem(AI_FAB_POSITION_KEY);
-  }
-  return undefined;
-}
-
-function saveAiFabPosition(position: FloatingPosition) {
-  window.localStorage.setItem(AI_FAB_POSITION_KEY, JSON.stringify(position));
 }

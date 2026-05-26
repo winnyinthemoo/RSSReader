@@ -7,6 +7,7 @@ import {
   FileText,
   Globe2,
   Languages,
+  Bot,
   NotebookPen,
   Palette,
   Search,
@@ -37,6 +38,7 @@ import {
 interface ReaderViewProps {
   article?: ArticleDetail;
   onTagsChanged?: () => void;
+  onOpenAiSettings?: () => void;
 }
 
 const turndown = new TurndownService({
@@ -106,7 +108,7 @@ const markdownComponents: Components = {
   },
 };
 
-export function ReaderView({ article, onTagsChanged }: ReaderViewProps) {
+export function ReaderView({ article, onTagsChanged, onOpenAiSettings }: ReaderViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("markdown");
   const [sourceIframeError, setSourceIframeError] = useState(false);
   const sourceIframeLoaded = useRef(false);
@@ -443,6 +445,7 @@ export function ReaderView({ article, onTagsChanged }: ReaderViewProps) {
           onFontSizeChange={setFontSize}
           bilingualOpen={bilingualOpen}
           onTranslate={() => undefined}
+          onOpenAiSettings={onOpenAiSettings}
         />
         <div className="reader-empty">
           <p className="eyebrow">Reader</p>
@@ -476,6 +479,7 @@ export function ReaderView({ article, onTagsChanged }: ReaderViewProps) {
         onTogglePanel={handleToggleReaderPanel}
         onSearchQueryChange={viewMode === "source" ? undefined : setSearchQuery}
         onSearchStep={viewMode === "source" ? undefined : handleSearchStep}
+        onOpenAiSettings={onOpenAiSettings}
       />
       {activePanel ? (
         <ReaderSidePanel
@@ -765,6 +769,7 @@ interface ReaderToolbarProps {
   onTogglePanel?: (panel: ReaderPanel) => void;
   onSearchQueryChange?: (value: string) => void;
   onSearchStep?: (direction: 1 | -1) => void;
+  onOpenAiSettings?: () => void;
 }
 
 function ReaderToolbar({
@@ -788,6 +793,7 @@ function ReaderToolbar({
   onTogglePanel,
   onSearchQueryChange,
   onSearchStep,
+  onOpenAiSettings,
 }: ReaderToolbarProps) {
   const themePanelRef = useRef<HTMLDivElement>(null);
   const searchCountLabel = searchQuery.trim()
@@ -955,6 +961,15 @@ function ReaderToolbar({
             <ChevronDown size={15} />
           </button>
         </div>
+        <button
+          className="tool-button ai-toolbar-button"
+          type="button"
+          title="AI settings"
+          aria-label="AI settings"
+          onClick={onOpenAiSettings}
+        >
+          <Bot size={17} />
+        </button>
       </div>
     </div>
   );
