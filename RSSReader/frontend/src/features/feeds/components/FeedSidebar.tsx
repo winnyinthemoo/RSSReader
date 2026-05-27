@@ -103,6 +103,62 @@ export function FeedSidebar({
 
   const selectedFeedId = selection.type === "feed" ? selection.feedId : undefined;
   const totalUnread = feeds.reduce((total, feed) => total + feed.unreadCount, 0);
+  const addFeedDialog = isAddDialogOpen ? (
+    <div className="modal-backdrop" role="presentation" onMouseDown={handleCloseDialog}>
+      <form
+        className="add-feed-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add feed"
+        onSubmit={handleSubmit}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="dialog-header">
+          <h2>Add Feed</h2>
+          <button type="button" title="Close" onClick={handleCloseDialog}>
+            <X size={17} />
+          </button>
+        </div>
+
+        <label className="dialog-field">
+          <span>Name</span>
+          <input
+            ref={nameInputRef}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Optional display name"
+            disabled={isAdding}
+          />
+        </label>
+
+        <label className="dialog-field">
+          <span>URL</span>
+          <input
+            value={url}
+            onChange={(event) => {
+              setUrl(event.target.value);
+              if (formHint) {
+                setFormHint(undefined);
+              }
+            }}
+            placeholder="https://example.com/feed.xml"
+            disabled={isAdding}
+          />
+        </label>
+
+        {formHint ? <p className="feed-form-hint">{formHint}</p> : null}
+
+        <div className="dialog-actions">
+          <button className="secondary-button" type="button" onClick={handleCloseDialog}>
+            Cancel
+          </button>
+          <button className="primary-button" type="submit" disabled={isAdding}>
+            Add
+          </button>
+        </div>
+      </form>
+    </div>
+  ) : null;
 
   return (
     <aside className="feed-sidebar">
@@ -249,65 +305,7 @@ export function FeedSidebar({
         <span>Refresh selected</span>
       </button>
 
-      {isAddDialogOpen
-        ? createPortal(
-            <div className="modal-backdrop" role="presentation" onMouseDown={handleCloseDialog}>
-              <form
-                className="add-feed-dialog"
-                role="dialog"
-                aria-modal="true"
-                aria-label="Add feed"
-                onSubmit={handleSubmit}
-                onMouseDown={(event) => event.stopPropagation()}
-              >
-                <div className="dialog-header">
-                  <h2>Add Feed</h2>
-                  <button type="button" title="Close" onClick={handleCloseDialog}>
-                    <X size={17} />
-                  </button>
-                </div>
-
-                <label className="dialog-field">
-                  <span>Name</span>
-                  <input
-                    ref={nameInputRef}
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    placeholder="Optional display name"
-                    disabled={isAdding}
-                  />
-                </label>
-
-                <label className="dialog-field">
-                  <span>URL</span>
-                  <input
-                    value={url}
-                    onChange={(event) => {
-                      setUrl(event.target.value);
-                      if (formHint) {
-                        setFormHint(undefined);
-                      }
-                    }}
-                    placeholder="https://example.com/feed.xml"
-                    disabled={isAdding}
-                  />
-                </label>
-
-                {formHint ? <p className="feed-form-hint">{formHint}</p> : null}
-
-                <div className="dialog-actions">
-                  <button className="secondary-button" type="button" onClick={handleCloseDialog}>
-                    Cancel
-                  </button>
-                  <button className="primary-button" type="submit" disabled={isAdding}>
-                    Add
-                  </button>
-                </div>
-              </form>
-            </div>,
-            document.body,
-          )
-        : null}
+      {addFeedDialog ? createPortal(addFeedDialog, document.body) : null}
     </aside>
   );
 }

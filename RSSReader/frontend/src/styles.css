@@ -717,7 +717,7 @@ h2 {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 80;
   display: grid;
   place-items: center;
   padding: 18px;
@@ -2690,11 +2690,9 @@ h2 {
 @keyframes pane-enter {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.99);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
   }
 }
 
