@@ -1391,14 +1391,20 @@ h2 {
 }
 
 .bilingual-translation {
-  max-width: 1100px;
+  --reader-content-max-width: 820px;
+  --reader-content-padding-x: 56px;
+  max-width: var(--reader-content-max-width);
   margin: 0 auto;
   width: 100%;
-  padding: 12px 44px 48px;
+  padding: 12px 0 48px;
 }
 
 .bilingual-status {
-  margin: 0 0 16px;
+  width: calc(100% - (var(--reader-content-padding-x) * 2));
+  max-width: calc(
+    var(--reader-content-max-width) - (var(--reader-content-padding-x) * 2)
+  );
+  margin: 0 auto 16px;
   color: #657066;
   font-size: 0.88rem;
 }
@@ -1408,12 +1414,24 @@ h2 {
 }
 
 .bilingual-align-warning {
-  margin: 0 0 12px;
+  width: calc(100% - (var(--reader-content-padding-x) * 2));
+  max-width: calc(
+    var(--reader-content-max-width) - (var(--reader-content-padding-x) * 2)
+  );
+  margin: 0 auto 12px;
   padding: 8px 12px;
   border-radius: 8px;
   background: #fff8e8;
   color: #6b5a20;
   font-size: 0.86rem;
+}
+
+.bilingual-translation > .summary-error {
+  width: calc(100% - (var(--reader-content-padding-x) * 2));
+  max-width: calc(
+    var(--reader-content-max-width) - (var(--reader-content-padding-x) * 2)
+  );
+  margin: 0 auto 12px;
 }
 
 .translation-block {
@@ -2717,6 +2735,10 @@ h2 {
   .reader-content {
     padding-right: 24px;
     padding-left: 24px;
+  }
+
+  .bilingual-translation {
+    --reader-content-padding-x: 24px;
   }
 }
 
