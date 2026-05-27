@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import vortexLogo from "../../../assets/vortex-logo.png";
 import type { FeedAddRequest, FeedSummary, TagSummary } from "../../../../../shared/feed";
@@ -248,62 +249,65 @@ export function FeedSidebar({
         <span>Refresh selected</span>
       </button>
 
-      {isAddDialogOpen ? (
-        <div className="modal-backdrop" role="presentation" onMouseDown={handleCloseDialog}>
-          <form
-            className="add-feed-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Add feed"
-            onSubmit={handleSubmit}
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="dialog-header">
-              <h2>Add Feed</h2>
-              <button type="button" title="Close" onClick={handleCloseDialog}>
-                <X size={17} />
-              </button>
-            </div>
+      {isAddDialogOpen
+        ? createPortal(
+            <div className="modal-backdrop" role="presentation" onMouseDown={handleCloseDialog}>
+              <form
+                className="add-feed-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Add feed"
+                onSubmit={handleSubmit}
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <div className="dialog-header">
+                  <h2>Add Feed</h2>
+                  <button type="button" title="Close" onClick={handleCloseDialog}>
+                    <X size={17} />
+                  </button>
+                </div>
 
-            <label className="dialog-field">
-              <span>Name</span>
-              <input
-                ref={nameInputRef}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Optional display name"
-                disabled={isAdding}
-              />
-            </label>
+                <label className="dialog-field">
+                  <span>Name</span>
+                  <input
+                    ref={nameInputRef}
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Optional display name"
+                    disabled={isAdding}
+                  />
+                </label>
 
-            <label className="dialog-field">
-              <span>URL</span>
-              <input
-                value={url}
-                onChange={(event) => {
-                  setUrl(event.target.value);
-                  if (formHint) {
-                    setFormHint(undefined);
-                  }
-                }}
-                placeholder="https://example.com/feed.xml"
-                disabled={isAdding}
-              />
-            </label>
+                <label className="dialog-field">
+                  <span>URL</span>
+                  <input
+                    value={url}
+                    onChange={(event) => {
+                      setUrl(event.target.value);
+                      if (formHint) {
+                        setFormHint(undefined);
+                      }
+                    }}
+                    placeholder="https://example.com/feed.xml"
+                    disabled={isAdding}
+                  />
+                </label>
 
-            {formHint ? <p className="feed-form-hint">{formHint}</p> : null}
+                {formHint ? <p className="feed-form-hint">{formHint}</p> : null}
 
-            <div className="dialog-actions">
-              <button className="secondary-button" type="button" onClick={handleCloseDialog}>
-                Cancel
-              </button>
-              <button className="primary-button" type="submit" disabled={isAdding}>
-                Add
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
+                <div className="dialog-actions">
+                  <button className="secondary-button" type="button" onClick={handleCloseDialog}>
+                    Cancel
+                  </button>
+                  <button className="primary-button" type="submit" disabled={isAdding}>
+                    Add
+                  </button>
+                </div>
+              </form>
+            </div>,
+            document.body,
+          )
+        : null}
     </aside>
   );
 }
