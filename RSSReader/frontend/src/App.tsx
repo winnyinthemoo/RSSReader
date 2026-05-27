@@ -45,6 +45,7 @@ export default function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAiSettings, setShowAiSettings] = useState(false);
+  const [readerTheme, setReaderTheme] = useState("white");
 
   useEffect(() => {
     void loadFeedsTagsAndArticles();
@@ -231,7 +232,7 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-reader-theme={readerTheme}>
       <FeedSidebar
         feeds={activeFeeds}
         tags={tags}
@@ -266,6 +267,7 @@ export default function App() {
         article={selectedArticle}
         onTagsChanged={() => void handleTagsChanged()}
         onOpenAiSettings={() => setShowAiSettings(true)}
+        onThemeChange={setReaderTheme}
       />
 
       {errorMessage ? <div className="toast" role="alert">{errorMessage}</div> : null}

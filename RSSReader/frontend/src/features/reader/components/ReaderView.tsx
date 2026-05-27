@@ -8,6 +8,7 @@ import {
   Globe2,
   Languages,
   Bot,
+  Check,
   NotebookPen,
   Palette,
   Search,
@@ -39,6 +40,7 @@ interface ReaderViewProps {
   article?: ArticleDetail;
   onTagsChanged?: () => void;
   onOpenAiSettings?: () => void;
+  onThemeChange?: (theme: ThemeBg) => void;
 }
 
 const turndown = new TurndownService({
@@ -108,7 +110,12 @@ const markdownComponents: Components = {
   },
 };
 
-export function ReaderView({ article, onTagsChanged, onOpenAiSettings }: ReaderViewProps) {
+export function ReaderView({
+  article,
+  onTagsChanged,
+  onOpenAiSettings,
+  onThemeChange,
+}: ReaderViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("markdown");
   const [sourceIframeError, setSourceIframeError] = useState(false);
   const sourceIframeLoaded = useRef(false);
@@ -133,6 +140,7 @@ export function ReaderView({ article, onTagsChanged, onOpenAiSettings }: ReaderV
   const [noteStatus, setNoteStatus] = useState<string | undefined>();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
+  const [shareStatus, setShareStatus] = useState<string | undefined>();
 
   // AI translation state
   const [bilingualOpen, setBilingualOpen] = useState(false);
@@ -140,6 +148,10 @@ export function ReaderView({ article, onTagsChanged, onOpenAiSettings }: ReaderV
   const [translation, setTranslation] = useState<TranslationView | undefined>();
   const [translationLoading, setTranslationLoading] = useState(false);
   const [translationError, setTranslationError] = useState<string | undefined>();
+
+  useEffect(() => {
+    onThemeChange?.(themeBg);
+  }, [onThemeChange, themeBg]);
 
   const loadCachedTranslation = useCallback(async () => {
     if (!article?.id) {
@@ -164,6 +176,7 @@ export function ReaderView({ article, onTagsChanged, onOpenAiSettings }: ReaderV
     setActivePanel(undefined);
     setSearchQuery("");
     setActiveSearchIndex(0);
+    setShareStatus(undefined);
   }, [article?.id]);
 
   // Load cached translation when panel opens
@@ -446,6 +459,8 @@ export function ReaderView({ article, onTagsChanged, onOpenAiSettings }: ReaderV
           bilingualOpen={bilingualOpen}
           onTranslate={() => undefined}
           onOpenAiSettings={onOpenAiSettings}
+          shareStatus={shareStatus}
+          onShareStatusChange={setShareStatus}
         />
         <div className="reader-empty">
           <p className="eyebrow">Reader</p>
@@ -480,6 +495,9 @@ export function ReaderView({ article, onTagsChanged, onOpenAiSettings }: ReaderV
         onSearchQueryChange={viewMode === "source" ? undefined : setSearchQuery}
         onSearchStep={viewMode === "source" ? undefined : handleSearchStep}
         onOpenAiSettings={onOpenAiSettings}
+        article={article}
+        shareStatus={shareStatus}
+        onShareStatusChange={setShareStatus}
       />
       {activePanel ? (
         <ReaderSidePanel
@@ -770,6 +788,9 @@ interface ReaderToolbarProps {
   onSearchQueryChange?: (value: string) => void;
   onSearchStep?: (direction: 1 | -1) => void;
   onOpenAiSettings?: () => void;
+  article?: ArticleDetail;
+  shareStatus?: string;
+  onShareStatusChange?: (status: string | undefined) => void;
 }
 
 function ReaderToolbar({
@@ -794,8 +815,13 @@ function ReaderToolbar({
   onSearchQueryChange,
   onSearchStep,
   onOpenAiSettings,
+  article,
+  shareStatus,
+  onShareStatusChange,
 }: ReaderToolbarProps) {
   const themePanelRef = useRef<HTMLDivElement>(null);
+  const sharePanelRef = useRef<HTMLDivElement>(null);
+  const [showSharePanel, setShowSharePanel] = useState(false);
   const searchCountLabel = searchQuery.trim()
     ? searchMatchCount > 0
       ? `${Math.min(activeSearchIndex + 1, searchMatchCount)} / ${searchMatchCount}`
@@ -812,6 +838,30 @@ function ReaderToolbar({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showThemePanel, onToggleThemePanel]);
+
+  useEffect(() => {
+    if (!showSharePanel) return;
+    function handleClick(e: MouseEvent) {
+      if (sharePanelRef.current && !sharePanelRef.current.contains(e.target as Node)) {
+        setShowSharePanel(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showSharePanel]);
+
+  async function handleCopyShare(value: string, status: string) {
+    if (!value) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      onShareStatusChange?.(status);
+      window.setTimeout(() => onShareStatusChange?.(undefined), 1500);
+    } catch (error) {
+      onShareStatusChange?.(error instanceof Error ? error.message : "Copy failed");
+    }
+  }
 
   return (
     <div className="reader-toolbar" aria-label="Reader tools">
@@ -896,9 +946,59 @@ function ReaderToolbar({
             />
           )}
         </div>
-        <button className="tool-button" type="button" title="Share">
-          <Share2 size={17} />
-        </button>
+        <div className="share-tool" ref={sharePanelRef}>
+          <button
+            className={`tool-button${showSharePanel ? " active" : ""}`}
+            type="button"
+            title="Share"
+            disabled={!article}
+            onClick={() => setShowSharePanel((current) => !current)}
+          >
+            <Share2 size={17} />
+          </button>
+          {showSharePanel && article ? (
+            <div className="share-popover" role="menu" aria-label="Share article">
+              <div className="share-popover-header">
+                <strong>Share Article</strong>
+                <span>{shareStatus ?? "Copy details or open the source."}</span>
+              </div>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => void handleCopyShare(article.url, "Link copied")}
+              >
+                {shareStatus === "Link copied" ? <Check size={15} /> : <Share2 size={15} />}
+                <span>Copy Link</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() =>
+                  void handleCopyShare(
+                    `[${article.title}](${article.url})`,
+                    "Markdown copied",
+                  )
+                }
+              >
+                <FileText size={15} />
+                <span>Copy Markdown</span>
+              </button>
+              <a href={article.url} target="_blank" rel="noreferrer" role="menuitem">
+                <ExternalLink size={15} />
+                <span>Open Original</span>
+              </a>
+              <a
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title)}&url=${encodeURIComponent(article.url)}`}
+                target="_blank"
+                rel="noreferrer"
+                role="menuitem"
+              >
+                <Share2 size={15} />
+                <span>Share to X</span>
+              </a>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="tool-group search-group open" aria-label="Search">
