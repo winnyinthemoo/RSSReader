@@ -76,6 +76,23 @@ fn feed_to_domain(feed_url: &str, feed: Feed) -> ParsedFeed {
     ParsedFeed { feed, articles }
 }
 
+fn strip_html(raw: &str) -> String {
+    let mut text = String::with_capacity(raw.len());
+    let mut inside_tag = false;
+    for ch in raw.chars() {
+        match ch {
+            '<' => inside_tag = true,
+            '>' => {
+                inside_tag = false;
+                text.push(' ');
+            }
+            ch if !inside_tag => text.push(ch),
+            _ => {}
+        }
+    }
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn try_fetch_full_content(article_url: &str) -> Option<String> {
     let response = reqwest::blocking::get(article_url).ok()?;
     if !response.status().is_success() {
@@ -101,7 +118,7 @@ fn entry_to_article(
     let title = entry
         .title
         .as_ref()
-        .map(|title| title.content.trim().to_string())
+        .map(|title| strip_html(title.content.trim()))
         .filter(|title| !title.is_empty())
         .unwrap_or_else(|| "Untitled article".to_string());
     let entry_id = entry.id.trim();
@@ -115,7 +132,6 @@ fn entry_to_article(
         .published
         .or(entry.updated)
         .map(|date| date.to_rfc3339());
-    let has_full_content = entry.content.as_ref().and_then(|c| c.body.as_ref()).is_some();
     let raw_html = entry
         .content
         .as_ref()
@@ -123,10 +139,12 @@ fn entry_to_article(
         .or_else(|| entry.summary.as_ref().map(|summary| summary.content.clone()))
         .unwrap_or_else(|| title.clone());
 
-    let raw_html = if has_full_content {
-        raw_html
-    } else {
+    let needs_full_fetch = strip_html(&raw_html).chars().count() < 400;
+
+    let raw_html = if needs_full_fetch {
         try_fetch_full_content(&article_url).unwrap_or(raw_html)
+    } else {
+        raw_html
     };
     let sanitized_html = ammonia::clean(&raw_html);
     let excerpt = entry
@@ -286,5 +304,17 @@ mod tests {
         println!("=== FIRST 500 CHARS ===\n{}", &product.content[..product.content.len().min(500)]);
         assert!(!product.content.is_empty(), "extracted content should not be empty");
         assert!(product.content.len() > 1000, "extracted content should be substantial");
+    }
+
+    #[test]
+    fn readability_extracts_ms_china_page() {
+        let html = std::fs::read_to_string("C:\\Users\\Eva\\AppData\\Local\\Temp\\test_ms.html")
+            .expect("test article HTML exists");
+        let url = Url::parse("https://www.morganstanleychina.com/ideas/corp-msim-china-name-change")
+            .expect("url parses");
+        let product = extractor::extract(&mut html.as_bytes(), &url).expect("readability extracts");
+        println!("=== MS CONTENT LENGTH: {} ===", product.content.len());
+        println!("=== FULL CONTENT ===\n{}", product.content);
+        assert!(!product.content.is_empty(), "extracted content should not be empty");
     }
 }
