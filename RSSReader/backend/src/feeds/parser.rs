@@ -1,6 +1,8 @@
 use std::io::Cursor;
 
 use feed_rs::model::{Entry, Feed};
+use readability::extractor;
+use url::Url;
 
 use super::{ArticleDetail, FeedStatus, FeedSummary};
 
@@ -74,6 +76,22 @@ fn feed_to_domain(feed_url: &str, feed: Feed) -> ParsedFeed {
     ParsedFeed { feed, articles }
 }
 
+fn try_fetch_full_content(article_url: &str) -> Option<String> {
+    let response = reqwest::blocking::get(article_url).ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    let html = response.text().ok()?;
+    let url = Url::parse(article_url).ok()?;
+    let product = extractor::extract(&mut html.as_bytes(), &url).ok()?;
+    let content = product.content.trim().to_string();
+    if content.is_empty() {
+        None
+    } else {
+        Some(content)
+    }
+}
+
 fn entry_to_article(
     entry: &Entry,
     feed_id: &str,
@@ -97,12 +115,19 @@ fn entry_to_article(
         .published
         .or(entry.updated)
         .map(|date| date.to_rfc3339());
+    let has_full_content = entry.content.as_ref().and_then(|c| c.body.as_ref()).is_some();
     let raw_html = entry
         .content
         .as_ref()
         .and_then(|content| content.body.clone())
         .or_else(|| entry.summary.as_ref().map(|summary| summary.content.clone()))
         .unwrap_or_else(|| title.clone());
+
+    let raw_html = if has_full_content {
+        raw_html
+    } else {
+        try_fetch_full_content(&article_url).unwrap_or(raw_html)
+    };
     let sanitized_html = ammonia::clean(&raw_html);
     let excerpt = entry
         .summary
@@ -248,5 +273,18 @@ mod tests {
 
         assert_eq!(parsed.articles.len(), 2);
         assert_ne!(parsed.articles[0].url, parsed.articles[1].url);
+    }
+
+    #[test]
+    fn readability_extracts_full_content() {
+        let html = std::fs::read_to_string("C:\\Users\\Eva\\AppData\\Local\\Temp\\test_article.html")
+            .expect("test article HTML exists");
+        let url = Url::parse("https://whyya.xyz/posts/20260528-omnifocus-ai-decision-branch/")
+            .expect("url parses");
+        let product = extractor::extract(&mut html.as_bytes(), &url).expect("readability extracts");
+        println!("=== EXTRACTED CONTENT LENGTH: {} ===", product.content.len());
+        println!("=== FIRST 500 CHARS ===\n{}", &product.content[..product.content.len().min(500)]);
+        assert!(!product.content.is_empty(), "extracted content should not be empty");
+        assert!(product.content.len() > 1000, "extracted content should be substantial");
     }
 }
