@@ -28,16 +28,13 @@ export function BilingualTranslationView({
     return buildBilingualArticleHtml(articleHtml, translation.segments);
   }, [articleHtml, translation]);
 
-  if (errorMessage) {
-    return (
-      <div className="bilingual-translation">
-        <p className="summary-error">{errorMessage}</p>
-      </div>
-    );
-  }
-
   return (
     <div className="bilingual-translation">
+      {errorMessage ? (
+        <p className="summary-error" role="status">
+          {formatTranslationError(errorMessage)}
+        </p>
+      ) : null}
       {isLoading ? (
         <p className="bilingual-status muted">
           Translating article by segment (may take a few minutes)…
@@ -62,4 +59,17 @@ export function BilingualTranslationView({
       />
     </div>
   );
+}
+
+function formatTranslationError(message: string) {
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("model") &&
+    (normalized.includes("not configured") ||
+      normalized.includes("not set") ||
+      normalized.includes("missing"))
+  ) {
+    return "Translation model is not configured. Please set a model in AI settings. Showing original content.";
+  }
+  return `Translation failed: ${message}. Showing original content.`;
 }
