@@ -682,6 +682,30 @@ h2 {
   margin: 0 0 1.05em;
 }
 
+.reader-content table {
+  width: 100%;
+  margin: 1.2em 0;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.reader-content th,
+.reader-content td {
+  border: 1px solid var(--line-soft, #d5ddd4);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.reader-content th {
+  background: rgba(0, 0, 0, 0.04);
+  font-weight: 700;
+}
+
+.reader-content tr:nth-child(even) td {
+  background: rgba(0, 0, 0, 0.02);
+}
+
 .reader-empty,
 .empty-panel {
   display: grid;

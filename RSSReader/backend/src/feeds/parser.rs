@@ -93,6 +93,115 @@ fn strip_html(raw: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+fn is_noise_image(tag: &str) -> bool {
+    let lower = tag.to_lowercase();
+    lower.contains("avatar")
+        || lower.contains("gravatar")
+        || lower.contains("smilies")
+        || lower.contains("emoji")
+        || lower.contains("class=\"icon\"")
+        || lower.contains("class='icon'")
+        || lower.contains("hopedomain.com/badge")
+}
+
+fn strip_noise_images(html: &str) -> String {
+    let mut result = String::with_capacity(html.len());
+    let mut pos = 0;
+    while let Some(tag_start) = html[pos..].find("<img ") {
+        let abs_start = pos + tag_start;
+        if let Some(tag_end) = html[abs_start..].find('>') {
+            let tag = &html[abs_start..abs_start + tag_end + 1];
+            if !is_noise_image(tag) {
+                result.push_str(&html[pos..abs_start + tag_end + 1]);
+            } else {
+                result.push_str(&html[pos..abs_start]);
+            }
+            pos = abs_start + tag_end + 1;
+        } else {
+            break;
+        }
+    }
+    result.push_str(&html[pos..]);
+    result
+}
+
+fn extract_img_tags(html: &str) -> String {
+    let mut result = String::new();
+    let mut pos = 0;
+    while let Some(tag_start) = html[pos..].find("<img ") {
+        let abs_start = pos + tag_start;
+        if let Some(tag_end) = html[abs_start..].find('>') {
+            let tag = &html[abs_start..abs_start + tag_end + 1];
+            if !is_noise_image(tag) {
+                result.push_str(tag);
+            }
+            pos = abs_start + tag_end + 1;
+        } else {
+            break;
+        }
+    }
+    result
+}
+
+fn narrow_to_content(html: &str) -> &str {
+    for marker in [
+        "<article", "class=\"article\"", "class=\"article ",
+        "class=\"post-content\"", "class=\"post-content ",
+        "class=\"entry-content\"", "class=\"entry-content ",
+        "class=\"post-body\"", "class=\"post-body ",
+    ] {
+        if let Some(start) = html.find(marker) {
+            let after_open = &html[start..];
+            if let Some(tag_close) = after_open.find('>') {
+                let inner_start = start + tag_close + 1;
+                let rest = &html[inner_start..];
+                if let Some(end) = find_closing_tag_end(rest) {
+                    return &html[inner_start..inner_start + end];
+                }
+            }
+            break;
+        }
+    }
+    html
+}
+
+fn is_void_element(tag: &str) -> bool {
+    matches!(
+        tag,
+        "area" | "base" | "br" | "col" | "embed" | "hr" | "img"
+            | "input" | "link" | "meta" | "param" | "source" | "track" | "wbr"
+    )
+}
+
+fn find_closing_tag_end(html: &str) -> Option<usize> {
+    let mut depth: i32 = 1;
+    let bytes = html.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'<' {
+            if i + 1 < bytes.len() && bytes[i + 1] == b'/' {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            } else if i + 1 < bytes.len() && bytes[i + 1].is_ascii_alphabetic() {
+                let tag_start = i + 1;
+                let tag_end = bytes[tag_start..]
+                    .iter()
+                    .position(|&b| b == b' ' || b == b'>')
+                    .map(|p| tag_start + p)
+                    .unwrap_or(tag_start);
+                let tag_name = std::str::from_utf8(&bytes[tag_start..tag_end]).unwrap_or("");
+                if !is_void_element(tag_name) {
+                    depth += 1;
+                }
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
 fn try_fetch_full_content(article_url: &str) -> Option<String> {
     let response = reqwest::blocking::get(article_url).ok()?;
     if !response.status().is_success() {
@@ -100,13 +209,20 @@ fn try_fetch_full_content(article_url: &str) -> Option<String> {
     }
     let html = response.text().ok()?;
     let url = Url::parse(article_url).ok()?;
-    let product = extractor::extract(&mut html.as_bytes(), &url).ok()?;
-    let content = product.content.trim().to_string();
+    let focused = narrow_to_content(&html);
+    let product = extractor::extract(&mut focused.as_bytes(), &url).ok()?;
+    let mut content = product.content.trim().to_string();
     if content.is_empty() {
-        None
-    } else {
-        Some(content)
+        return None;
     }
+    if !content.contains("<img") {
+        let page_images = extract_img_tags(&html);
+        if !page_images.is_empty() {
+            content = format!("{page_images}{content}");
+        }
+    }
+    content = strip_noise_images(&content);
+    Some(content)
 }
 
 fn entry_to_article(
@@ -142,10 +258,17 @@ fn entry_to_article(
     let needs_full_fetch = strip_html(&raw_html).chars().count() < 400;
 
     let raw_html = if needs_full_fetch {
-        try_fetch_full_content(&article_url).unwrap_or(raw_html)
+        let feed_images = extract_img_tags(&raw_html);
+        let full_text = try_fetch_full_content(&article_url).unwrap_or(raw_html);
+        if feed_images.is_empty() {
+            full_text
+        } else {
+            format!("{feed_images}{full_text}")
+        }
     } else {
         raw_html
     };
+    let raw_html = strip_noise_images(&raw_html);
     let sanitized_html = ammonia::clean(&raw_html);
     let excerpt = entry
         .summary
@@ -293,28 +416,4 @@ mod tests {
         assert_ne!(parsed.articles[0].url, parsed.articles[1].url);
     }
 
-    #[test]
-    fn readability_extracts_full_content() {
-        let html = std::fs::read_to_string("C:\\Users\\Eva\\AppData\\Local\\Temp\\test_article.html")
-            .expect("test article HTML exists");
-        let url = Url::parse("https://whyya.xyz/posts/20260528-omnifocus-ai-decision-branch/")
-            .expect("url parses");
-        let product = extractor::extract(&mut html.as_bytes(), &url).expect("readability extracts");
-        println!("=== EXTRACTED CONTENT LENGTH: {} ===", product.content.len());
-        println!("=== FIRST 500 CHARS ===\n{}", &product.content[..product.content.len().min(500)]);
-        assert!(!product.content.is_empty(), "extracted content should not be empty");
-        assert!(product.content.len() > 1000, "extracted content should be substantial");
-    }
-
-    #[test]
-    fn readability_extracts_ms_china_page() {
-        let html = std::fs::read_to_string("C:\\Users\\Eva\\AppData\\Local\\Temp\\test_ms.html")
-            .expect("test article HTML exists");
-        let url = Url::parse("https://www.morganstanleychina.com/ideas/corp-msim-china-name-change")
-            .expect("url parses");
-        let product = extractor::extract(&mut html.as_bytes(), &url).expect("readability extracts");
-        println!("=== MS CONTENT LENGTH: {} ===", product.content.len());
-        println!("=== FULL CONTENT ===\n{}", product.content);
-        assert!(!product.content.is_empty(), "extracted content should not be empty");
-    }
 }

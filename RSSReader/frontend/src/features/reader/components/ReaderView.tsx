@@ -50,6 +50,16 @@ const turndown = new TurndownService({
   strongDelimiter: "**",
 });
 
+turndown.addRule("table", {
+  filter: ["table"],
+  replacement: (_content, node) => (node as HTMLElement).outerHTML,
+});
+
+turndown.addRule("image", {
+  filter: ["img"],
+  replacement: (_content, node) => (node as HTMLElement).outerHTML,
+});
+
 function normalizeMarkdown(html: string): string {
   const prepared = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   const md = turndown.turndown(prepared);
