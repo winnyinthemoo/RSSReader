@@ -77,32 +77,53 @@ fn feed_to_domain(feed_url: &str, feed: Feed) -> ParsedFeed {
 }
 
 fn strip_html(raw: &str) -> String {
-    let mut text = String::with_capacity(raw.len());
-    let mut inside_tag = false;
-    for ch in raw.chars() {
-        match ch {
-            '<' => inside_tag = true,
-            '>' => {
-                inside_tag = false;
-                text.push(' ');
-            }
-            ch if !inside_tag => text.push(ch),
-            _ => {}
-        }
-    }
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+    plain_text(raw)
 }
 
 fn is_noise_image(tag: &str) -> bool {
     let lower = tag.to_lowercase();
-    lower.contains("avatar")
+    // Path / type patterns
+    if lower.contains(".svg")
+        || lower.contains("/icp.")
+        || lower.contains("/gaba.")
+        || lower.contains("/denglu/")
+        || lower.contains("cprevious")
+        || lower.contains("cnext")
+        || lower.contains("/badge")
+        || lower.contains("/logo.")
+    {
+        return true;
+    }
+    // Legacy keyword patterns
+    if lower.contains("avatar")
         || lower.contains("gravatar")
         || lower.contains("smilies")
         || lower.contains("emoji")
         || lower.contains("class=\"icon\"")
         || lower.contains("class='icon'")
-        || lower.contains("hopedomain.com/badge")
-        || lower.contains("/logo.")
+    {
+        return true;
+    }
+    // Alt-text keyword patterns (Chinese UI labels)
+    if let Some(alt_start) = lower.find("alt=\"") {
+        let rest = &lower[alt_start + 5..];
+        if let Some(alt_end) = rest.find('"') {
+            let alt = &rest[..alt_end];
+            if alt.contains("菜单")
+                || alt.contains("登录")
+                || alt.contains("注册")
+                || alt.contains("分享")
+                || alt.contains("返回")
+                || alt.contains("主题")
+                || alt.contains("相关文章")
+                || alt.contains("声明")
+                || alt.contains("标签")
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn strip_noise_images(html: &str) -> String {
@@ -147,9 +168,12 @@ fn extract_img_tags(html: &str) -> String {
 fn narrow_to_content(html: &str) -> &str {
     for marker in [
         "<article", "class=\"article\"", "class=\"article ",
+        "class=\"article-content\"", "class=\"article-content ",
         "class=\"post-content\"", "class=\"post-content ",
         "class=\"entry-content\"", "class=\"entry-content ",
         "class=\"post-body\"", "class=\"post-body ",
+        "class=\"content\"", "class=\"content ",
+        "class=\"main\"", "class=\"main ",
     ] {
         if let Some(start) = html.find(marker) {
             let after_open = &html[start..];
@@ -206,26 +230,31 @@ fn find_closing_tag_end(html: &str) -> Option<usize> {
 fn strip_tag(html: &str, tag_name: &str) -> String {
     let open = format!("<{}", tag_name);
     let close = format!("</{}>", tag_name);
-    let mut result = String::with_capacity(html.len());
+    let end = html.len();
+    let mut result = String::with_capacity(end);
     let mut pos = 0;
-    while let Some(start) = html[pos..].find(&open) {
-        let abs_start = pos + start;
-        // push everything before this tag
-        result.push_str(&html[pos..abs_start]);
-        // skip this tag and all its content
-        let after_open = &html[abs_start..];
-        if let Some(tag_end) = after_open.find('>') {
-            let inner_start = abs_start + tag_end + 1;
-            if let Some(close_pos) = find_closing_tag_end(&html[inner_start..]) {
-                pos = inner_start + close_pos + close.len();
+    while pos < end {
+        if let Some(start) = html[pos..].find(&open) {
+            let abs_start = pos + start;
+            result.push_str(&html[pos..abs_start]);
+            let after_open = &html[abs_start..];
+            if let Some(tag_end) = after_open.find('>') {
+                let inner_start = abs_start + tag_end + 1;
+                pos = if let Some(close_pos) = find_closing_tag_end(&html[inner_start..]) {
+                    (inner_start + close_pos + close.len()).min(end)
+                } else {
+                    inner_start.min(end)
+                };
             } else {
-                pos = inner_start;
+                pos = (abs_start + open.len()).min(end);
             }
         } else {
-            pos = abs_start + open.len();
+            break;
         }
     }
-    result.push_str(&html[pos..]);
+    if pos < end {
+        result.push_str(&html[pos..]);
+    }
     result
 }
 
@@ -251,6 +280,12 @@ fn try_fetch_full_content(article_url: &str) -> Option<String> {
     if content.is_empty() {
         return None;
     }
+    // Quality check: if readability extracted fewer than 100 plain-text characters,
+    // the result is likely garbage (JS SPA shell, CSS-only layout, etc.).
+    // Fall back to the RSS summary/description instead.
+    if plain_text(&content).chars().count() < 100 {
+        return None;
+    }
     if !content.contains("<img") {
         let page_images = extract_img_tags(&html);
         if !page_images.is_empty() {
@@ -258,6 +293,8 @@ fn try_fetch_full_content(article_url: &str) -> Option<String> {
         }
     }
     content = strip_noise_images(&content);
+    // Strip orphaned <figcaption> left behind when its parent <img> was filtered out.
+    content = strip_tag(&content, "figcaption");
     Some(content)
 }
 
@@ -291,20 +328,33 @@ fn entry_to_article(
         .or_else(|| entry.summary.as_ref().map(|summary| summary.content.clone()))
         .unwrap_or_else(|| title.clone());
 
-    let needs_full_fetch = strip_html(&raw_html).chars().count() < 2000;
+    let rss_plain_len = strip_html(&raw_html).chars().count();
+    let needs_full_fetch = rss_plain_len < 2000;
 
     let raw_html = if needs_full_fetch {
         let feed_images = extract_img_tags(&raw_html);
-        let full_text = try_fetch_full_content(&article_url).unwrap_or(raw_html);
-        if feed_images.is_empty() {
-            full_text
-        } else {
-            format!("{feed_images}{full_text}")
+        match try_fetch_full_content(&article_url) {
+            Some(fetched) => {
+                // Keep whichever source has more plain text — readability on
+                // paginated pages (e.g. caixin.com) may extract less than the
+                // full RSS description.
+                let fetched_plain_len = strip_html(&fetched).chars().count();
+                if fetched_plain_len >= rss_plain_len {
+                    if feed_images.is_empty() {
+                        fetched
+                    } else {
+                        format!("{feed_images}{fetched}")
+                    }
+                } else {
+                    raw_html
+                }
+            }
+            None => raw_html,
         }
     } else {
         raw_html
     };
-    let raw_html = strip_noise_images(&raw_html);
+    let raw_html = strip_noise_images(&strip_tag(&raw_html, "figcaption"));
     let sanitized_html = ammonia::clean(&raw_html);
     let excerpt = entry
         .summary
@@ -344,9 +394,21 @@ fn fallback_article_url(feed_url: &str, entry_id: &str, title: &str) -> String {
 }
 
 fn plain_excerpt(html: &str) -> String {
-    let mut text = String::new();
-    let mut inside_tag = false;
+    let compact = plain_text(html);
+    compact.chars().take(180).collect()
+}
 
+fn now_marker() -> String {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs().to_string())
+        .unwrap_or_else(|_| "0".to_string())
+}
+
+/// Extract plain text from HTML: strip all tags and collapse whitespace.
+fn plain_text(html: &str) -> String {
+    let mut text = String::with_capacity(html.len());
+    let mut inside_tag = false;
     for ch in html.chars() {
         match ch {
             '<' => inside_tag = true,
@@ -358,16 +420,7 @@ fn plain_excerpt(html: &str) -> String {
             _ => {}
         }
     }
-
-    let compact = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    compact.chars().take(180).collect()
-}
-
-fn now_marker() -> String {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs().to_string())
-        .unwrap_or_else(|_| "0".to_string())
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 pub fn stable_id(prefix: &str, value: &str) -> String {
