@@ -25,9 +25,13 @@ import rehypeRaw from "rehype-raw";
 
 import { BilingualTranslationView } from "../../ai/components/BilingualTranslationView";
 import { SummaryPanel } from "../../ai/components/SummaryPanel";
+import { TaggingPanel } from "../../ai/components/TaggingPanel";
 import type { TranslationView } from "../../../../../shared/ai";
 import type { ArticleDetail, ArticleTag } from "../../../../../shared/feed";
-import { getArticleTranslation, startTranslation } from "../../../services/aiService";
+import {
+  getArticleTranslation,
+  startTranslation,
+} from "../../../services/aiService";
 import {
   deleteArticleTag,
   getArticleNote,
@@ -149,6 +153,7 @@ export function ReaderView({
   const [showThemePanel, setShowThemePanel] = useState(false);
   const [activePanel, setActivePanel] = useState<ReaderPanel | undefined>();
   const sidePanelRef = useRef<HTMLElement>(null);
+  const tagStatusTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [tags, setTags] = useState<ArticleTag[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [tagStatus, setTagStatus] = useState<string | undefined>();
@@ -190,6 +195,9 @@ export function ReaderView({
     setTranslation(undefined);
     setTranslationError(undefined);
     setActivePanel(undefined);
+    setTags([]);
+    setTagInput("");
+    setTagStatus(undefined);
     setSearchQuery("");
     setActiveSearchIndex(0);
     setShareStatus(undefined);
@@ -365,6 +373,14 @@ export function ReaderView({
     }
   }
 
+  function showTagStatus(message: string, durationMs = 1000) {
+    clearTimeout(tagStatusTimerRef.current);
+    setTagStatus(message);
+    tagStatusTimerRef.current = setTimeout(() => {
+      setTagStatus(undefined);
+    }, durationMs);
+  }
+
   async function handleSaveTags() {
     if (!article?.id || !tagInput.trim()) {
       return;
@@ -383,9 +399,10 @@ export function ReaderView({
       });
       setTags(result.tags);
       setTagInput("");
-      setTagStatus("Saved");
+      showTagStatus("Saved");
       onTagsChanged?.();
     } catch (error) {
+      clearTimeout(tagStatusTimerRef.current);
       setTagStatus(error instanceof Error ? error.message : String(error));
     }
   }
@@ -398,9 +415,10 @@ export function ReaderView({
     try {
       await deleteArticleTag({ articleId: article.id, tagId });
       setTags((currentTags) => currentTags.filter((tag) => tag.id !== tagId));
-      setTagStatus("Removed");
+      showTagStatus("Removed");
       onTagsChanged?.();
     } catch (error) {
+      clearTimeout(tagStatusTimerRef.current);
       setTagStatus(error instanceof Error ? error.message : String(error));
     }
   }
@@ -528,6 +546,8 @@ export function ReaderView({
           onClose={() => setActivePanel(undefined)}
           onTagInputChange={setTagInput}
           onSaveTags={() => void handleSaveTags()}
+          onAiTagsApplied={setTags}
+          onTagsChanged={onTagsChanged}
           onDeleteTag={(tagId) => void handleDeleteTag(tagId)}
           onNoteChange={setNoteContent}
           onSaveNote={() => void handleSaveNote()}
@@ -698,6 +718,8 @@ interface ReaderSidePanelProps {
   onClose: () => void;
   onTagInputChange: (value: string) => void;
   onSaveTags: () => void;
+  onAiTagsApplied: (tags: ArticleTag[]) => void;
+  onTagsChanged?: () => void;
   onDeleteTag: (tagId: string) => void;
   onNoteChange: (value: string) => void;
   onSaveNote: () => void;
@@ -714,6 +736,8 @@ const ReaderSidePanel = forwardRef<HTMLElement, ReaderSidePanelProps>(function R
   onClose,
   onTagInputChange,
   onSaveTags,
+  onAiTagsApplied,
+  onTagsChanged,
   onDeleteTag,
   onNoteChange,
   onSaveNote,
@@ -757,6 +781,11 @@ const ReaderSidePanel = forwardRef<HTMLElement, ReaderSidePanelProps>(function R
           <button className="secondary-button" type="button" onClick={onSaveTags}>
             Save tags
           </button>
+          <TaggingPanel
+            articleId={articleId}
+            onApplied={onAiTagsApplied}
+            onTagsChanged={onTagsChanged}
+          />
           {tagStatus ? <p className="reader-panel-status">{tagStatus}</p> : null}
         </div>
       ) : null}

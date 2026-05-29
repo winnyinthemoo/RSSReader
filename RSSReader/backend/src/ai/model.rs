@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::feeds::ArticleTagsResult;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentType {
@@ -228,7 +230,12 @@ pub struct TranslationView {
     pub run_id: String,
     pub article_id: String,
     pub target_language: String,
+    pub translated_title: Option<String>,
     pub status: String,
+    pub bilingual_html: Option<String>,
+    pub bilingual_aligned: bool,
+    pub bilingual_placed: usize,
+    pub bilingual_expected: usize,
     pub segments: Vec<TranslationSegmentView>,
 }
 
@@ -260,6 +267,8 @@ pub struct AssignTagsRequest {
     pub source: String,
 }
 
+pub type AssignTagsResult = ArticleTagsResult;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageReportRequest {
@@ -284,6 +293,24 @@ pub struct UsageDailyRow {
     pub date: String,
     pub request_count: u64,
     pub total_tokens: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct UsageEventRecord {
+    pub id: String,
+    pub task_type: String,
+    pub article_id: Option<String>,
+    pub provider_id: Option<String>,
+    pub model_id: Option<String>,
+    pub model_name_snapshot: String,
+    pub base_url_snapshot: String,
+    pub request_status: String,
+    pub prompt_tokens: Option<u64>,
+    pub completion_tokens: Option<u64>,
+    pub total_tokens: Option<u64>,
+    pub started_at: String,
+    pub finished_at: String,
+    pub created_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

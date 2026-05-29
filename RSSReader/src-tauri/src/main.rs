@@ -194,7 +194,7 @@ async fn ai_suggest_tags(request: TaggingSuggestRequest) -> Result<TaggingSugges
 }
 
 #[tauri::command]
-fn ai_assign_tags(request: AssignTagsRequest) -> Result<(), String> {
+fn ai_assign_tags(request: AssignTagsRequest) -> Result<ArticleTagsResult, String> {
     backend::ai::ai_assign_tags(request)
 }
 

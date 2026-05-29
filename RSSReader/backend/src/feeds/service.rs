@@ -1,9 +1,9 @@
 use super::{
-    fetch_and_parse_feed, ArticleDetail, ArticleListFilter, ArticleListItem, ArticleNote,
-    ArticleNoteSaveRequest, ArticleMarkFavoriteRequest, ArticleMarkReadRequest, ArticleTagDeleteRequest,
-    ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest, FeedDeleteRequest, FeedListResult,
-    FeedRefreshRequest, FeedRefreshResult, FeedRepository, FeedStatus, FeedWithArticles,
-    TagListResult,
+    fetch_and_parse_feed, ArticleDetail, ArticleListFilter, ArticleListItem,
+    ArticleMarkFavoriteRequest, ArticleMarkReadRequest, ArticleNote, ArticleNoteSaveRequest,
+    ArticleTagDeleteRequest, ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest,
+    FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedRepository,
+    FeedStatus, FeedWithArticles, TagListResult,
 };
 
 pub struct FeedService {
@@ -30,7 +30,11 @@ impl FeedService {
     pub fn add_feed(&mut self, request: FeedAddRequest) -> Result<FeedWithArticles, String> {
         let normalized_url = normalize_feed_url(&request.url)?;
         if let Some(mut existing) = self.repository.get_feed_by_url(&normalized_url)? {
-            if let Some(name) = request.name.as_deref().map(str::trim).filter(|name| !name.is_empty())
+            if let Some(name) = request
+                .name
+                .as_deref()
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
             {
                 existing.custom_title = Some(name.to_string());
                 existing.title = name.to_string();
@@ -50,7 +54,11 @@ impl FeedService {
 
         let parsed = fetch_and_parse_feed(&normalized_url)?;
         let mut feed = parsed.feed;
-        if let Some(name) = request.name.as_deref().map(str::trim).filter(|name| !name.is_empty())
+        if let Some(name) = request
+            .name
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
         {
             feed.custom_title = Some(name.to_string());
             feed.title = name.to_string();
@@ -61,10 +69,7 @@ impl FeedService {
             self.repository.save_article(article)?;
         }
 
-        let feed = self
-            .repository
-            .get_feed(&feed.id)?
-            .unwrap_or(feed);
+        let feed = self.repository.get_feed(&feed.id)?.unwrap_or(feed);
         let articles = self.repository.list_articles(ArticleListFilter {
             feed_id: Some(feed.id.clone()),
             unread_only: false,
@@ -121,10 +126,7 @@ impl FeedService {
         feed.unread_count = self.repository.count_unread_for_feed(&feed.id)?;
         self.repository.save_feed(&feed)?;
 
-        Ok(FeedRefreshResult {
-            feed,
-            new_articles,
-        })
+        Ok(FeedRefreshResult { feed, new_articles })
     }
 
     pub fn list_articles(&self, filter: ArticleListFilter) -> Vec<ArticleListItem> {

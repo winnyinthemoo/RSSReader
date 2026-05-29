@@ -6,6 +6,7 @@ import type {
   AiProviderListResult,
   ArticleSummaryRecord,
   AssignTagsRequest,
+  AssignTagsResult,
   CreateAiModelRequest,
   CreateAiProviderRequest,
   GetSummaryRequest,
@@ -241,13 +242,13 @@ export async function suggestTags(
   });
 }
 
-export async function assignTags(request: AssignTagsRequest): Promise<void> {
+export async function assignTags(request: AssignTagsRequest): Promise<AssignTagsResult> {
   const invoke = getInvoke();
   if (invoke) {
-    return invoke<void>("ai_assign_tags", { request });
+    return invoke<AssignTagsResult>("ai_assign_tags", { request });
   }
 
-  await requestJson<{ ok: boolean }>("/api/ai/tags/assign", {
+  return requestJson<AssignTagsResult>("/api/ai/tags/assign", {
     method: "POST",
     body: JSON.stringify(request),
   });

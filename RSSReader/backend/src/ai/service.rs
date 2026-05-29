@@ -1,6 +1,6 @@
 use super::error::{AiError, AiResult};
-use super::model::*;
 use super::model::TranslationPromptStrategy;
+use super::model::*;
 use super::prompt::{AgentPromptKind, PromptCustomization, PromptResolver};
 use super::provider::AiProviderService;
 use super::summary::SummaryService;
@@ -98,7 +98,10 @@ impl AiService {
         })
     }
 
-    pub fn get_summary(&self, request: GetSummaryRequest) -> AiResult<Option<ArticleSummaryRecord>> {
+    pub fn get_summary(
+        &self,
+        request: GetSummaryRequest,
+    ) -> AiResult<Option<ArticleSummaryRecord>> {
         self.summary.get_summary(request)
     }
 
@@ -111,7 +114,8 @@ impl AiService {
         article_id: &str,
         target_language: &str,
     ) -> AiResult<Option<TranslationView>> {
-        self.translation.get_translation(article_id, target_language)
+        self.translation
+            .get_translation(article_id, target_language)
     }
 
     pub fn start_translation(&self, request: StartTranslationRequest) -> AiResult<TranslationView> {
@@ -122,7 +126,7 @@ impl AiService {
         self.tagging.suggest(request)
     }
 
-    pub fn assign_tags(&self, request: AssignTagsRequest) -> AiResult<()> {
+    pub fn assign_tags(&self, request: AssignTagsRequest) -> AiResult<AssignTagsResult> {
         self.tagging.assign_tags(request)
     }
 

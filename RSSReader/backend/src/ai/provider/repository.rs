@@ -5,7 +5,7 @@ use crate::database::run_migrations;
 use super::super::error::{AiError, AiResult};
 use super::super::model::{
     AgentSettingsRecord, AgentType, AiModel, AiProvider, ArticleSummaryRecord, SummaryDetailLevel,
-    TranslationSegmentView, TranslationView, UsageDailyRow, UsageReportRow,
+    TranslationSegmentView, TranslationView, UsageDailyRow, UsageEventRecord, UsageReportRow,
 };
 
 pub struct AiRepository {
@@ -201,8 +201,8 @@ impl AiRepository {
         record: &AgentSettingsRecord,
         updated_at: &str,
     ) -> AiResult<()> {
-        let config_json = serde_json::to_string(&record.config)
-            .map_err(|e| AiError::Database(e.to_string()))?;
+        let config_json =
+            serde_json::to_string(&record.config).map_err(|e| AiError::Database(e.to_string()))?;
         self.connection.execute(
             "INSERT INTO ai_agent_settings (agent_type, primary_model_id, fallback_model_id, config_json, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5)
@@ -310,6 +310,33 @@ impl AiRepository {
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 
+    pub fn insert_usage_event(&self, event: &UsageEventRecord) -> AiResult<()> {
+        self.connection.execute(
+            "INSERT INTO llm_usage_events (
+                id, task_type, article_id, provider_id, model_id, model_name_snapshot,
+                base_url_snapshot, request_status, prompt_tokens, completion_tokens,
+                total_tokens, started_at, finished_at, created_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            params![
+                event.id,
+                event.task_type,
+                event.article_id,
+                event.provider_id,
+                event.model_id,
+                event.model_name_snapshot,
+                event.base_url_snapshot,
+                event.request_status,
+                event.prompt_tokens,
+                event.completion_tokens,
+                event.total_tokens,
+                event.started_at,
+                event.finished_at,
+                event.created_at,
+            ],
+        )?;
+        Ok(())
+    }
+
     pub fn list_tag_names(&self) -> AiResult<Vec<String>> {
         let mut stmt = self
             .connection
@@ -350,11 +377,15 @@ impl AiRepository {
         source: &str,
         now: &str,
     ) -> AiResult<()> {
-        let tag_id: String = if let Some(existing) = self.connection.query_row(
-            "SELECT id FROM tags WHERE normalized_name = ?1",
-            params![normalized_name],
-            |row| row.get(0),
-        ).optional()? {
+        let tag_id: String = if let Some(existing) = self
+            .connection
+            .query_row(
+                "SELECT id FROM tags WHERE normalized_name = ?1",
+                params![normalized_name],
+                |row| row.get(0),
+            )
+            .optional()?
+        {
             existing
         } else {
             let id = uuid::Uuid::new_v4().to_string();
@@ -395,19 +426,33 @@ impl AiRepository {
         run_id: &str,
         article_id: &str,
         target_language: &str,
+        translated_title: Option<&str>,
         status: &str,
         now: &str,
     ) -> AiResult<()> {
         self.connection.execute(
             "INSERT INTO article_translation_runs (
-                id, article_id, target_language, status, created_at, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![run_id, article_id, target_language, status, now, now],
+                id, article_id, target_language, translated_title, status, created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                run_id,
+                article_id,
+                target_language,
+                translated_title,
+                status,
+                now,
+                now
+            ],
         )?;
         Ok(())
     }
 
-    pub fn update_translation_run_status(&self, run_id: &str, status: &str, now: &str) -> AiResult<()> {
+    pub fn update_translation_run_status(
+        &self,
+        run_id: &str,
+        status: &str,
+        now: &str,
+    ) -> AiResult<()> {
         self.connection.execute(
             "UPDATE article_translation_runs SET status = ?1, updated_at = ?2 WHERE id = ?3",
             params![status, now, run_id],
@@ -450,7 +495,7 @@ impl AiRepository {
         let run = self
             .connection
             .query_row(
-                "SELECT id, article_id, target_language, status
+                "SELECT id, article_id, target_language, translated_title, status
                  FROM article_translation_runs
                  WHERE article_id = ?1 AND target_language = ?2",
                 params![article_id, target_language],
@@ -459,13 +504,14 @@ impl AiRepository {
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, String>(2)?,
-                        row.get::<_, String>(3)?,
+                        row.get::<_, Option<String>>(3)?,
+                        row.get::<_, String>(4)?,
                     ))
                 },
             )
             .optional()?;
 
-        let Some((run_id, article_id, target_language, status)) = run else {
+        let Some((run_id, article_id, target_language, translated_title, status)) = run else {
             return Ok(None);
         };
 
@@ -492,7 +538,12 @@ impl AiRepository {
             run_id,
             article_id,
             target_language,
+            translated_title,
             status,
+            bilingual_html: None,
+            bilingual_aligned: false,
+            bilingual_placed: 0,
+            bilingual_expected: segments.len(),
             segments,
         }))
     }

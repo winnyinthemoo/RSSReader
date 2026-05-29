@@ -1,5 +1,5 @@
-use super::template_store::PromptRenderResult;
 use super::super::client::openai_compat::ChatMessage;
+use super::template_store::PromptRenderResult;
 
 /// Build OpenAI-compatible messages from rendered prompts (Mercury: omit system when absent).
 pub fn chat_messages_from_rendered(rendered: &PromptRenderResult) -> Vec<ChatMessage> {

@@ -24,7 +24,10 @@ pub fn try_handle(
         }
         ("POST", "/api/ai/providers") => {
             let payload = parse_json_body::<CreateAiProviderRequest>(body);
-            respond(write_json, payload.and_then(|request| ai_create_provider(request)));
+            respond(
+                write_json,
+                payload.and_then(|request| ai_create_provider(request)),
+            );
         }
         ("PUT", path) if provider_id_from_path(path).is_some() => {
             let provider_id = provider_id_from_path(path).unwrap();
@@ -46,7 +49,10 @@ pub fn try_handle(
         }
         ("POST", "/api/ai/models") => {
             let payload = parse_json_body::<CreateAiModelRequest>(body);
-            respond(write_json, payload.and_then(|request| ai_create_model(request)));
+            respond(
+                write_json,
+                payload.and_then(|request| ai_create_model(request)),
+            );
         }
         ("PUT", path) if model_id_from_path(path).is_some() => {
             let model_id = model_id_from_path(path).unwrap();
@@ -65,7 +71,10 @@ pub fn try_handle(
         }
         ("POST", "/api/ai/providers/test") => {
             let payload = parse_json_body::<ProviderTestRequest>(body);
-            respond(write_json, payload.and_then(|request| ai_test_provider(request)));
+            respond(
+                write_json,
+                payload.and_then(|request| ai_test_provider(request)),
+            );
         }
         ("GET", path) if path.starts_with("/api/ai/settings/") => {
             let agent = path
@@ -75,7 +84,10 @@ pub fn try_handle(
         }
         ("PUT", path) if path.starts_with("/api/ai/settings/") => {
             let payload = parse_json_body::<AiAgentSettings>(body);
-            respond(write_json, payload.and_then(|settings| ai_update_agent_settings(settings)));
+            respond(
+                write_json,
+                payload.and_then(|settings| ai_update_agent_settings(settings)),
+            );
         }
         ("POST", path) if path.starts_with("/api/ai/prompts/reveal/") => {
             let agent = path.trim_start_matches("/api/ai/prompts/reveal/");
@@ -83,8 +95,8 @@ pub fn try_handle(
         }
         ("GET", "/api/ai/summary") => {
             let article_id = query_param(path_with_query, "articleId").unwrap_or_default();
-            let target_language =
-                query_param(path_with_query, "targetLanguage").unwrap_or_else(|| "zh-Hans".to_string());
+            let target_language = query_param(path_with_query, "targetLanguage")
+                .unwrap_or_else(|| "zh-Hans".to_string());
             let detail_level = query_param(path_with_query, "detailLevel")
                 .and_then(|value| parse_detail_level(&value))
                 .unwrap_or(SummaryDetailLevel::Medium);
@@ -99,24 +111,37 @@ pub fn try_handle(
         }
         ("POST", "/api/ai/summary/stream") => {
             let payload = parse_json_body::<StartSummaryRequest>(body);
-            respond(write_json, payload.and_then(|request| ai_start_summary(request)));
+            respond(
+                write_json,
+                payload.and_then(|request| ai_start_summary(request)),
+            );
         }
         ("GET", "/api/ai/translation") => {
             let article_id = query_param(path_with_query, "articleId").unwrap_or_default();
-            let target_language =
-                query_param(path_with_query, "targetLanguage").unwrap_or_else(|| "zh-Hans".to_string());
-            respond(
-                write_json,
-                ai_get_translation(article_id, target_language),
-            );
+            let target_language = query_param(path_with_query, "targetLanguage")
+                .unwrap_or_else(|| "zh-Hans".to_string());
+            respond(write_json, ai_get_translation(article_id, target_language));
         }
         ("POST", "/api/ai/translation/start") => {
             let payload = parse_json_body::<StartTranslationRequest>(body);
-            respond(write_json, payload.and_then(|request| ai_start_translation(request)));
+            respond(
+                write_json,
+                payload.and_then(|request| ai_start_translation(request)),
+            );
         }
         ("POST", "/api/ai/tagging/suggest") => {
             let payload = parse_json_body::<TaggingSuggestRequest>(body);
-            respond(write_json, payload.and_then(|request| ai_suggest_tags(request)));
+            respond(
+                write_json,
+                payload.and_then(|request| ai_suggest_tags(request)),
+            );
+        }
+        ("POST", "/api/ai/tagging/assign") | ("POST", "/api/ai/tags/assign") => {
+            let payload = parse_json_body::<AssignTagsRequest>(body);
+            respond(
+                write_json,
+                payload.and_then(|request| ai_assign_tags(request)),
+            );
         }
         ("GET", "/api/ai/usage/report") => {
             let dimension =

@@ -12,8 +12,8 @@ use rssreader_backend::feeds::{
 };
 
 fn main() -> std::io::Result<()> {
-    let address = std::env::var("RSSREADER_BACKEND_ADDR")
-        .unwrap_or_else(|_| "127.0.0.1:5181".to_string());
+    let address =
+        std::env::var("RSSREADER_BACKEND_ADDR").unwrap_or_else(|_| "127.0.0.1:5181".to_string());
     let listener = TcpListener::bind(&address)?;
 
     println!("Vortex backend dev server listening on http://{address}");
@@ -196,7 +196,11 @@ fn handle_connection(mut stream: TcpStream) {
         }
         ("GET", path) if path.starts_with("/api/articles") => {
             let filter = parse_article_filter(path);
-            write_json(&mut stream, 200, &article_list_result_json(&article_list(filter)));
+            write_json(
+                &mut stream,
+                200,
+                &article_list_result_json(&article_list(filter)),
+            );
         }
         _ => write_json(&mut stream, 404, &error_json("Not found")),
     }
@@ -296,9 +300,8 @@ fn write_json(stream: &mut TcpStream, status: u16, body: &str) {
 }
 
 fn write_empty(stream: &mut TcpStream, status: u16) {
-    let response = format!(
-        "HTTP/1.1 {status} No Content\r\n{CORS_RESPONSE_HEADERS}Content-Length: 0\r\n\r\n"
-    );
+    let response =
+        format!("HTTP/1.1 {status} No Content\r\n{CORS_RESPONSE_HEADERS}Content-Length: 0\r\n\r\n");
 
     let _ = stream.write_all(response.as_bytes());
 }

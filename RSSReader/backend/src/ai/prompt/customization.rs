@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use super::super::error::AiResult;
 use super::resolver::{ensure_custom_prompt_file, AgentPromptKind};
 use super::template_store::{AgentPromptTemplate, PromptRenderResult, PromptTemplateStore};
-use super::super::error::AiResult;
 
 pub struct PromptCustomization;
 
@@ -31,7 +31,8 @@ impl PromptCustomization {
                             template: builtin,
                             rendered,
                             fallback_notice: Some(
-                                "Custom prompt version mismatch; using builtin template.".to_string(),
+                                "Custom prompt version mismatch; using builtin template."
+                                    .to_string(),
                             ),
                             used_custom: false,
                         });

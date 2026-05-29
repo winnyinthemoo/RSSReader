@@ -33,7 +33,10 @@ pub fn summary_parameters(
         "targetLanguageDisplayName".to_string(),
         language_display_name(target_language),
     );
-    map.insert("detailLevel".to_string(), detail_level_label(detail_level).to_string());
+    map.insert(
+        "detailLevel".to_string(),
+        detail_level_label(detail_level).to_string(),
+    );
     map.insert("sourceText".to_string(), source_text.to_string());
     map
 }
@@ -64,6 +67,9 @@ pub fn tagging_parameters(
     let mut map = HashMap::new();
     map.insert("title".to_string(), title.to_string());
     map.insert("body".to_string(), body.to_string());
-    map.insert("existingTagsJson".to_string(), existing_tags_json.to_string());
+    map.insert(
+        "existingTagsJson".to_string(),
+        existing_tags_json.to_string(),
+    );
     map
 }

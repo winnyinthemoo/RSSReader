@@ -146,10 +146,15 @@ fn extract_img_tags(html: &str) -> String {
 
 fn narrow_to_content(html: &str) -> &str {
     for marker in [
-        "<article", "class=\"article\"", "class=\"article ",
-        "class=\"post-content\"", "class=\"post-content ",
-        "class=\"entry-content\"", "class=\"entry-content ",
-        "class=\"post-body\"", "class=\"post-body ",
+        "<article",
+        "class=\"article\"",
+        "class=\"article ",
+        "class=\"post-content\"",
+        "class=\"post-content ",
+        "class=\"entry-content\"",
+        "class=\"entry-content ",
+        "class=\"post-body\"",
+        "class=\"post-body ",
     ] {
         if let Some(start) = html.find(marker) {
             let after_open = &html[start..];
@@ -169,8 +174,20 @@ fn narrow_to_content(html: &str) -> &str {
 fn is_void_element(tag: &str) -> bool {
     matches!(
         tag,
-        "area" | "base" | "br" | "col" | "embed" | "hr" | "img"
-            | "input" | "link" | "meta" | "param" | "source" | "track" | "wbr"
+        "area"
+            | "base"
+            | "br"
+            | "col"
+            | "embed"
+            | "hr"
+            | "img"
+            | "input"
+            | "link"
+            | "meta"
+            | "param"
+            | "source"
+            | "track"
+            | "wbr"
     )
 }
 
@@ -288,7 +305,12 @@ fn entry_to_article(
         .content
         .as_ref()
         .and_then(|content| content.body.clone())
-        .or_else(|| entry.summary.as_ref().map(|summary| summary.content.clone()))
+        .or_else(|| {
+            entry
+                .summary
+                .as_ref()
+                .map(|summary| summary.content.clone())
+        })
         .unwrap_or_else(|| title.clone());
 
     let needs_full_fetch = strip_html(&raw_html).chars().count() < 2000;
@@ -371,9 +393,9 @@ fn now_marker() -> String {
 }
 
 pub fn stable_id(prefix: &str, value: &str) -> String {
-    let hash = value
-        .bytes()
-        .fold(5381_u64, |acc, byte| acc.wrapping_mul(33).wrapping_add(byte as u64));
+    let hash = value.bytes().fold(5381_u64, |acc, byte| {
+        acc.wrapping_mul(33).wrapping_add(byte as u64)
+    });
     format!("{prefix}-{hash:x}")
 }
 
@@ -451,5 +473,4 @@ mod tests {
         assert_eq!(parsed.articles.len(), 2);
         assert_ne!(parsed.articles[0].url, parsed.articles[1].url);
     }
-
 }

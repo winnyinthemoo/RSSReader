@@ -538,6 +538,33 @@ h2 {
   background: #f4d8cf;
 }
 
+.tag-suggestion-box {
+  display: grid;
+  gap: 8px;
+}
+
+.tag-suggestion-chip {
+  cursor: pointer;
+  padding-right: 10px;
+}
+
+.tag-suggestion-chip.selected {
+  border-color: #2f6f7c;
+  color: #174d57;
+  background: #d8ece7;
+}
+
+.tag-suggestion-chip:not(.selected) {
+  color: #60706a;
+  background: #f6f8f6;
+}
+
+.secondary-button:disabled,
+.tag-suggestion-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .reader-search-hit {
   border-radius: 3px;
   padding: 0 2px;
@@ -1433,6 +1460,31 @@ h2 {
   font-size: 0.88rem;
 }
 
+.bilingual-title {
+  width: calc(100% - (var(--reader-content-padding-x) * 2));
+  max-width: calc(
+    var(--reader-content-max-width) - (var(--reader-content-padding-x) * 2)
+  );
+  margin: 0 auto 24px;
+  padding-top: 22px;
+}
+
+.bilingual-title h2 {
+  margin: 0 0 12px;
+  color: inherit;
+  font-size: 2.2rem;
+  line-height: 1.12;
+}
+
+.bilingual-title p {
+  margin: 0;
+  border-left: 3px solid #3d8f7a;
+  padding-left: 0.85rem;
+  color: #1f3d2c;
+  font-size: 1.18rem;
+  line-height: 1.55;
+}
+
 .bilingual-content {
   padding-top: 0;
 }
@@ -1472,16 +1524,12 @@ h2 {
   color: #6d7a72;
 }
 
-.tagging-panel {
-  position: absolute;
-  right: 24px;
-  top: 72px;
-  width: 280px;
-  padding: 12px;
-  border: 1px solid #d5ddd4;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+.reader-ai-tagging-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border-top: 1px solid #e2e8e0;
+  padding-top: 12px;
 }
 
 .usage-table {
@@ -1650,10 +1698,15 @@ h2 {
 .compare-pane-content .reader-content-md b { color: inherit; }
 
 .reader-themed-page[data-theme="dark"] .reader-header h2,
+.reader-themed-page[data-theme="dark"] .bilingual-title h2,
 .compare-pane-content[data-theme="dark"] .reader-header h2,
 .reader-themed-page[data-theme="dark"] .reader-content-md p,
 .reader-themed-page[data-theme="dark"] .bilingual-content p,
 .compare-pane-content[data-theme="dark"] .reader-content-md p { color: #d5ddd4; }
+.reader-themed-page[data-theme="dark"] .bilingual-title p {
+  color: #d7f0df;
+  border-left-color: #7bd0b5;
+}
 .reader-themed-page[data-theme="dark"] .eyebrow,
 .reader-themed-page[data-theme="dark"] .reader-meta,
 .compare-pane-content[data-theme="dark"] .eyebrow,
@@ -2657,8 +2710,7 @@ h2 {
 .add-feed-dialog,
 .ai-settings-panel,
 .reader-side-panel,
-.theme-panel,
-.tagging-panel {
+.theme-panel {
   border: 1px solid rgba(255, 255, 255, 0.58);
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.86);

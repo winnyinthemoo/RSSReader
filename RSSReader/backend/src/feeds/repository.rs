@@ -257,7 +257,10 @@ impl FeedRepository {
                 .collect::<Result<Vec<_>, _>>()
         } else {
             statement
-                .query_map(rusqlite::params_from_iter(params.iter()), article_item_from_row)
+                .query_map(
+                    rusqlite::params_from_iter(params.iter()),
+                    article_item_from_row,
+                )
                 .map_err(|error| format!("Failed to list articles: {error}"))?
                 .collect::<Result<Vec<_>, _>>()
         };
@@ -306,11 +309,7 @@ impl FeedRepository {
         Ok(())
     }
 
-    pub fn mark_article_favorite(
-        &self,
-        article_id: &str,
-        is_favorite: bool,
-    ) -> Result<(), String> {
+    pub fn mark_article_favorite(&self, article_id: &str, is_favorite: bool) -> Result<(), String> {
         let updated = self
             .connection
             .execute(
@@ -457,7 +456,11 @@ impl FeedRepository {
             .map_err(|error| format!("Failed to get article note: {error}"))
     }
 
-    pub fn save_article_note(&self, article_id: &str, content: &str) -> Result<ArticleNote, String> {
+    pub fn save_article_note(
+        &self,
+        article_id: &str,
+        content: &str,
+    ) -> Result<ArticleNote, String> {
         let now = now_marker();
         self.connection
             .execute(
@@ -479,17 +482,16 @@ impl FeedRepository {
     }
 
     pub fn count_unread_for_feed(&self, feed_id: &str) -> Result<usize, String> {
-        count_for_feed(&self.connection, "COUNT(*)", feed_id)
-            .and_then(|_| {
-                self.connection
-                    .query_row(
-                        "SELECT COUNT(*) FROM articles WHERE feed_id = ?1 AND is_read = 0",
-                        params![feed_id],
-                        |row| row.get::<_, i64>(0),
-                    )
-                    .map(|count| count as usize)
-                    .map_err(|error| format!("Failed to count unread articles: {error}"))
-            })
+        count_for_feed(&self.connection, "COUNT(*)", feed_id).and_then(|_| {
+            self.connection
+                .query_row(
+                    "SELECT COUNT(*) FROM articles WHERE feed_id = ?1 AND is_read = 0",
+                    params![feed_id],
+                    |row| row.get::<_, i64>(0),
+                )
+                .map(|count| count as usize)
+                .map_err(|error| format!("Failed to count unread articles: {error}"))
+        })
     }
 
     pub fn delete_feed(&self, feed_id: &str) -> Result<(), String> {
@@ -510,7 +512,11 @@ impl FeedRepository {
     }
 }
 
-fn count_for_feed(connection: &Connection, expression: &str, feed_id: &str) -> Result<usize, String> {
+fn count_for_feed(
+    connection: &Connection,
+    expression: &str,
+    feed_id: &str,
+) -> Result<usize, String> {
     let query = format!("SELECT {expression} FROM articles WHERE feed_id = ?1");
     connection
         .query_row(&query, params![feed_id], |row| row.get::<_, i64>(0))

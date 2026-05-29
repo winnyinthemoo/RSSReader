@@ -10,11 +10,11 @@ pub use commands::{
     feed_delete, feed_list, feed_refresh, tag_list,
 };
 pub use model::{
-    ArticleDetail, ArticleListFilter, ArticleListItem, ArticleListResult, ArticleMarkFavoriteRequest,
-    ArticleMarkReadRequest, ArticleNote, ArticleNoteSaveRequest, ArticleTag, ArticleTagDeleteRequest,
-    ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest, FeedDeleteRequest, FeedListResult,
-    FeedRefreshRequest, FeedRefreshResult, FeedStatus, FeedSummary, FeedWithArticles, TagListResult,
-    TagSummary,
+    ArticleDetail, ArticleListFilter, ArticleListItem, ArticleListResult,
+    ArticleMarkFavoriteRequest, ArticleMarkReadRequest, ArticleNote, ArticleNoteSaveRequest,
+    ArticleTag, ArticleTagDeleteRequest, ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest,
+    FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedStatus,
+    FeedSummary, FeedWithArticles, TagListResult, TagSummary,
 };
 pub use parser::{fetch_and_parse_feed, parse_feed_bytes};
 pub use repository::FeedRepository;

@@ -850,7 +850,7 @@ function AgentsTab({
       </aside>
 
       <section className="ai-properties">
-        <UsageSummary dimension="agent" report={usageReport} />
+        <UsageSummary dimension="agent" report={usageReport} rowKey={activeAgent} />
         <PanelTitle title={`${agentLabel(activeAgent)} Properties`} subtitle="Choose the model and defaults used by this agent." />
         {activeAgent === "summary" ? (
           <div className="ai-form-grid">
@@ -921,11 +921,12 @@ function AgentsTab({
 interface UsageSummaryProps {
   dimension: UsageDimension;
   report?: UsageReportResult;
+  rowKey?: string;
 }
 
-function UsageSummary({ dimension, report }: UsageSummaryProps) {
+function UsageSummary({ dimension, report, rowKey }: UsageSummaryProps) {
   const gradientId = `usageGradient-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
-  const visibleReport = report?.dimension === dimension ? report : undefined;
+  const visibleReport = buildVisibleUsageReport(report, dimension, rowKey);
   const dailyRows = buildUsageDailyRows(visibleReport);
   const points = buildUsageChartPoints(dailyRows);
   const linePoints = points.map((point) => `${point.x},${point.y}`).join(" ");
@@ -1067,6 +1068,28 @@ function LanguageSelect({
 
 function providerLabel(providers: AiProvider[], providerId: string) {
   return providers.find((provider) => provider.id === providerId)?.displayName ?? providerId;
+}
+
+function buildVisibleUsageReport(
+  report: UsageReportResult | undefined,
+  dimension: UsageDimension,
+  rowKey?: string,
+): UsageReportResult | undefined {
+  if (report?.dimension !== dimension) {
+    return undefined;
+  }
+  if (!rowKey) {
+    return report;
+  }
+
+  const rows = report.rows.filter((row) => row.key === rowKey);
+  return {
+    ...report,
+    rows,
+    dailyRows: undefined,
+    totalRequests: rows.reduce((total, row) => total + row.requestCount, 0),
+    totalTokens: rows.reduce((total, row) => total + row.totalTokens, 0),
+  };
 }
 
 function buildUsageDailyRows(report?: UsageReportResult) {

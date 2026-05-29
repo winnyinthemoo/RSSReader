@@ -99,9 +99,10 @@ pub fn article_save_note(article_id: String, content: String) -> Result<ArticleN
 }
 
 fn with_service<T>(handler: impl FnOnce(&mut FeedService) -> T) -> T {
-    let service = FEED_SERVICE.get_or_init(|| {
-        Mutex::new(FeedService::new().expect("feed service should initialize"))
-    });
-    let mut guard = service.lock().expect("feed service lock should not be poisoned");
+    let service = FEED_SERVICE
+        .get_or_init(|| Mutex::new(FeedService::new().expect("feed service should initialize")));
+    let mut guard = service
+        .lock()
+        .expect("feed service lock should not be poisoned");
     handler(&mut guard)
 }
