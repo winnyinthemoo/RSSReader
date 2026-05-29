@@ -60,9 +60,15 @@ turndown.addRule("image", {
   replacement: (_content, node) => (node as HTMLElement).outerHTML,
 });
 
+turndown.addRule("paragraph", {
+  filter: ["p"],
+  replacement: (_content, node) => (node as HTMLElement).outerHTML + "\n",
+});
+
 function normalizeMarkdown(html: string): string {
   const prepared = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   const md = turndown.turndown(prepared);
+  console.log("HAS IMG in markdown:", md.includes("<img"));
   const unescaped = md.replace(/\\([*])/g, "$1");
   return unescaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }

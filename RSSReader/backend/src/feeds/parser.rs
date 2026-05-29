@@ -102,6 +102,7 @@ fn is_noise_image(tag: &str) -> bool {
         || lower.contains("class=\"icon\"")
         || lower.contains("class='icon'")
         || lower.contains("hopedomain.com/badge")
+        || lower.contains("/logo.")
 }
 
 fn strip_noise_images(html: &str) -> String {
@@ -202,6 +203,40 @@ fn find_closing_tag_end(html: &str) -> Option<usize> {
     None
 }
 
+fn strip_tag(html: &str, tag_name: &str) -> String {
+    let open = format!("<{}", tag_name);
+    let close = format!("</{}>", tag_name);
+    let mut result = String::with_capacity(html.len());
+    let mut pos = 0;
+    while let Some(start) = html[pos..].find(&open) {
+        let abs_start = pos + start;
+        // push everything before this tag
+        result.push_str(&html[pos..abs_start]);
+        // skip this tag and all its content
+        let after_open = &html[abs_start..];
+        if let Some(tag_end) = after_open.find('>') {
+            let inner_start = abs_start + tag_end + 1;
+            if let Some(close_pos) = find_closing_tag_end(&html[inner_start..]) {
+                pos = inner_start + close_pos + close.len();
+            } else {
+                pos = inner_start;
+            }
+        } else {
+            pos = abs_start + open.len();
+        }
+    }
+    result.push_str(&html[pos..]);
+    result
+}
+
+fn strip_non_content(html: &str) -> String {
+    let mut html = strip_tag(html, "nav");
+    html = strip_tag(&html, "footer");
+    html = strip_tag(&html, "header");
+    html = strip_tag(&html, "aside");
+    html
+}
+
 fn try_fetch_full_content(article_url: &str) -> Option<String> {
     let response = reqwest::blocking::get(article_url).ok()?;
     if !response.status().is_success() {
@@ -209,7 +244,8 @@ fn try_fetch_full_content(article_url: &str) -> Option<String> {
     }
     let html = response.text().ok()?;
     let url = Url::parse(article_url).ok()?;
-    let focused = narrow_to_content(&html);
+    let cleaned = strip_non_content(&html);
+    let focused = narrow_to_content(&cleaned);
     let product = extractor::extract(&mut focused.as_bytes(), &url).ok()?;
     let mut content = product.content.trim().to_string();
     if content.is_empty() {
@@ -255,7 +291,7 @@ fn entry_to_article(
         .or_else(|| entry.summary.as_ref().map(|summary| summary.content.clone()))
         .unwrap_or_else(|| title.clone());
 
-    let needs_full_fetch = strip_html(&raw_html).chars().count() < 400;
+    let needs_full_fetch = strip_html(&raw_html).chars().count() < 2000;
 
     let raw_html = if needs_full_fetch {
         let feed_images = extract_img_tags(&raw_html);
