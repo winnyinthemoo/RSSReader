@@ -135,6 +135,10 @@ impl FeedService {
         self.repository.get_article(article_id).ok().flatten()
     }
 
+    pub fn update_article_content(&self, article_id: &str, html: &str) -> Result<(), String> {
+        self.repository.update_article_content(article_id, html)
+    }
+
     pub fn mark_article_read(&mut self, request: ArticleMarkReadRequest) -> Result<(), String> {
         self.repository
             .mark_article_read(&request.article_id, request.is_read)

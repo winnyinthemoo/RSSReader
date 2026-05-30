@@ -134,15 +134,24 @@ export function ReaderView({
 }: ReaderViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("markdown");
   const [sourceIframeError, setSourceIframeError] = useState(false);
+  const [sourceUseRender, setSourceUseRender] = useState(false);
   const sourceIframeLoaded = useRef(false);
   const sourceTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const sourceRenderTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [compareIframeError, setCompareIframeError] = useState(false);
+  const [compareUseRender, setCompareUseRender] = useState(false);
   const compareIframeLoaded = useRef(false);
   const compareTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const compareRenderTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [splitRatio, setSplitRatio] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
   const compareRef = useRef<HTMLDivElement>(null);
+
+  const proxyBase = `http://${window.location.hostname === '127.0.0.1' ? '127.0.0.1:5181' : window.location.host}/api`;
+  function getRenderUrl(originalUrl: string) {
+    return `${proxyBase}/render?url=${encodeURIComponent(originalUrl)}`;
+  }
 
   const [themeBg, setThemeBg] = useState<ThemeBg>("white");
   const [fontSize, setFontSize] = useState<FontSize>("md");
@@ -262,15 +271,17 @@ export function ReaderView({
 
   useEffect(() => {
     if (viewMode === "source" && article?.url) {
-      startIframeTimer(sourceIframeLoaded, setSourceIframeError, sourceTimerRef);
+      startSourceIframe();
     }
     if (viewMode === "compare" && article?.url) {
-      startIframeTimer(compareIframeLoaded, setCompareIframeError, compareTimerRef);
+      startCompareIframe();
     }
 
     return () => {
-      if (sourceTimerRef.current) clearTimeout(sourceTimerRef.current);
-      if (compareTimerRef.current) clearTimeout(compareTimerRef.current);
+      clearTimeout(sourceTimerRef.current);
+      clearTimeout(sourceRenderTimerRef.current);
+      clearTimeout(compareTimerRef.current);
+      clearTimeout(compareRenderTimerRef.current);
     };
   }, [article?.url, viewMode]);
 
@@ -287,6 +298,8 @@ export function ReaderView({
     compareIframeLoaded.current = false;
     setSourceIframeError(false);
     setCompareIframeError(false);
+    setSourceUseRender(false);
+    setCompareUseRender(false);
   };
 
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
@@ -445,17 +458,38 @@ export function ReaderView({
     setActivePanel((currentPanel) => (currentPanel === panel ? undefined : panel));
   }
 
-  function startIframeTimer(
-    loadFlag: { current: boolean },
-    setError: (value: boolean) => void,
-    timerRef: { current: ReturnType<typeof setTimeout> | undefined },
-  ) {
-    clearTimeout(timerRef.current);
-    loadFlag.current = false;
-    setError(false);
-    timerRef.current = setTimeout(() => {
-      if (!loadFlag.current) {
-        setError(true);
+  function startSourceIframe() {
+    setSourceUseRender(false);
+    sourceIframeLoaded.current = false;
+    setSourceIframeError(false);
+    clearTimeout(sourceTimerRef.current);
+    clearTimeout(sourceRenderTimerRef.current);
+    sourceTimerRef.current = window.setTimeout(() => {
+      if (!sourceIframeLoaded.current) {
+        setSourceUseRender(true);
+        sourceRenderTimerRef.current = window.setTimeout(() => {
+          if (!sourceIframeLoaded.current) {
+            setSourceIframeError(true);
+          }
+        }, 15000);
+      }
+    }, 10000);
+  }
+
+  function startCompareIframe() {
+    setCompareUseRender(false);
+    compareIframeLoaded.current = false;
+    setCompareIframeError(false);
+    clearTimeout(compareTimerRef.current);
+    clearTimeout(compareRenderTimerRef.current);
+    compareTimerRef.current = window.setTimeout(() => {
+      if (!compareIframeLoaded.current) {
+        setCompareUseRender(true);
+        compareRenderTimerRef.current = window.setTimeout(() => {
+          if (!compareIframeLoaded.current) {
+            setCompareIframeError(true);
+          }
+        }, 15000);
       }
     }, 10000);
   }
@@ -558,7 +592,7 @@ export function ReaderView({
           ) : (
             <iframe
               className="reader-iframe"
-              src={article.url}
+              src={sourceUseRender ? getRenderUrl(article.url) : article.url}
               title="Original article page"
               onLoad={() => {
                 sourceIframeLoaded.current = true;
@@ -591,7 +625,7 @@ export function ReaderView({
             ) : (
               <iframe
                 className="reader-iframe"
-                src={article.url}
+                src={compareUseRender ? getRenderUrl(article.url) : article.url}
                 title="Original article page"
                 onLoad={() => {
                   compareIframeLoaded.current = true;

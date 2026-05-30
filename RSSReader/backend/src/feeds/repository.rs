@@ -102,6 +102,17 @@ impl FeedRepository {
         Ok(())
     }
 
+    /// Update only the sanitized_html field (used for on-demand content enrichment).
+    pub fn update_article_content(&self, article_id: &str, sanitized_html: &str) -> Result<(), String> {
+        self.connection
+            .execute(
+                "UPDATE articles SET sanitized_html = ?1, updated_at = ?2 WHERE id = ?3",
+                params![sanitized_html, now_marker(), article_id],
+            )
+            .map_err(|error| format!("Failed to update article content: {error}"))?;
+        Ok(())
+    }
+
     pub fn has_article(&self, article_id: &str) -> Result<bool, String> {
         let count = self
             .connection

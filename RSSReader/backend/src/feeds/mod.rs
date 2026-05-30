@@ -16,6 +16,6 @@ pub use model::{
     FeedRefreshRequest, FeedRefreshResult, FeedStatus, FeedSummary, FeedWithArticles, TagListResult,
     TagSummary,
 };
-pub use parser::{fetch_and_parse_feed, parse_feed_bytes};
+pub use parser::{enrich_rss_content, fetch_and_parse_feed, parse_feed_bytes, strip_html, try_fetch_full_content};
 pub use repository::FeedRepository;
 pub use service::FeedService;

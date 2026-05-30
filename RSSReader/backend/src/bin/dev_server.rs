@@ -6,7 +6,7 @@ use rssreader_backend::ai::http::try_handle as try_handle_ai;
 use rssreader_backend::feeds::{
     article_delete_tag, article_get, article_get_note, article_list, article_list_tags,
     article_mark_favorite, article_mark_read, article_save_note, article_save_tags, feed_add,
-    feed_delete, feed_list, feed_refresh, tag_list, ArticleDetail, ArticleListFilter,
+    feed_delete, feed_list, feed_refresh, tag_list, try_fetch_full_content, ArticleDetail, ArticleListFilter,
     ArticleListItem, ArticleListResult, ArticleNote, ArticleTagsResult, FeedListResult,
     FeedRefreshResult, FeedStatus, FeedSummary, FeedWithArticles, TagListResult, TagSummary,
 };
@@ -197,6 +197,17 @@ fn handle_connection(mut stream: TcpStream) {
         ("GET", path) if path.starts_with("/api/articles") => {
             let filter = parse_article_filter(path);
             write_json(&mut stream, 200, &article_list_result_json(&article_list(filter)));
+        }
+        ("GET", path) if path.starts_with("/api/render") => {
+            let target_url = parse_query_param(path, "url").unwrap_or_default();
+            if target_url.is_empty() || !target_url.starts_with("http://") && !target_url.starts_with("https://") {
+                write_json(&mut stream, 400, &error_json("Missing or invalid url"));
+                return;
+            }
+            match try_fetch_full_content(&target_url) {
+                Some(html) => write_proxied_html(&mut stream, &html),
+                None => write_json(&mut stream, 502, &error_json("Failed to render page")),
+            }
         }
         _ => write_json(&mut stream, 404, &error_json("Not found")),
     }
@@ -612,4 +623,32 @@ fn url_decode(value: &str) -> String {
     }
 
     output
+}
+
+/// Extract a single query parameter value from a path like "/path?key=value&..."
+fn parse_query_param(path: &str, name: &str) -> Option<String> {
+    let (_, query) = path.split_once('?')?;
+    for pair in query.split('&') {
+        let (key, value) = pair.split_once('=')?;
+        if key == name && !value.is_empty() {
+            return Some(url_decode(value));
+        }
+    }
+    None
+}
+
+/// Write an HTML response with headers that allow cross-origin embedding.
+fn write_proxied_html(stream: &mut TcpStream, html: &str) {
+    let body = html.as_bytes();
+    let response = format!(
+        "HTTP/1.1 200 OK\r\n\
+         Content-Type: text/html; charset=utf-8\r\n\
+         Content-Length: {}\r\n\
+         Access-Control-Allow-Origin: *\r\n\
+         X-Frame-Options: ALLOWALL\r\n\
+         \r\n",
+        body.len(),
+    );
+    let _ = stream.write_all(response.as_bytes());
+    let _ = stream.write_all(body);
 }

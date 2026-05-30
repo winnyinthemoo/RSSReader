@@ -76,7 +76,7 @@ fn feed_to_domain(feed_url: &str, feed: Feed) -> ParsedFeed {
     ParsedFeed { feed, articles }
 }
 
-fn strip_html(raw: &str) -> String {
+pub fn strip_html(raw: &str) -> String {
     plain_text(raw)
 }
 
@@ -266,8 +266,13 @@ fn strip_non_content(html: &str) -> String {
     html
 }
 
-fn try_fetch_full_content(article_url: &str) -> Option<String> {
-    let response = reqwest::blocking::get(article_url).ok()?;
+pub fn try_fetch_full_content(article_url: &str) -> Option<String> {
+    // Short timeout — if the page is slow, we'd rather show RSS content quickly.
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .ok()?;
+    let response = client.get(article_url).send().ok()?;
     if !response.status().is_success() {
         return None;
     }
@@ -296,6 +301,36 @@ fn try_fetch_full_content(article_url: &str) -> Option<String> {
     // Strip orphaned <figcaption> left behind when its parent <img> was filtered out.
     content = strip_tag(&content, "figcaption");
     Some(content)
+}
+
+/// Called on-demand (or from background thread) to enrich RSS-short content
+/// with readability-extracted full text.  Returns ammonia-cleaned HTML.
+pub fn enrich_rss_content(article_url: &str, rss_html: &str) -> String {
+    let feed_images = extract_img_tags(rss_html);
+    let rss_plain_len = strip_html(rss_html).chars().count();
+    let rss_cleaned = strip_noise_images(&strip_tag(rss_html, "figcaption"));
+
+    let enriched = if rss_plain_len < 2000 {
+        match try_fetch_full_content(article_url) {
+            Some(fetched) => {
+                let fetched_plain_len = strip_html(&fetched).chars().count();
+                if fetched_plain_len >= rss_plain_len {
+                    if feed_images.is_empty() {
+                        fetched
+                    } else {
+                        format!("{feed_images}{fetched}")
+                    }
+                } else {
+                    rss_cleaned.clone()
+                }
+            }
+            None => rss_cleaned.clone(),
+        }
+    } else {
+        rss_cleaned.clone()
+    };
+
+    ammonia::clean(&enriched)
 }
 
 fn entry_to_article(
@@ -328,34 +363,9 @@ fn entry_to_article(
         .or_else(|| entry.summary.as_ref().map(|summary| summary.content.clone()))
         .unwrap_or_else(|| title.clone());
 
-    let rss_plain_len = strip_html(&raw_html).chars().count();
-    let needs_full_fetch = rss_plain_len < 2000;
-
-    let raw_html = if needs_full_fetch {
-        let feed_images = extract_img_tags(&raw_html);
-        match try_fetch_full_content(&article_url) {
-            Some(fetched) => {
-                // Keep whichever source has more plain text — readability on
-                // paginated pages (e.g. caixin.com) may extract less than the
-                // full RSS description.
-                let fetched_plain_len = strip_html(&fetched).chars().count();
-                if fetched_plain_len >= rss_plain_len {
-                    if feed_images.is_empty() {
-                        fetched
-                    } else {
-                        format!("{feed_images}{fetched}")
-                    }
-                } else {
-                    raw_html
-                }
-            }
-            None => raw_html,
-        }
-    } else {
-        raw_html
-    };
-    let raw_html = strip_noise_images(&strip_tag(&raw_html, "figcaption"));
-    let sanitized_html = ammonia::clean(&raw_html);
+    // Feed-add: store only RSS raw content — no readability fetch.
+    // Background enrichment happens after the feed is saved.
+    let sanitized_html = ammonia::clean(&strip_noise_images(&strip_tag(&raw_html, "figcaption")));
     let excerpt = entry
         .summary
         .as_ref()
