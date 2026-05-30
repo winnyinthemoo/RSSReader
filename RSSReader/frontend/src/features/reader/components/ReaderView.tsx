@@ -11,6 +11,7 @@ import {
   Check,
   NotebookPen,
   Palette,
+  RefreshCw,
   Search,
   Share2,
   Star,
@@ -73,9 +74,14 @@ function normalizeMarkdown(html: string): string {
   return unescaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
 
+/** Convert display-oriented markdown (<strong>) to clipboard-friendly (**). */
+function markdownForCopy(md: string): string {
+  return md.replace(/<strong>/g, "**").replace(/<\/strong>/g, "**");
+}
+
 type ViewMode = "markdown" | "source" | "compare";
 
-function OriginalPageFallback({ url }: { url: string }) {
+function OriginalPageFallback({ url, onRetryProxy }: { url: string; onRetryProxy?: () => void }) {
   return (
     <div className="reader-iframe-fallback">
       <div className="fallback-header">
@@ -84,6 +90,11 @@ function OriginalPageFallback({ url }: { url: string }) {
           This is the real article URL. Some sites block embedded views or may be unavailable on
           the current network.
         </p>
+        {onRetryProxy ? (
+          <button className="secondary-button" type="button" onClick={onRetryProxy}>
+            Retry with proxy
+          </button>
+        ) : null}
         <a className="fallback-link" href={url} target="_blank" rel="noreferrer">
           Open original page
         </a>
@@ -137,13 +148,11 @@ export function ReaderView({
   const [sourceUseRender, setSourceUseRender] = useState(false);
   const sourceIframeLoaded = useRef(false);
   const sourceTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const sourceRenderTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const [compareIframeError, setCompareIframeError] = useState(false);
+      const [compareIframeError, setCompareIframeError] = useState(false);
   const [compareUseRender, setCompareUseRender] = useState(false);
   const compareIframeLoaded = useRef(false);
   const compareTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const compareRenderTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
+    
   const [splitRatio, setSplitRatio] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
   const compareRef = useRef<HTMLDivElement>(null);
@@ -216,6 +225,11 @@ export function ReaderView({
     return normalizeMarkdown(article.sanitizedHtml);
   }, [article?.sanitizedHtml]);
 
+  const copyMarkdown = useMemo(
+    () => markdownForCopy(markdown),
+    [markdown],
+  );
+
   const searchMatches = useMemo(() => {
     if (!searchQuery.trim() || !markdown) {
       return [] as Array<{ start: number; end: number }>;
@@ -279,9 +293,7 @@ export function ReaderView({
 
     return () => {
       clearTimeout(sourceTimerRef.current);
-      clearTimeout(sourceRenderTimerRef.current);
       clearTimeout(compareTimerRef.current);
-      clearTimeout(compareRenderTimerRef.current);
     };
   }, [article?.url, viewMode]);
 
@@ -463,36 +475,36 @@ export function ReaderView({
     sourceIframeLoaded.current = false;
     setSourceIframeError(false);
     clearTimeout(sourceTimerRef.current);
-    clearTimeout(sourceRenderTimerRef.current);
-    sourceTimerRef.current = window.setTimeout(() => {
+        sourceTimerRef.current = window.setTimeout(() => {
       if (!sourceIframeLoaded.current) {
-        setSourceUseRender(true);
-        sourceRenderTimerRef.current = window.setTimeout(() => {
-          if (!sourceIframeLoaded.current) {
-            setSourceIframeError(true);
-          }
-        }, 15000);
+        if (!sourceUseRender) {
+          // Try /api/render fallback
+          setSourceUseRender(true);
+          sourceIframeLoaded.current = false;
+          clearTimeout(sourceTimerRef.current);
+          sourceTimerRef.current = window.setTimeout(() => {
+            if (!sourceIframeLoaded.current) {
+              setSourceIframeError(true);
+            }
+          }, 15000);
+        } else {
+          setSourceIframeError(true);
+        }
       }
-    }, 10000);
+    }, 8000);
   }
 
   function startCompareIframe() {
-    setCompareUseRender(false);
     compareIframeLoaded.current = false;
     setCompareIframeError(false);
     clearTimeout(compareTimerRef.current);
-    clearTimeout(compareRenderTimerRef.current);
     compareTimerRef.current = window.setTimeout(() => {
       if (!compareIframeLoaded.current) {
-        setCompareUseRender(true);
-        compareRenderTimerRef.current = window.setTimeout(() => {
-          if (!compareIframeLoaded.current) {
-            setCompareIframeError(true);
-          }
-        }, 15000);
+        setCompareIframeError(true);
       }
-    }, 10000);
+    }, 12000);
   }
+
 
   if (!article) {
     return (
@@ -548,6 +560,7 @@ export function ReaderView({
         article={article}
         shareStatus={shareStatus}
         onShareStatusChange={setShareStatus}
+        shareMarkdown={copyMarkdown}
       />
       {activePanel ? (
         <ReaderSidePanel
@@ -587,8 +600,11 @@ export function ReaderView({
         </div>
       ) : viewMode === "source" ? (
         <div className="reader-web-view">
+          <button className="reader-proxy-toggle" type="button" title="Toggle proxy" onClick={() => { setSourceUseRender(v => !v); setSourceIframeError(false); sourceIframeLoaded.current = false; }}>
+            <RefreshCw size={18} />
+          </button>
           {sourceIframeError ? (
-            <OriginalPageFallback url={article.url} />
+            <OriginalPageFallback url={article.url} onRetryProxy={() => { setSourceUseRender(true); setSourceIframeError(false); sourceIframeLoaded.current = false; }} />
           ) : (
             <iframe
               className="reader-iframe"
@@ -620,12 +636,16 @@ export function ReaderView({
           </div>
           <div className="compare-pane" style={{ width: `${100 - splitRatio}%` }}>
             <div className="compare-pane-label">Original page</div>
+            <button className="reader-proxy-toggle" type="button" title="Toggle proxy" onClick={() => { setCompareUseRender(v => !v); setCompareIframeError(false); compareIframeLoaded.current = false; }}>
+              <RefreshCw size={18} />
+            </button>
             {compareIframeError ? (
-              <OriginalPageFallback url={article.url} />
+              <OriginalPageFallback url={article.url} onRetryProxy={() => { setCompareUseRender(true); setCompareIframeError(false); compareIframeLoaded.current = false; }} />
             ) : (
               <iframe
                 className="reader-iframe"
                 src={compareUseRender ? getRenderUrl(article.url) : article.url}
+                style={{}}
                 title="Original article page"
                 onLoad={() => {
                   compareIframeLoaded.current = true;
@@ -841,6 +861,7 @@ interface ReaderToolbarProps {
   article?: ArticleDetail;
   shareStatus?: string;
   onShareStatusChange?: (status: string | undefined) => void;
+  shareMarkdown?: string;
 }
 
 function ReaderToolbar({
@@ -868,6 +889,7 @@ function ReaderToolbar({
   article,
   shareStatus,
   onShareStatusChange,
+  shareMarkdown = "",
 }: ReaderToolbarProps) {
   const themePanelRef = useRef<HTMLDivElement>(null);
   const sharePanelRef = useRef<HTMLDivElement>(null);
@@ -1025,7 +1047,7 @@ function ReaderToolbar({
                 role="menuitem"
                 onClick={() =>
                   void handleCopyShare(
-                    `[${article.title}](${article.url})`,
+                    shareMarkdown || `[${article.title}](${article.url})`,
                     "Markdown copied",
                   )
                 }

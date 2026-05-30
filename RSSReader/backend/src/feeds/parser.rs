@@ -300,6 +300,20 @@ pub fn try_fetch_full_content(article_url: &str) -> Option<String> {
     content = strip_noise_images(&content);
     // Strip orphaned <figcaption> left behind when its parent <img> was filtered out.
     content = strip_tag(&content, "figcaption");
+    // Inject hero/banner background-image as <img> (missed by readability
+    // since it lives in <header> which strip_non_content removes).
+    if let Some(hero_tag) = extract_hero_banner_img(&html, article_url) {
+        if !content.contains(&hero_tag) {
+            content = format!("{}{}", hero_tag, content);
+        }
+    }
+    // Expose lazy-loaded images:
+    // 1. Strip the base64 placeholder src (common lazyload pattern) so
+    //    browsers don't pick it over the real data-src.
+    // 2. Rewrite data-src -> src so the real URL becomes visible.
+    content = content.replace("src=\"data:image/gif;base64", "old_src=\"data:image/gif;base64");
+    content = content.replace("src=\"data:image/png;base64", "old_src=\"data:image/png;base64");
+    content = content.replace("data-src", "src");
     Some(content)
 }
 
@@ -342,7 +356,7 @@ fn entry_to_article(
     let title = entry
         .title
         .as_ref()
-        .map(|title| strip_html(title.content.trim()))
+        .map(|title| deduplicate_title(&strip_html(title.content.trim())))
         .filter(|title| !title.is_empty())
         .unwrap_or_else(|| "Untitled article".to_string());
     let entry_id = entry.id.trim();
@@ -431,6 +445,94 @@ fn plain_text(html: &str) -> String {
         }
     }
     text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Some RSS feeds embed HTML in <title>, e.g.
+///   "foo</span>"><span>foo</span>"
+/// strip_html collapses both into "foo foo". Keep only the first occurrence.
+fn deduplicate_title(raw: &str) -> String {
+    let t = raw.trim();
+    // Pattern: "title \" title" — strip_html collapses HTML-embedded title
+    // from malformed RSS feeds into "text \" text".
+    if let Some(pos) = t.find(" \"") {
+        let first = t[..pos].trim();
+        let second = t[pos + 2..].trim();
+        if first == second {
+            return first.to_string();
+        }
+    }
+    t.to_string()
+}
+
+/// Scan raw HTML for a hero/banner background-image and return an
+/// absolute <img> tag.  This catches CSS background-images that readability
+/// misses because they live in <header> (stripped by strip_non_content).
+fn extract_hero_banner_img(raw_html: &str, article_url: &str) -> Option<String> {
+    // Find a hero/banner container
+    let lower = raw_html.to_lowercase();
+    let hero_start = lower.find("hero").or_else(|| lower.find("banner"))?;
+    let window_start = if hero_start > 2000 { hero_start - 2000 } else { 0 };
+    let window = &raw_html[window_start..hero_start + 500];
+
+    // Check for <img> inside the window first
+    if let Some(s) = window.find("<img") {
+        let tag = &window[s..];
+        if let Some(src_start) = tag.find("src=\"") {
+            let after = &tag[src_start + 5..];
+            if let Some(src_end) = after.find('\"') {
+                let mut src = after[..src_end].to_string();
+                src = resolve_url(&src, article_url);
+                if !src.is_empty() {
+                    return Some(format!("<img src=\"{}\">", src));
+                }
+            }
+        }
+    }
+
+    // Fallback: CSS background-image: url(...)
+    if let Some(bg) = window.find("background-image") {
+        let after_bg = &window[bg..];
+        if let Some(url_start) = after_bg.find("url(") {
+            let after_paren = &after_bg[url_start + 4..];
+            if let Some(url_end) = after_paren.find(')') {
+                let mut url = after_paren[..url_end].trim().to_string();
+                url = url.trim_matches('\"').trim_matches('\'').to_string();
+                url = resolve_url(&url, article_url);
+                if !url.is_empty() {
+                    return Some(format!("<img src=\"{}\">", url));
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Resolve a potentially relative URL against the article base URL.
+fn resolve_url(url: &str, article_url: &str) -> String {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        return url.to_string();
+    }
+    if url.starts_with("//") {
+        return format!("https:{}", url);
+    }
+    if url.starts_with('/') {
+        if url::Url::parse(article_url).is_ok() {
+            let parsed = url::Url::parse(article_url).unwrap();
+            let base = parsed.origin().ascii_serialization();
+            if !base.is_empty() {
+                return format!("{}{}", base, url);
+            }
+        }
+        // Fallback manual parsing
+        if let Some(scheme_end) = article_url.find("://") {
+            let after_scheme = &article_url[scheme_end + 3..];
+            let host_end = after_scheme.find('/').unwrap_or(after_scheme.len());
+            let base = &article_url[..scheme_end + 3 + host_end];
+            return format!("{}{}", base, url);
+        }
+    }
+    url.to_string()
 }
 
 pub fn stable_id(prefix: &str, value: &str) -> String {
