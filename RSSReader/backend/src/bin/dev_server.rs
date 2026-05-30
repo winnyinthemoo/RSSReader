@@ -2,6 +2,7 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::time::Duration;
 
+use reqwest::header::*;
 use rssreader_backend::ai::http::try_handle as try_handle_ai;
 use rssreader_backend::feeds::{
     article_delete_tag, article_get, article_get_note, article_list, article_list_tags,
@@ -197,6 +198,22 @@ fn handle_connection(mut stream: TcpStream) {
         ("GET", path) if path.starts_with("/api/articles") => {
             let filter = parse_article_filter(path);
             write_json(&mut stream, 200, &article_list_result_json(&article_list(filter)));
+        }
+        ("GET", path) if path.starts_with("/api/render") => {
+            let target_url = parse_query_param(path, "url").unwrap_or_default();
+            if target_url.is_empty() || !target_url.starts_with("http://") && !target_url.starts_with("https://") {
+                write_json(&mut stream, 400, &error_json("Missing or invalid url"));
+                return;
+            }
+            // Simple proxy: fetch raw page, inject <base> tag, strip X-Frame-Options.
+            // No readability extraction — just show the original page iframe-friendly.
+            match fetch_raw_page(&target_url) {
+                Some(html) => write_proxied_html(&mut stream, &html),
+                None => {
+                    let fallback = html_fallback_page(&target_url);
+                    write_proxied_html(&mut stream, &fallback);
+                }
+            }
         }
         _ => write_json(&mut stream, 404, &error_json("Not found")),
     }
@@ -612,4 +629,100 @@ fn url_decode(value: &str) -> String {
     }
 
     output
+}
+
+/// Extract a single query parameter value from a path like "/path?key=value&..."
+fn parse_query_param(path: &str, name: &str) -> Option<String> {
+    let (_, query) = path.split_once('?')?;
+    for pair in query.split('&') {
+        let (key, value) = pair.split_once('=')?;
+        if key == name && !value.is_empty() {
+            return Some(url_decode(value));
+        }
+    }
+    None
+}
+
+/// Fetch raw HTML from a remote URL, used as proxy fallback for iframe.
+/// Sends full browser headers to bypass anti-bot protections.
+fn fetch_raw_page(url: &str) -> Option<String> {
+    use reqwest::header::*;
+    use std::time::Duration;
+    let mut headers = HeaderMap::new();
+    headers.insert(USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36".parse().unwrap());
+    headers.insert(ACCEPT, "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8".parse().unwrap());
+    headers.insert(ACCEPT_LANGUAGE, "zh-CN,zh;q=0.9,en;q=0.8".parse().unwrap());
+    headers.insert("sec-ch-ua", "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"".parse().unwrap());
+    headers.insert("sec-ch-ua-mobile", "?0".parse().unwrap());
+    headers.insert("sec-ch-ua-platform", "\"Windows\"".parse().unwrap());
+    headers.insert("sec-fetch-dest", "document".parse().unwrap());
+    headers.insert("sec-fetch-mode", "navigate".parse().unwrap());
+    headers.insert("sec-fetch-site", "none".parse().unwrap());
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(12))
+        .default_headers(headers)
+        .build()
+        .ok()?;
+    let response = client.get(url).send().ok()?;
+    if !response.status().is_success() { return None; }
+    let html = response.text().ok()?;
+
+    // Inject a <base> tag after <head> so relative asset paths resolve.
+    let base_url = url.trim_end_matches(|c: char| c == '/' || c == '?');
+    let base_tag = format!("<base href=\"{}/\">", base_url.trim_end_matches('/'));
+    let mut result = html;
+    if let Some(pos) = result.find("<head>") {
+        result.insert_str(pos + 6, &base_tag);
+    } else if let Some(pos) = result.find("<HEAD>") {
+        result.insert_str(pos + 6, &base_tag);
+    }
+    // Expose lazy-loaded images:
+    // 1. Strip the base64 placeholder src so browsers don't pick it.
+    // 2. Rewrite data-src -> src so the real URL becomes visible.
+    result = result.replace("src=\"data:image/gif;base64", "old_src=\"data:image/gif;base64");
+    result = result.replace("src=\"data:image/png;base64", "old_src=\"data:image/png;base64");
+    result = result.replace("data-src", "src");
+    Some(result)
+}
+
+/// Generate a minimal error page so the iframe shows something useful
+/// rather than a JSON parse error when the remote page can't be fetched.
+fn html_fallback_page(target_url: &str) -> String {
+    let escaped = target_url
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    format!(
+        r#"<!DOCTYPE html>
+<html><head><meta charset="utf-8"><base href="{0}">
+<style>body{{font-family:-apple-system,sans-serif;padding:40px 28px;color:#333;}}
+a{{color:#1a73e8;}}
+.msg{{max-width:480px;margin:0 auto;text-align:center;}}
+h2{{font-size:1.1rem;font-weight:600;margin:0 0 8px;}}
+p{{font-size:.9rem;line-height:1.5;margin:0 0 16px;color:#666;}}
+</style></head><body>
+<div class="msg">
+<h2>Unable to load original page</h2>
+<p>The remote server did not respond. This may be a network issue or the site may be blocked on the current network.</p>
+<p><a href="{0}" target="_blank" rel="noreferrer">Open original page in a new tab</a></p>
+</div></body></html>"#,
+        escaped
+    )
+}
+
+/// Write an HTML response with headers that allow cross-origin embedding.
+fn write_proxied_html(stream: &mut TcpStream, html: &str) {
+    let body = html.as_bytes();
+    let response = format!(
+        "HTTP/1.1 200 OK\r\n\
+         Content-Type: text/html; charset=utf-8\r\n\
+         Content-Length: {}\r\n\
+         Access-Control-Allow-Origin: *\r\n\
+         X-Frame-Options: ALLOWALL\r\n\
+         \r\n",
+        body.len(),
+    );
+    let _ = stream.write_all(response.as_bytes());
+    let _ = stream.write_all(body);
 }

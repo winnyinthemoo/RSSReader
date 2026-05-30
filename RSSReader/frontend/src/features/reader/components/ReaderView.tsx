@@ -11,6 +11,7 @@ import {
   Check,
   NotebookPen,
   Palette,
+  RefreshCw,
   Search,
   Share2,
   Star,
@@ -73,9 +74,14 @@ function normalizeMarkdown(html: string): string {
   return unescaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
 
+/** Convert display-oriented markdown (<strong>) to clipboard-friendly (**). */
+function markdownForCopy(md: string): string {
+  return md.replace(/<strong>/g, "**").replace(/<\/strong>/g, "**");
+}
+
 type ViewMode = "markdown" | "source" | "compare";
 
-function OriginalPageFallback({ url }: { url: string }) {
+function OriginalPageFallback({ url, onRetryProxy }: { url: string; onRetryProxy?: () => void }) {
   return (
     <div className="reader-iframe-fallback">
       <div className="fallback-header">
@@ -84,6 +90,11 @@ function OriginalPageFallback({ url }: { url: string }) {
           This is the real article URL. Some sites block embedded views or may be unavailable on
           the current network.
         </p>
+        {onRetryProxy ? (
+          <button className="secondary-button" type="button" onClick={onRetryProxy}>
+            Retry with proxy
+          </button>
+        ) : null}
         <a className="fallback-link" href={url} target="_blank" rel="noreferrer">
           Open original page
         </a>
@@ -134,15 +145,22 @@ export function ReaderView({
 }: ReaderViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("markdown");
   const [sourceIframeError, setSourceIframeError] = useState(false);
+  const [sourceUseRender, setSourceUseRender] = useState(false);
   const sourceIframeLoaded = useRef(false);
   const sourceTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const [compareIframeError, setCompareIframeError] = useState(false);
+      const [compareIframeError, setCompareIframeError] = useState(false);
+  const [compareUseRender, setCompareUseRender] = useState(false);
   const compareIframeLoaded = useRef(false);
   const compareTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
+    
   const [splitRatio, setSplitRatio] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
   const compareRef = useRef<HTMLDivElement>(null);
+
+  const proxyBase = `http://${window.location.hostname === '127.0.0.1' ? '127.0.0.1:5181' : window.location.host}/api`;
+  function getRenderUrl(originalUrl: string) {
+    return `${proxyBase}/render?url=${encodeURIComponent(originalUrl)}`;
+  }
 
   const [themeBg, setThemeBg] = useState<ThemeBg>("white");
   const [fontSize, setFontSize] = useState<FontSize>("md");
@@ -207,6 +225,11 @@ export function ReaderView({
     return normalizeMarkdown(article.sanitizedHtml);
   }, [article?.sanitizedHtml]);
 
+  const copyMarkdown = useMemo(
+    () => markdownForCopy(markdown),
+    [markdown],
+  );
+
   const searchMatches = useMemo(() => {
     if (!searchQuery.trim() || !markdown) {
       return [] as Array<{ start: number; end: number }>;
@@ -262,15 +285,15 @@ export function ReaderView({
 
   useEffect(() => {
     if (viewMode === "source" && article?.url) {
-      startIframeTimer(sourceIframeLoaded, setSourceIframeError, sourceTimerRef);
+      startSourceIframe();
     }
     if (viewMode === "compare" && article?.url) {
-      startIframeTimer(compareIframeLoaded, setCompareIframeError, compareTimerRef);
+      startCompareIframe();
     }
 
     return () => {
-      if (sourceTimerRef.current) clearTimeout(sourceTimerRef.current);
-      if (compareTimerRef.current) clearTimeout(compareTimerRef.current);
+      clearTimeout(sourceTimerRef.current);
+      clearTimeout(compareTimerRef.current);
     };
   }, [article?.url, viewMode]);
 
@@ -287,6 +310,8 @@ export function ReaderView({
     compareIframeLoaded.current = false;
     setSourceIframeError(false);
     setCompareIframeError(false);
+    setSourceUseRender(false);
+    setCompareUseRender(false);
   };
 
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
@@ -445,20 +470,41 @@ export function ReaderView({
     setActivePanel((currentPanel) => (currentPanel === panel ? undefined : panel));
   }
 
-  function startIframeTimer(
-    loadFlag: { current: boolean },
-    setError: (value: boolean) => void,
-    timerRef: { current: ReturnType<typeof setTimeout> | undefined },
-  ) {
-    clearTimeout(timerRef.current);
-    loadFlag.current = false;
-    setError(false);
-    timerRef.current = setTimeout(() => {
-      if (!loadFlag.current) {
-        setError(true);
+  function startSourceIframe() {
+    setSourceUseRender(false);
+    sourceIframeLoaded.current = false;
+    setSourceIframeError(false);
+    clearTimeout(sourceTimerRef.current);
+        sourceTimerRef.current = window.setTimeout(() => {
+      if (!sourceIframeLoaded.current) {
+        if (!sourceUseRender) {
+          // Try /api/render fallback
+          setSourceUseRender(true);
+          sourceIframeLoaded.current = false;
+          clearTimeout(sourceTimerRef.current);
+          sourceTimerRef.current = window.setTimeout(() => {
+            if (!sourceIframeLoaded.current) {
+              setSourceIframeError(true);
+            }
+          }, 15000);
+        } else {
+          setSourceIframeError(true);
+        }
       }
-    }, 10000);
+    }, 8000);
   }
+
+  function startCompareIframe() {
+    compareIframeLoaded.current = false;
+    setCompareIframeError(false);
+    clearTimeout(compareTimerRef.current);
+    compareTimerRef.current = window.setTimeout(() => {
+      if (!compareIframeLoaded.current) {
+        setCompareIframeError(true);
+      }
+    }, 12000);
+  }
+
 
   if (!article) {
     return (
@@ -514,6 +560,7 @@ export function ReaderView({
         article={article}
         shareStatus={shareStatus}
         onShareStatusChange={setShareStatus}
+        shareMarkdown={copyMarkdown}
       />
       {activePanel ? (
         <ReaderSidePanel
@@ -553,12 +600,15 @@ export function ReaderView({
         </div>
       ) : viewMode === "source" ? (
         <div className="reader-web-view">
+          <button className="reader-proxy-toggle" type="button" title="Toggle proxy" onClick={() => { setSourceUseRender(v => !v); setSourceIframeError(false); sourceIframeLoaded.current = false; }}>
+            <RefreshCw size={18} />
+          </button>
           {sourceIframeError ? (
-            <OriginalPageFallback url={article.url} />
+            <OriginalPageFallback url={article.url} onRetryProxy={() => { setSourceUseRender(true); setSourceIframeError(false); sourceIframeLoaded.current = false; }} />
           ) : (
             <iframe
               className="reader-iframe"
-              src={article.url}
+              src={sourceUseRender ? getRenderUrl(article.url) : article.url}
               title="Original article page"
               onLoad={() => {
                 sourceIframeLoaded.current = true;
@@ -586,12 +636,16 @@ export function ReaderView({
           </div>
           <div className="compare-pane" style={{ width: `${100 - splitRatio}%` }}>
             <div className="compare-pane-label">Original page</div>
+            <button className="reader-proxy-toggle" type="button" title="Toggle proxy" onClick={() => { setCompareUseRender(v => !v); setCompareIframeError(false); compareIframeLoaded.current = false; }}>
+              <RefreshCw size={18} />
+            </button>
             {compareIframeError ? (
-              <OriginalPageFallback url={article.url} />
+              <OriginalPageFallback url={article.url} onRetryProxy={() => { setCompareUseRender(true); setCompareIframeError(false); compareIframeLoaded.current = false; }} />
             ) : (
               <iframe
                 className="reader-iframe"
-                src={article.url}
+                src={compareUseRender ? getRenderUrl(article.url) : article.url}
+                style={{}}
                 title="Original article page"
                 onLoad={() => {
                   compareIframeLoaded.current = true;
@@ -807,6 +861,7 @@ interface ReaderToolbarProps {
   article?: ArticleDetail;
   shareStatus?: string;
   onShareStatusChange?: (status: string | undefined) => void;
+  shareMarkdown?: string;
 }
 
 function ReaderToolbar({
@@ -834,6 +889,7 @@ function ReaderToolbar({
   article,
   shareStatus,
   onShareStatusChange,
+  shareMarkdown = "",
 }: ReaderToolbarProps) {
   const themePanelRef = useRef<HTMLDivElement>(null);
   const sharePanelRef = useRef<HTMLDivElement>(null);
@@ -991,7 +1047,7 @@ function ReaderToolbar({
                 role="menuitem"
                 onClick={() =>
                   void handleCopyShare(
-                    `[${article.title}](${article.url})`,
+                    shareMarkdown || `[${article.title}](${article.url})`,
                     "Markdown copied",
                   )
                 }
