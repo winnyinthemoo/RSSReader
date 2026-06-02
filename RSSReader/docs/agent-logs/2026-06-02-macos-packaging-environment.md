@@ -1,0 +1,26 @@
+# 2026-06-02 Agent 工作记录：macOS 打包环境准备
+
+- 日期：2026-06-02
+- 负责人：Codex
+- 使用工具：Codex、zsh、curl、npm、rustup、cargo、Tauri CLI
+- 对应 Issue / PR：未指定
+- 任务目标：为当前 RSS Reader 项目准备 macOS 本地运行与后续打包所需环境，并确认基础验证链路可运行。
+- 关键 Prompt 摘要：用户说明自己负责当前版本 macOS 打包，电脑可能缺少环境，希望 Agent 先补齐环境，遇到问题及时沟通。
+- Agent 修改内容摘要：
+  - 在仓库根目录新增本地工具链目录 `.tools/`，用于保存项目本地 Node/npm 和 Rust/Cargo 环境。
+  - 将 `.tools/` 加入根目录 `.gitignore`，避免本地工具链和下载缓存进入 Git 跟踪。
+  - 下载并校验 Node.js `v24.16.0` macOS arm64 包，提供 npm/npx `11.13.0`。
+  - 下载并校验 Rust `rustup-init`，安装 Rust stable minimal 工具链，当前为 `rustc 1.96.0` / `cargo 1.96.0`。
+  - 安装 `RSSReader/` 与 `RSSReader/frontend/` 的 npm 依赖。
+- 人工检查结果：`npm run tauri:dev` 已成功启动 Vite dev server，编译并运行 `target/debug/rssreader-desktop`；窗口视觉验收仍建议负责人在本机手动确认。
+- 是否运行测试：
+  - 已运行 `npm run frontend:build`，通过，有既有 Vite chunk size warning。
+  - 已运行 `backend/cargo check`，通过，有既有 AI 模块 dead_code warning 和 dev_server unused import warning。
+  - 已运行 `backend/cargo test`，16 个测试通过。
+  - 已运行 `src-tauri/cargo check`，通过，有既有 AI 模块 dead_code warning。
+  - 已运行 `npm run tauri -- --version`，输出 `tauri-cli 2.11.2`。
+  - 已运行 `npm run tauri:dev`，成功启动桌面程序后正常退出。
+- 未解决问题：
+  - 当前仅完成 macOS 本地运行环境准备，尚未生成 macOS `.app` 或 `.dmg`。
+  - `src-tauri/tauri.conf.json` 当前 bundle target 仍为 Windows `nsis`，后续 macOS 打包需要改为或命令覆盖为 `app` / `dmg`。
+  - 当前内部测试包预计仍未做 macOS 代码签名和 notarization。
