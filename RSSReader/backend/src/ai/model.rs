@@ -215,6 +215,14 @@ pub struct SummaryStreamChunk {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TranslationStreamChunk {
+    pub translation: Option<TranslationView>,
+    pub done: bool,
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TranslationSegmentView {
     pub id: String,
     pub segment_index: i32,
@@ -244,6 +252,7 @@ pub struct TranslationView {
 pub struct StartTranslationRequest {
     pub article_id: String,
     pub target_language: String,
+    pub selected_text: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -318,6 +327,7 @@ pub struct UsageEventRecord {
 pub struct UsageReportResult {
     pub dimension: String,
     pub window_days: u32,
+    pub key: Option<String>,
     pub rows: Vec<UsageReportRow>,
     pub daily_rows: Vec<UsageDailyRow>,
     pub total_requests: u64,

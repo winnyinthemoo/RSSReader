@@ -1,0 +1,26 @@
+# 2026-06-02 Agent 工作记录：macOS Tauri 打包
+
+- 日期：2026-06-02
+- 负责人：Codex
+- 使用工具：Codex、zsh、npm、cargo、Tauri CLI、hdiutil、apply_patch
+- 对应 Issue / PR：未指定
+- 任务目标：为当前 RSS Reader 项目补齐 macOS Tauri 打包入口，并生成可用于内部测试的 macOS `.app` / `.dmg`。
+- 关键 Prompt 摘要：用户确认环境已补好，要求继续下一步完成 macOS 打包。
+- Agent 修改内容摘要：
+  - 在 `RSSReader/package.json` 新增 `tauri:build:mac` 脚本。
+  - 在 `RSSReader/src-tauri/tauri.conf.json` 的 bundle icon 列表中补充 `icons/icon.icns`。
+  - 新增 `RSSReader/build/macos-packaging.md`，记录 macOS 打包前置条件、验证命令、打包命令、产物路径和未签名说明。
+  - 生成 macOS arm64 内测产物：
+    - `src-tauri/target/release/bundle/macos/Vortex.app`
+    - `src-tauri/target/release/bundle/dmg/Vortex_0.1.0_aarch64.dmg`
+- 人工检查结果：已生成 `.app` 和 `.dmg`，待负责人手动打开 `.dmg`、拖拽安装并运行应用做视觉和功能验收。
+- 是否运行测试：
+  - 已运行 `npm run tauri:build:mac`，第一次在沙箱内生成 `.app` 成功，但 `.dmg` 因 `bundle_dmg.sh` 失败未完成。
+  - 已使用非沙箱权限重跑 `npm run tauri:build:mac`，通过，生成 2 个 bundle。
+  - 已运行 `hdiutil verify src-tauri/target/release/bundle/dmg/Vortex_0.1.0_aarch64.dmg`，校验通过。
+  - 已检查产物大小：`Vortex.app` 约 21 MB，`Vortex_0.1.0_aarch64.dmg` 约 13 MB。
+  - 已检查二进制类型：`rssreader-desktop` 为 `Mach-O 64-bit executable arm64`。
+- 未解决问题：
+  - 当前为未签名、未 notarize 的内部测试包，其他 Mac 打开时可能触发 Gatekeeper 安全提示。
+  - 当前产物是 Apple Silicon arm64 包；如需同时支持 Intel Mac，需要安装 `x86_64-apple-darwin` target 并构建 universal macOS 应用。
+  - 前端构建仍有既有 Vite chunk size warning，暂不影响本次打包。

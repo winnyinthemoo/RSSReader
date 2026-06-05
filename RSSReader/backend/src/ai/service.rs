@@ -122,6 +122,14 @@ impl AiService {
         self.translation.start_translation(request)
     }
 
+    pub fn stream_translation(
+        &self,
+        request: StartTranslationRequest,
+        emit: impl FnMut(&TranslationView),
+    ) -> AiResult<TranslationView> {
+        self.translation.stream_translation(request, emit)
+    }
+
     pub fn suggest_tags(&self, request: TaggingSuggestRequest) -> AiResult<TaggingSuggestResult> {
         self.tagging.suggest(request)
     }
@@ -130,8 +138,13 @@ impl AiService {
         self.tagging.assign_tags(request)
     }
 
-    pub fn usage_report(&self, dimension: &str, window_days: u32) -> AiResult<UsageReportResult> {
-        self.usage.report(dimension, window_days)
+    pub fn usage_report(
+        &self,
+        dimension: &str,
+        window_days: u32,
+        key: Option<&str>,
+    ) -> AiResult<UsageReportResult> {
+        self.usage.report(dimension, window_days, key)
     }
 }
 

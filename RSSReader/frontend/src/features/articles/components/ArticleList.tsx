@@ -1,12 +1,17 @@
 import { Circle, Star } from "lucide-react";
 
-import type { ArticleListItem, FeedSummary, TagSummary } from "../../../../../shared/feed";
+import type {
+  ArticleListItem,
+  FeedSummary,
+  TagMatchMode,
+  TagSummary,
+} from "../../../../../shared/feed";
 
 type SidebarSelection =
   | { type: "all" }
   | { type: "feed"; feedId: string }
   | { type: "starred" }
-  | { type: "tag"; tagId: string };
+  | { type: "tag"; tagIds: string[]; tagMatch: TagMatchMode };
 
 interface ArticleListProps {
   articles: ArticleListItem[];
@@ -103,8 +108,15 @@ function getArticleListTitle(
       return feeds.find((feed) => feed.id === selection.feedId)?.title ?? "Feed";
     case "starred":
       return "Starred";
-    case "tag":
-      return tags.find((tag) => tag.id === selection.tagId)?.name ?? "Tag";
+    case "tag": {
+      const selectedNames = selection.tagIds
+        .map((tagId) => tags.find((tag) => tag.id === tagId)?.name)
+        .filter((name): name is string => Boolean(name));
+      if (selectedNames.length <= 1) {
+        return selectedNames[0] ?? "Tag";
+      }
+      return `${selectedNames[0]} +${selectedNames.length - 1} (${selection.tagMatch})`;
+    }
     case "all":
     default:
       return "All articles";

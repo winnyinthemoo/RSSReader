@@ -8,6 +8,8 @@ interface BilingualTranslationViewProps {
   translation?: TranslationView;
   isLoading?: boolean;
   errorMessage?: string;
+  showEmptyMessage?: boolean;
+  isSelection?: boolean;
 }
 
 export function BilingualTranslationView({
@@ -15,6 +17,8 @@ export function BilingualTranslationView({
   translation,
   isLoading,
   errorMessage,
+  showEmptyMessage = true,
+  isSelection = false,
 }: BilingualTranslationViewProps) {
   const built = useMemo(() => {
     if (translation?.bilingualHtml) {
@@ -51,10 +55,12 @@ export function BilingualTranslationView({
       ) : null}
       {isLoading ? (
         <p className="bilingual-status muted">
-          Translating article by segment (may take a few minutes)…
+          {isSelection
+            ? "Translating selected text..."
+            : "Translating article by segment (may take a few minutes)..."}
         </p>
       ) : null}
-      {!translation && !isLoading ? (
+      {!translation && !isLoading && showEmptyMessage ? (
         <p className="bilingual-status muted">No translation yet.</p>
       ) : null}
       {built.placed < built.expected ? (

@@ -76,33 +76,54 @@ fn feed_to_domain(feed_url: &str, feed: Feed) -> ParsedFeed {
     ParsedFeed { feed, articles }
 }
 
-fn strip_html(raw: &str) -> String {
-    let mut text = String::with_capacity(raw.len());
-    let mut inside_tag = false;
-    for ch in raw.chars() {
-        match ch {
-            '<' => inside_tag = true,
-            '>' => {
-                inside_tag = false;
-                text.push(' ');
-            }
-            ch if !inside_tag => text.push(ch),
-            _ => {}
-        }
-    }
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+pub fn strip_html(raw: &str) -> String {
+    plain_text(raw)
 }
 
 fn is_noise_image(tag: &str) -> bool {
     let lower = tag.to_lowercase();
-    lower.contains("avatar")
+    // Path / type patterns
+    if lower.contains(".svg")
+        || lower.contains("/icp.")
+        || lower.contains("/gaba.")
+        || lower.contains("/denglu/")
+        || lower.contains("cprevious")
+        || lower.contains("cnext")
+        || lower.contains("/badge")
+        || lower.contains("/logo.")
+    {
+        return true;
+    }
+    // Legacy keyword patterns
+    if lower.contains("avatar")
         || lower.contains("gravatar")
         || lower.contains("smilies")
         || lower.contains("emoji")
         || lower.contains("class=\"icon\"")
         || lower.contains("class='icon'")
-        || lower.contains("hopedomain.com/badge")
-        || lower.contains("/logo.")
+    {
+        return true;
+    }
+    // Alt-text keyword patterns (Chinese UI labels)
+    if let Some(alt_start) = lower.find("alt=\"") {
+        let rest = &lower[alt_start + 5..];
+        if let Some(alt_end) = rest.find('"') {
+            let alt = &rest[..alt_end];
+            if alt.contains("菜单")
+                || alt.contains("登录")
+                || alt.contains("注册")
+                || alt.contains("分享")
+                || alt.contains("返回")
+                || alt.contains("主题")
+                || alt.contains("相关文章")
+                || alt.contains("声明")
+                || alt.contains("标签")
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn strip_noise_images(html: &str) -> String {
@@ -149,12 +170,18 @@ fn narrow_to_content(html: &str) -> &str {
         "<article",
         "class=\"article\"",
         "class=\"article ",
+        "class=\"article-content\"",
+        "class=\"article-content ",
         "class=\"post-content\"",
         "class=\"post-content ",
         "class=\"entry-content\"",
         "class=\"entry-content ",
         "class=\"post-body\"",
         "class=\"post-body ",
+        "class=\"content\"",
+        "class=\"content ",
+        "class=\"main\"",
+        "class=\"main ",
     ] {
         if let Some(start) = html.find(marker) {
             let after_open = &html[start..];
@@ -223,26 +250,31 @@ fn find_closing_tag_end(html: &str) -> Option<usize> {
 fn strip_tag(html: &str, tag_name: &str) -> String {
     let open = format!("<{}", tag_name);
     let close = format!("</{}>", tag_name);
-    let mut result = String::with_capacity(html.len());
+    let end = html.len();
+    let mut result = String::with_capacity(end);
     let mut pos = 0;
-    while let Some(start) = html[pos..].find(&open) {
-        let abs_start = pos + start;
-        // push everything before this tag
-        result.push_str(&html[pos..abs_start]);
-        // skip this tag and all its content
-        let after_open = &html[abs_start..];
-        if let Some(tag_end) = after_open.find('>') {
-            let inner_start = abs_start + tag_end + 1;
-            if let Some(close_pos) = find_closing_tag_end(&html[inner_start..]) {
-                pos = inner_start + close_pos + close.len();
+    while pos < end {
+        if let Some(start) = html[pos..].find(&open) {
+            let abs_start = pos + start;
+            result.push_str(&html[pos..abs_start]);
+            let after_open = &html[abs_start..];
+            if let Some(tag_end) = after_open.find('>') {
+                let inner_start = abs_start + tag_end + 1;
+                pos = if let Some(close_pos) = find_closing_tag_end(&html[inner_start..]) {
+                    (inner_start + close_pos + close.len()).min(end)
+                } else {
+                    inner_start.min(end)
+                };
             } else {
-                pos = inner_start;
+                pos = (abs_start + open.len()).min(end);
             }
         } else {
-            pos = abs_start + open.len();
+            break;
         }
     }
-    result.push_str(&html[pos..]);
+    if pos < end {
+        result.push_str(&html[pos..]);
+    }
     result
 }
 
@@ -254,8 +286,13 @@ fn strip_non_content(html: &str) -> String {
     html
 }
 
-fn try_fetch_full_content(article_url: &str) -> Option<String> {
-    let response = reqwest::blocking::get(article_url).ok()?;
+pub fn try_fetch_full_content(article_url: &str) -> Option<String> {
+    // Short timeout — if the page is slow, we'd rather show RSS content quickly.
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .ok()?;
+    let response = client.get(article_url).send().ok()?;
     if !response.status().is_success() {
         return None;
     }
@@ -268,6 +305,12 @@ fn try_fetch_full_content(article_url: &str) -> Option<String> {
     if content.is_empty() {
         return None;
     }
+    // Quality check: if readability extracted fewer than 100 plain-text characters,
+    // the result is likely garbage (JS SPA shell, CSS-only layout, etc.).
+    // Fall back to the RSS summary/description instead.
+    if plain_text(&content).chars().count() < 100 {
+        return None;
+    }
     if !content.contains("<img") {
         let page_images = extract_img_tags(&html);
         if !page_images.is_empty() {
@@ -275,7 +318,59 @@ fn try_fetch_full_content(article_url: &str) -> Option<String> {
         }
     }
     content = strip_noise_images(&content);
+    // Strip orphaned <figcaption> left behind when its parent <img> was filtered out.
+    content = strip_tag(&content, "figcaption");
+    // Inject hero/banner background-image as <img> (missed by readability
+    // since it lives in <header> which strip_non_content removes).
+    if let Some(hero_tag) = extract_hero_banner_img(&html, article_url) {
+        if !content.contains(&hero_tag) {
+            content = format!("{}{}", hero_tag, content);
+        }
+    }
+    // Expose lazy-loaded images:
+    // 1. Strip the base64 placeholder src (common lazyload pattern) so
+    //    browsers don't pick it over the real data-src.
+    // 2. Rewrite data-src -> src so the real URL becomes visible.
+    content = content.replace(
+        "src=\"data:image/gif;base64",
+        "old_src=\"data:image/gif;base64",
+    );
+    content = content.replace(
+        "src=\"data:image/png;base64",
+        "old_src=\"data:image/png;base64",
+    );
+    content = content.replace("data-src", "src");
     Some(content)
+}
+
+/// Called on-demand (or from background thread) to enrich RSS-short content
+/// with readability-extracted full text.  Returns ammonia-cleaned HTML.
+pub fn enrich_rss_content(article_url: &str, rss_html: &str) -> String {
+    let feed_images = extract_img_tags(rss_html);
+    let rss_plain_len = strip_html(rss_html).chars().count();
+    let rss_cleaned = strip_noise_images(&strip_tag(rss_html, "figcaption"));
+
+    let enriched = if rss_plain_len < 2000 {
+        match try_fetch_full_content(article_url) {
+            Some(fetched) => {
+                let fetched_plain_len = strip_html(&fetched).chars().count();
+                if fetched_plain_len >= rss_plain_len {
+                    if feed_images.is_empty() {
+                        fetched
+                    } else {
+                        format!("{feed_images}{fetched}")
+                    }
+                } else {
+                    rss_cleaned.clone()
+                }
+            }
+            None => rss_cleaned.clone(),
+        }
+    } else {
+        rss_cleaned.clone()
+    };
+
+    ammonia::clean(&enriched)
 }
 
 fn entry_to_article(
@@ -287,7 +382,7 @@ fn entry_to_article(
     let title = entry
         .title
         .as_ref()
-        .map(|title| strip_html(title.content.trim()))
+        .map(|title| deduplicate_title(&strip_html(title.content.trim())))
         .filter(|title| !title.is_empty())
         .unwrap_or_else(|| "Untitled article".to_string());
     let entry_id = entry.id.trim();
@@ -313,21 +408,9 @@ fn entry_to_article(
         })
         .unwrap_or_else(|| title.clone());
 
-    let needs_full_fetch = strip_html(&raw_html).chars().count() < 2000;
-
-    let raw_html = if needs_full_fetch {
-        let feed_images = extract_img_tags(&raw_html);
-        let full_text = try_fetch_full_content(&article_url).unwrap_or(raw_html);
-        if feed_images.is_empty() {
-            full_text
-        } else {
-            format!("{feed_images}{full_text}")
-        }
-    } else {
-        raw_html
-    };
-    let raw_html = strip_noise_images(&raw_html);
-    let sanitized_html = ammonia::clean(&raw_html);
+    // Feed-add: store only RSS raw content — no readability fetch.
+    // Background enrichment happens after the feed is saved.
+    let sanitized_html = ammonia::clean(&strip_noise_images(&strip_tag(&raw_html, "figcaption")));
     let excerpt = entry
         .summary
         .as_ref()
@@ -366,9 +449,21 @@ fn fallback_article_url(feed_url: &str, entry_id: &str, title: &str) -> String {
 }
 
 fn plain_excerpt(html: &str) -> String {
-    let mut text = String::new();
-    let mut inside_tag = false;
+    let compact = plain_text(html);
+    compact.chars().take(180).collect()
+}
 
+fn now_marker() -> String {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs().to_string())
+        .unwrap_or_else(|_| "0".to_string())
+}
+
+/// Extract plain text from HTML: strip all tags and collapse whitespace.
+fn plain_text(html: &str) -> String {
+    let mut text = String::with_capacity(html.len());
+    let mut inside_tag = false;
     for ch in html.chars() {
         match ch {
             '<' => inside_tag = true,
@@ -380,16 +475,99 @@ fn plain_excerpt(html: &str) -> String {
             _ => {}
         }
     }
-
-    let compact = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    compact.chars().take(180).collect()
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-fn now_marker() -> String {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs().to_string())
-        .unwrap_or_else(|_| "0".to_string())
+/// Some RSS feeds embed HTML in <title>, e.g.
+///   "foo</span>"><span>foo</span>"
+/// strip_html collapses both into "foo foo". Keep only the first occurrence.
+fn deduplicate_title(raw: &str) -> String {
+    let t = raw.trim();
+    // Pattern: "title \" title" — strip_html collapses HTML-embedded title
+    // from malformed RSS feeds into "text \" text".
+    if let Some(pos) = t.find(" \"") {
+        let first = t[..pos].trim();
+        let second = t[pos + 2..].trim();
+        if first == second {
+            return first.to_string();
+        }
+    }
+    t.to_string()
+}
+
+/// Scan raw HTML for a hero/banner background-image and return an
+/// absolute <img> tag.  This catches CSS background-images that readability
+/// misses because they live in <header> (stripped by strip_non_content).
+fn extract_hero_banner_img(raw_html: &str, article_url: &str) -> Option<String> {
+    // Find a hero/banner container
+    let lower = raw_html.to_lowercase();
+    let hero_start = lower.find("hero").or_else(|| lower.find("banner"))?;
+    let window_start = if hero_start > 2000 {
+        hero_start - 2000
+    } else {
+        0
+    };
+    let window = &raw_html[window_start..hero_start + 500];
+
+    // Check for <img> inside the window first
+    if let Some(s) = window.find("<img") {
+        let tag = &window[s..];
+        if let Some(src_start) = tag.find("src=\"") {
+            let after = &tag[src_start + 5..];
+            if let Some(src_end) = after.find('\"') {
+                let mut src = after[..src_end].to_string();
+                src = resolve_url(&src, article_url);
+                if !src.is_empty() {
+                    return Some(format!("<img src=\"{}\">", src));
+                }
+            }
+        }
+    }
+
+    // Fallback: CSS background-image: url(...)
+    if let Some(bg) = window.find("background-image") {
+        let after_bg = &window[bg..];
+        if let Some(url_start) = after_bg.find("url(") {
+            let after_paren = &after_bg[url_start + 4..];
+            if let Some(url_end) = after_paren.find(')') {
+                let mut url = after_paren[..url_end].trim().to_string();
+                url = url.trim_matches('\"').trim_matches('\'').to_string();
+                url = resolve_url(&url, article_url);
+                if !url.is_empty() {
+                    return Some(format!("<img src=\"{}\">", url));
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Resolve a potentially relative URL against the article base URL.
+fn resolve_url(url: &str, article_url: &str) -> String {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        return url.to_string();
+    }
+    if url.starts_with("//") {
+        return format!("https:{}", url);
+    }
+    if url.starts_with('/') {
+        if url::Url::parse(article_url).is_ok() {
+            let parsed = url::Url::parse(article_url).unwrap();
+            let base = parsed.origin().ascii_serialization();
+            if !base.is_empty() {
+                return format!("{}{}", base, url);
+            }
+        }
+        // Fallback manual parsing
+        if let Some(scheme_end) = article_url.find("://") {
+            let after_scheme = &article_url[scheme_end + 3..];
+            let host_end = after_scheme.find('/').unwrap_or(after_scheme.len());
+            let base = &article_url[..scheme_end + 3 + host_end];
+            return format!("{}{}", base, url);
+        }
+    }
+    url.to_string()
 }
 
 pub fn stable_id(prefix: &str, value: &str) -> String {

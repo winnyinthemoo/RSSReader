@@ -1,10 +1,11 @@
 use std::sync::{Mutex, OnceLock};
 
 use super::{
-    ArticleDetail, ArticleListFilter, ArticleListResult, ArticleMarkFavoriteRequest,
-    ArticleMarkReadRequest, ArticleNote, ArticleNoteSaveRequest, ArticleTagDeleteRequest,
-    ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest, FeedDeleteRequest, FeedListResult,
-    FeedRefreshRequest, FeedRefreshResult, FeedService, FeedWithArticles, TagListResult,
+    enrich_rss_content, strip_html, ArticleDetail, ArticleListFilter, ArticleListResult,
+    ArticleMarkFavoriteRequest, ArticleMarkReadRequest, ArticleNote, ArticleNoteSaveRequest,
+    ArticleTagDeleteRequest, ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest,
+    FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedService,
+    FeedWithArticles, TagDeleteRequest, TagListResult, TagMergeRequest, TagRenameRequest,
 };
 
 static FEED_SERVICE: OnceLock<Mutex<FeedService>> = OnceLock::new();
@@ -32,11 +33,25 @@ pub fn article_list(filter: ArticleListFilter) -> ArticleListResult {
 }
 
 pub fn article_get(article_id: String) -> Result<ArticleDetail, String> {
-    with_service(|service| {
+    let mut article = with_service(|service| {
         service
             .get_article(&article_id)
             .ok_or_else(|| "Article not found".to_string())
-    })
+    })?;
+
+    // On-demand enrichment outside the lock so HTTP doesn't block other requests.
+    if strip_html(&article.sanitized_html).chars().count() < 2000 {
+        let enriched = enrich_rss_content(&article.url, &article.sanitized_html);
+        if strip_html(&enriched).chars().count()
+            > strip_html(&article.sanitized_html).chars().count()
+        {
+            article.sanitized_html = enriched.clone();
+            let _ =
+                with_service(|service| service.update_article_content(&article_id, &enriched).ok());
+        }
+    }
+
+    Ok(article)
 }
 
 pub fn article_mark_read(article_id: String, is_read: bool) -> Result<(), String> {
@@ -83,6 +98,23 @@ pub fn article_delete_tag(article_id: String, tag_id: String) -> Result<(), Stri
     with_service(|service| {
         service.delete_article_tag(ArticleTagDeleteRequest { article_id, tag_id })
     })
+}
+
+pub fn tag_rename(tag_id: String, name: String) -> Result<TagListResult, String> {
+    with_service(|service| service.rename_tag(TagRenameRequest { tag_id, name }))
+}
+
+pub fn tag_merge(source_tag_id: String, target_tag_id: String) -> Result<TagListResult, String> {
+    with_service(|service| {
+        service.merge_tags(TagMergeRequest {
+            source_tag_id,
+            target_tag_id,
+        })
+    })
+}
+
+pub fn tag_delete(tag_id: String) -> Result<TagListResult, String> {
+    with_service(|service| service.delete_tag(TagDeleteRequest { tag_id }))
 }
 
 pub fn article_get_note(article_id: String) -> Option<ArticleNote> {

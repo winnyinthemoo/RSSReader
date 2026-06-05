@@ -11,6 +11,16 @@ pub fn language_display_name(code: &str) -> String {
         "ko" => "Korean".to_string(),
         "fr" => "French".to_string(),
         "de" => "German".to_string(),
+        "es" => "Spanish".to_string(),
+        "it" => "Italian".to_string(),
+        "pt" | "pt-br" | "pt-pt" => "Portuguese".to_string(),
+        "ru" => "Russian".to_string(),
+        "ar" => "Arabic".to_string(),
+        "hi" => "Hindi".to_string(),
+        "id" => "Indonesian".to_string(),
+        "vi" => "Vietnamese".to_string(),
+        "th" => "Thai".to_string(),
+        "tr" => "Turkish".to_string(),
         other => other.to_string(),
     }
 }
@@ -67,6 +77,9 @@ pub fn tagging_parameters(
     let mut map = HashMap::new();
     map.insert("title".to_string(), title.to_string());
     map.insert("body".to_string(), body.to_string());
+    map.insert("bodyKind".to_string(), "article excerpt".to_string());
+    map.insert("maxTagCount".to_string(), "5".to_string());
+    map.insert("maxNewTagCount".to_string(), "3".to_string());
     map.insert(
         "existingTagsJson".to_string(),
         existing_tags_json.to_string(),

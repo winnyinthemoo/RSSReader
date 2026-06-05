@@ -3,7 +3,8 @@ use super::{
     ArticleMarkFavoriteRequest, ArticleMarkReadRequest, ArticleNote, ArticleNoteSaveRequest,
     ArticleTagDeleteRequest, ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest,
     FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedRepository,
-    FeedStatus, FeedWithArticles, TagListResult,
+    FeedStatus, FeedWithArticles, TagDeleteRequest, TagListResult, TagMergeRequest,
+    TagRenameRequest,
 };
 
 pub struct FeedService {
@@ -48,6 +49,7 @@ impl FeedService {
                     unread_only: false,
                     favorites_only: false,
                     tag_id: None,
+                    ..Default::default()
                 })?,
             });
         }
@@ -75,6 +77,7 @@ impl FeedService {
             unread_only: false,
             favorites_only: false,
             tag_id: None,
+            ..Default::default()
         })?;
 
         Ok(FeedWithArticles { feed, articles })
@@ -137,6 +140,10 @@ impl FeedService {
         self.repository.get_article(article_id).ok().flatten()
     }
 
+    pub fn update_article_content(&self, article_id: &str, html: &str) -> Result<(), String> {
+        self.repository.update_article_content(article_id, html)
+    }
+
     pub fn mark_article_read(&mut self, request: ArticleMarkReadRequest) -> Result<(), String> {
         self.repository
             .mark_article_read(&request.article_id, request.is_read)
@@ -194,6 +201,32 @@ impl FeedService {
             .delete_article_tag(&request.article_id, &request.tag_id)
     }
 
+    pub fn rename_tag(&mut self, request: TagRenameRequest) -> Result<TagListResult, String> {
+        let display = request.name.trim();
+        if display.is_empty() {
+            return Err("Tag name cannot be empty".to_string());
+        }
+        let normalized = normalize_tag_name(display);
+        if normalized.is_empty() {
+            return Err("Tag name must contain letters or numbers".to_string());
+        }
+
+        self.repository
+            .rename_tag(&request.tag_id, display, &normalized)?;
+        Ok(self.list_tags())
+    }
+
+    pub fn merge_tags(&mut self, request: TagMergeRequest) -> Result<TagListResult, String> {
+        self.repository
+            .merge_tags(&request.source_tag_id, &request.target_tag_id)?;
+        Ok(self.list_tags())
+    }
+
+    pub fn delete_tag(&mut self, request: TagDeleteRequest) -> Result<TagListResult, String> {
+        self.repository.delete_tag(&request.tag_id)?;
+        Ok(self.list_tags())
+    }
+
     pub fn get_article_note(&self, article_id: &str) -> Option<ArticleNote> {
         self.repository.get_article_note(article_id).ok().flatten()
     }
@@ -239,6 +272,7 @@ fn now_marker() -> String {
 mod tests {
     use super::*;
     use crate::feeds::parse_feed_bytes;
+    use crate::feeds::TagMatchMode;
 
     fn service_with_sample_feed() -> FeedService {
         let xml = br#"
@@ -281,6 +315,7 @@ mod tests {
             unread_only: false,
             favorites_only: false,
             tag_id: None,
+            ..Default::default()
         });
 
         assert_eq!(feeds.len(), 1);
@@ -308,5 +343,89 @@ mod tests {
 
         let feeds = service.list_feeds().feeds;
         assert_eq!(feeds[0].unread_count, 0);
+    }
+
+    #[test]
+    fn list_articles_filters_multiple_tags_by_match_mode() {
+        let xml = br#"
+            <rss version="2.0">
+              <channel>
+                <title>Tagged Feed</title>
+                <link>https://example.com</link>
+                <item>
+                  <title>Rust Article</title>
+                  <guid>rust-article</guid>
+                  <link>https://example.com/rust</link>
+                  <description>Rust body</description>
+                </item>
+                <item>
+                  <title>AI Article</title>
+                  <guid>ai-article</guid>
+                  <link>https://example.com/ai</link>
+                  <description>AI body</description>
+                </item>
+              </channel>
+            </rss>
+        "#;
+        let parsed = parse_feed_bytes("https://example.com/rss.xml", xml).expect("feed parses");
+        let repository = FeedRepository::open_in_memory().expect("repository opens");
+        repository.save_feed(&parsed.feed).expect("feed saves");
+        for article in &parsed.articles {
+            repository.save_article(article).expect("article saves");
+        }
+        let mut service = FeedService::with_repository(repository);
+        let articles = service.list_articles(ArticleListFilter::default());
+        let rust_article = articles
+            .iter()
+            .find(|article| article.title == "Rust Article")
+            .expect("rust article exists");
+        let ai_article = articles
+            .iter()
+            .find(|article| article.title == "AI Article")
+            .expect("ai article exists");
+
+        service
+            .save_article_tags(ArticleTagsSaveRequest {
+                article_id: rust_article.id.clone(),
+                tags: vec!["Rust".to_string(), "AI".to_string()],
+                source: "manual".to_string(),
+            })
+            .expect("rust article tags save");
+        service
+            .save_article_tags(ArticleTagsSaveRequest {
+                article_id: ai_article.id.clone(),
+                tags: vec!["AI".to_string()],
+                source: "manual".to_string(),
+            })
+            .expect("ai article tags save");
+
+        let tags = service.list_tags().tags;
+        let rust_tag_id = tags
+            .iter()
+            .find(|tag| tag.name == "Rust")
+            .expect("rust tag exists")
+            .id
+            .clone();
+        let ai_tag_id = tags
+            .iter()
+            .find(|tag| tag.name == "AI")
+            .expect("ai tag exists")
+            .id
+            .clone();
+
+        let any_articles = service.list_articles(ArticleListFilter {
+            tag_ids: vec![rust_tag_id.clone(), ai_tag_id.clone()],
+            tag_match: TagMatchMode::Any,
+            ..Default::default()
+        });
+        let all_articles = service.list_articles(ArticleListFilter {
+            tag_ids: vec![rust_tag_id, ai_tag_id],
+            tag_match: TagMatchMode::All,
+            ..Default::default()
+        });
+
+        assert_eq!(any_articles.len(), 2);
+        assert_eq!(all_articles.len(), 1);
+        assert_eq!(all_articles[0].title, "Rust Article");
     }
 }

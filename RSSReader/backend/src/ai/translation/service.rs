@@ -57,17 +57,26 @@ impl TranslationService {
     }
 
     pub fn start_translation(&self, request: StartTranslationRequest) -> AiResult<TranslationView> {
+        self.translate_article(request, |_| {})
+    }
+
+    pub fn stream_translation(
+        &self,
+        request: StartTranslationRequest,
+        emit: impl FnMut(&TranslationView),
+    ) -> AiResult<TranslationView> {
+        self.translate_article(request, emit)
+    }
+
+    fn translate_article(
+        &self,
+        request: StartTranslationRequest,
+        mut emit: impl FnMut(&TranslationView),
+    ) -> AiResult<TranslationView> {
         let feeds = FeedRepository::open_default().map_err(|error| AiError::Database(error))?;
         let article = feeds.get_article(&request.article_id)?.ok_or_else(|| {
             AiError::NotFound(format!("Article not found: {}", request.article_id))
         })?;
-
-        let segments = Segmenter::from_html(&article.sanitized_html);
-        if segments.is_empty() {
-            return Err(AiError::InvalidInput(
-                "Article has no translatable text segments".to_string(),
-            ));
-        }
 
         let provider = AiProviderService::new()?;
         let settings = provider.get_agent_settings(AgentType::Translation)?;
@@ -77,6 +86,31 @@ impl TranslationService {
             .unwrap_or(TranslationPromptStrategy::Standard);
         let kind = PromptResolver::for_agent(AgentType::Translation, strategy);
         let route = provider.openai_agent_client(AgentType::Translation)?;
+
+        if let Some(selected_text) = request
+            .selected_text
+            .as_deref()
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+        {
+            let view = translate_selection(
+                &route,
+                &request.article_id,
+                kind,
+                &request.target_language,
+                selected_text,
+            )?;
+            emit(&view);
+            return Ok(view);
+        }
+
+        let segments = Segmenter::from_html(&article.sanitized_html);
+        if segments.is_empty() {
+            return Err(AiError::InvalidInput(
+                "Article has no translatable text segments".to_string(),
+            ));
+        }
+
         let translated_title = translate_text(
             &route,
             &request.article_id,
@@ -104,6 +138,17 @@ impl TranslationService {
         let mut views = Vec::new();
         let mut previous_plain: Option<String> = None;
         let mut failed_count = 0usize;
+
+        let initial_view = build_translation_view(
+            &article.sanitized_html,
+            &request.article_id,
+            &request.target_language,
+            &run_id,
+            translated_title.clone(),
+            "running",
+            &views,
+        );
+        emit(&initial_view);
 
         for segment in &segments {
             let segment_result = translate_segment(
@@ -142,6 +187,17 @@ impl TranslationService {
                 status: status.to_string(),
             });
 
+            let partial_view = build_translation_view(
+                &article.sanitized_html,
+                &request.article_id,
+                &request.target_language,
+                &run_id,
+                translated_title.clone(),
+                "running",
+                &views,
+            );
+            emit(&partial_view);
+
             previous_plain = Some(strip_html_tags(&segment.source_html));
         }
 
@@ -156,25 +212,65 @@ impl TranslationService {
         self.repository
             .update_translation_run_status(&run_id, run_status, &finished_at)?;
 
-        let built = build_bilingual_html(&article.sanitized_html, &views);
-
-        Ok(TranslationView {
-            run_id,
-            article_id: request.article_id,
-            target_language: request.target_language,
+        let final_view = build_translation_view(
+            &article.sanitized_html,
+            &request.article_id,
+            &request.target_language,
+            &run_id,
             translated_title,
-            status: run_status.to_string(),
-            bilingual_html: Some(built.html),
-            bilingual_aligned: built.aligned,
-            bilingual_placed: built.placed,
-            bilingual_expected: built.expected,
-            segments: views,
-        })
+            run_status,
+            &views,
+        );
+        emit(&final_view);
+
+        Ok(final_view)
     }
 
     pub fn retry_segment(&self, _segment_id: &str) -> AiResult<TranslationView> {
         Err(AiError::NotImplemented("translation segment retry"))
     }
+}
+
+fn translate_selection(
+    route: &AgentClient,
+    article_id: &str,
+    kind: AgentPromptKind,
+    target_language: &str,
+    selected_text: &str,
+) -> AiResult<TranslationView> {
+    let translated_text = translate_text(
+        route,
+        article_id,
+        kind,
+        target_language,
+        selected_text,
+        None,
+    )?;
+    let segment = TranslationSegmentView {
+        id: Uuid::new_v4().to_string(),
+        segment_index: 0,
+        segment_tag: "selection".to_string(),
+        source_html: selected_text.to_string(),
+        translated_text: Some(translated_text.clone()),
+        status: "succeeded".to_string(),
+    };
+
+    Ok(TranslationView {
+        run_id: format!("selection-{}", Uuid::new_v4()),
+        article_id: article_id.to_string(),
+        target_language: target_language.to_string(),
+        translated_title: None,
+        status: "selection".to_string(),
+        bilingual_html: Some(format!(
+            "<div class=\"translation-selection\"><p>{}</p><div class=\"translation-block\" data-segment-index=\"0\">{}</div></div>",
+            escape_html(selected_text),
+            escape_html(&translated_text)
+        )),
+        bilingual_aligned: true,
+        bilingual_placed: 1,
+        bilingual_expected: 1,
+        segments: vec![segment],
+    })
 }
 
 fn build_bilingual_html(article_html: &str, segments: &[TranslationSegmentView]) -> BilingualBuild {
@@ -224,6 +320,30 @@ fn build_bilingual_html(article_html: &str, segments: &[TranslationSegmentView])
         aligned: placed == ordered.len(),
         placed,
         expected: ordered.len(),
+    }
+}
+
+fn build_translation_view(
+    article_html: &str,
+    article_id: &str,
+    target_language: &str,
+    run_id: &str,
+    translated_title: Option<String>,
+    status: &str,
+    segments: &[TranslationSegmentView],
+) -> TranslationView {
+    let built = build_bilingual_html(article_html, segments);
+    TranslationView {
+        run_id: run_id.to_string(),
+        article_id: article_id.to_string(),
+        target_language: target_language.to_string(),
+        translated_title,
+        status: status.to_string(),
+        bilingual_html: Some(built.html),
+        bilingual_aligned: built.aligned,
+        bilingual_placed: built.placed,
+        bilingual_expected: built.expected,
+        segments: segments.to_vec(),
     }
 }
 

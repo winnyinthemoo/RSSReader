@@ -39,6 +39,21 @@ fn tag_list() -> TagListResult {
 }
 
 #[tauri::command]
+fn tag_rename(tag_id: String, name: String) -> Result<TagListResult, String> {
+    backend::feeds::tag_rename(tag_id, name)
+}
+
+#[tauri::command]
+fn tag_merge(source_tag_id: String, target_tag_id: String) -> Result<TagListResult, String> {
+    backend::feeds::tag_merge(source_tag_id, target_tag_id)
+}
+
+#[tauri::command]
+fn tag_delete(tag_id: String) -> Result<TagListResult, String> {
+    backend::feeds::tag_delete(tag_id)
+}
+
+#[tauri::command]
 async fn feed_add(url: String, name: Option<String>) -> Result<FeedWithArticles, String> {
     run_blocking(move || backend::feeds::feed_add(url, name)).await
 }
@@ -223,6 +238,9 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             feed_list,
             tag_list,
+            tag_rename,
+            tag_merge,
+            tag_delete,
             feed_add,
             feed_refresh,
             feed_delete,

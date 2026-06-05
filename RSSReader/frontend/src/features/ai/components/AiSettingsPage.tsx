@@ -9,6 +9,7 @@ import type {
   ProviderTestResult,
   SummaryDetailLevel,
   TranslationPromptStrategy,
+  UsageDailyRow,
   UsageReportResult,
 } from "../../../../../shared/ai";
 import {
@@ -33,6 +34,7 @@ interface AiSettingsPageProps {
 type AiSettingsTab = "providers" | "models" | "agents";
 type AgentPanelType = Extract<AgentType, "summary" | "translation" | "tagging">;
 type UsageDimension = "provider" | "model" | "agent";
+type UsageMetric = "tokens" | "requests";
 
 const tabs: { id: AiSettingsTab; label: string }[] = [
   { id: "providers", label: "Providers" },
@@ -92,8 +94,14 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
   }, []);
 
   useEffect(() => {
-    void loadUsage(usageDimension);
-  }, [usageDimension]);
+    const key =
+      usageDimension === "agent"
+        ? activeAgent
+        : usageDimension === "model"
+          ? selectedModelId || undefined
+          : selectedProviderId || undefined;
+    void loadUsage(usageDimension, key);
+  }, [activeAgent, selectedModelId, selectedProviderId, usageDimension]);
 
   useEffect(() => {
     if (selectedProvider) {
@@ -185,9 +193,10 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
     }
   }
 
-  async function loadUsage(nextDimension: UsageDimension) {
+  async function loadUsage(nextDimension: UsageDimension, key?: string) {
     try {
-      const report = await getUsageReport(nextDimension, 7);
+      setUsageReport(undefined);
+      const report = await getUsageReport(nextDimension, 7, key);
       setUsageReport(report);
       setErrorMessage(undefined);
     } catch (error) {
@@ -588,7 +597,11 @@ function ProvidersTab({
       </aside>
 
       <section className="ai-properties">
-        <UsageSummary dimension="provider" report={usageReport} />
+        <UsageSummary
+          dimension="provider"
+          report={usageReport}
+          rowKey={selectedProviderId || undefined}
+        />
         <PanelTitle title="Properties" subtitle="Provider connection and local secret settings." />
         <div className="ai-form-grid">
           <label className="ai-field">
@@ -723,7 +736,7 @@ function ModelsTab({
       </aside>
 
       <section className="ai-properties">
-        <UsageSummary dimension="model" report={usageReport} />
+        <UsageSummary dimension="model" report={usageReport} rowKey={selectedModelId || undefined} />
         <PanelTitle title="Properties" subtitle="Model name and provider binding." />
         <div className="ai-form-grid">
           <label className="ai-field">
@@ -926,12 +939,22 @@ interface UsageSummaryProps {
 
 function UsageSummary({ dimension, report, rowKey }: UsageSummaryProps) {
   const gradientId = `usageGradient-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const [usageMetric, setUsageMetric] = useState<UsageMetric>("tokens");
+  const [selectedPointLabel, setSelectedPointLabel] = useState<string | undefined>();
   const visibleReport = buildVisibleUsageReport(report, dimension, rowKey);
   const dailyRows = buildUsageDailyRows(visibleReport);
-  const points = buildUsageChartPoints(dailyRows);
+  const points = buildUsageChartPoints(dailyRows, usageMetric);
   const linePoints = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const areaPoints = points.length > 0 ? `36,96 ${linePoints} 304,96` : "";
+  const yAxisLabels = buildUsageYAxisLabels(points);
   const topRows = visibleReport?.rows.slice(0, 3) ?? [];
-  const activeItemCount = visibleReport?.rows.length ?? 0;
+  const metricTotal = usageMetric === "tokens" ? visibleReport?.totalTokens ?? 0 : visibleReport?.totalRequests ?? 0;
+  const todayRow = dailyRows[dailyRows.length - 1];
+  const todayValue = todayRow ? usageMetricValue(todayRow, usageMetric) : 0;
+  const dailyAverage = dailyRows.length > 0 ? metricTotal / dailyRows.length : 0;
+  const hasUsageData = points.some((point) => point.value > 0);
+  const peakPoint = points.find((point) => point.isPeak);
+  const activePoint = points.find((point) => point.label === selectedPointLabel) ?? peakPoint;
 
   return (
     <section className="ai-usage-panel">
@@ -948,6 +971,11 @@ function UsageSummary({ dimension, report, rowKey }: UsageSummaryProps) {
         </div>
       </div>
 
+      <div className="usage-insight-row" aria-label="Usage insights">
+        <span>Today {formatCompactNumber(todayValue)}</span>
+        <span>Daily avg {formatCompactNumber(dailyAverage)}</span>
+      </div>
+
       <div className="usage-stat-grid">
         <div className="usage-stat-card">
           <span>Requests</span>
@@ -957,33 +985,79 @@ function UsageSummary({ dimension, report, rowKey }: UsageSummaryProps) {
           <span>Tokens</span>
           <strong>{formatCompactNumber(visibleReport?.totalTokens ?? 0)}</strong>
         </div>
-        <div className="usage-stat-card">
-          <span>Active</span>
-          <strong>{formatCompactNumber(activeItemCount)}</strong>
-        </div>
       </div>
 
-      <div className="usage-chart" aria-label="Daily token usage">
-        <svg viewBox="0 0 320 112" role="img">
-          <defs>
-            <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#2f6f7c" stopOpacity="0.24" />
-              <stop offset="100%" stopColor="#2f6f7c" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <path className="usage-grid-line" d="M18 16 H304" />
-          <path className="usage-grid-line" d="M18 56 H304" />
-          <path className="usage-grid-line" d="M18 96 H304" />
-          <polygon
-            className="usage-area"
-            fill={`url(#${gradientId})`}
-            points={`18,96 ${linePoints} 304,96`}
-          />
-          <polyline className="usage-line" points={linePoints} />
-          {points.map((point) => (
-            <circle key={`${point.label}-${point.x}`} className="usage-point" cx={point.x} cy={point.y} r="3" />
+      <div className="usage-chart" aria-label={`Daily ${usageMetric} usage`}>
+        <div className="usage-chart-toolbar" aria-label="Usage metric">
+          {(["tokens", "requests"] as UsageMetric[]).map((metric) => (
+            <button
+              key={metric}
+              className={`usage-metric-button ${usageMetric === metric ? "active" : ""}`}
+              type="button"
+              aria-pressed={usageMetric === metric}
+              onClick={() => {
+                setUsageMetric(metric);
+                setSelectedPointLabel(undefined);
+              }}
+            >
+              {metricLabel(metric)}
+            </button>
           ))}
-        </svg>
+        </div>
+        {hasUsageData ? (
+          <>
+            <div className="usage-y-axis" aria-hidden="true">
+              {yAxisLabels.map((label) => (
+                <span key={label}>{label}</span>
+              ))}
+            </div>
+            <svg viewBox="0 0 320 112" role="img">
+              <defs>
+                <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="#2f6f7c" stopOpacity="0.24" />
+                  <stop offset="100%" stopColor="#2f6f7c" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path className="usage-grid-line" d="M36 16 H304" />
+              <path className="usage-grid-line" d="M36 56 H304" />
+              <path className="usage-grid-line" d="M36 96 H304" />
+              <polygon className="usage-area" fill={`url(#${gradientId})`} points={areaPoints} />
+              <polyline className="usage-line" points={linePoints} />
+              {points.map((point) => (
+                <g
+                  key={`${point.label}-${point.x}`}
+                  className="usage-point-hit"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={usagePointDescription(point)}
+                  onClick={() => setSelectedPointLabel(point.label)}
+                  onFocus={() => setSelectedPointLabel(point.label)}
+                  onMouseEnter={() => setSelectedPointLabel(point.label)}
+                >
+                  <title>{usagePointDescription(point)}</title>
+                  <circle
+                    className={`usage-point ${point.isPeak ? "peak" : ""}`}
+                    cx={point.x}
+                    cy={point.y}
+                    r={point.isPeak ? "4" : "3"}
+                  />
+                  {point.isPeak ? (
+                    <text className="usage-peak-label" x={point.x + 7} y={Math.max(12, point.y - 7)}>
+                      Peak
+                    </text>
+                  ) : null}
+                </g>
+              ))}
+            </svg>
+            {activePoint ? (
+              <p className="usage-point-detail" aria-live="polite">
+                {usagePointDescription(activePoint)}
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <div className="usage-empty-chart">No AI calls in the last 7 days.</div>
+        )}
         <div className="usage-axis">
           {dailyRows.map((row) => (
             <span key={row.date}>{formatUsageDay(row.date)}</span>
@@ -991,18 +1065,23 @@ function UsageSummary({ dimension, report, rowKey }: UsageSummaryProps) {
         </div>
       </div>
 
-      <div className="usage-leaders" aria-label="Top usage rows">
-        {topRows.length === 0 ? (
-          <p className="muted">No usage events yet.</p>
-        ) : (
-          topRows.map((row) => (
-            <div className="usage-leader-row" key={row.key}>
-              <span>{row.label}</span>
-              <strong>{formatCompactNumber(row.totalTokens)} tokens</strong>
-            </div>
-          ))
-        )}
-      </div>
+      {dimension === "model" ? null : (
+        <div className="usage-leaders" aria-label="Top usage rows">
+          {topRows.length === 0 ? (
+            <p className="muted">No usage events yet.</p>
+          ) : (
+            topRows.map((row) => (
+              <div className="usage-leader-row" key={row.key}>
+                <span>{row.label}</span>
+                <strong>
+                  {formatCompactNumber(usageMetric === "tokens" ? row.totalTokens : row.requestCount)}{" "}
+                  {metricUnit(usageMetric)}
+                </strong>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -1085,8 +1164,8 @@ function buildVisibleUsageReport(
   const rows = report.rows.filter((row) => row.key === rowKey);
   return {
     ...report,
+    key: rowKey,
     rows,
-    dailyRows: undefined,
     totalRequests: rows.reduce((total, row) => total + row.requestCount, 0),
     totalTokens: rows.reduce((total, row) => total + row.totalTokens, 0),
   };
@@ -1114,14 +1193,42 @@ function buildUsageDailyRows(report?: UsageReportResult) {
   });
 }
 
-function buildUsageChartPoints(rows: ReturnType<typeof buildUsageDailyRows>) {
-  const maxTokens = Math.max(1, ...rows.map((row) => row.totalTokens));
+function buildUsageChartPoints(rows: ReturnType<typeof buildUsageDailyRows>, metric: UsageMetric) {
+  const values = rows.map((row) => usageMetricValue(row, metric));
+  const maxValue = Math.max(1, ...values);
+  const peakIndex = values.findIndex((value) => value > 0 && value === maxValue);
   const count = Math.max(rows.length - 1, 1);
   return rows.map((row, index) => ({
     label: row.date,
-    x: 18 + (286 / count) * index,
-    y: 96 - (row.totalTokens / maxTokens) * 80,
+    requests: row.requestCount,
+    tokens: row.totalTokens,
+    value: values[index],
+    maxValue,
+    isPeak: index === peakIndex,
+    x: 36 + (268 / count) * index,
+    y: 96 - (values[index] / maxValue) * 80,
   }));
+}
+
+function usageMetricValue(row: UsageDailyRow, metric: UsageMetric) {
+  return metric === "tokens" ? row.totalTokens : row.requestCount;
+}
+
+function buildUsageYAxisLabels(points: ReturnType<typeof buildUsageChartPoints>) {
+  const maxValue = points[0]?.maxValue ?? 1;
+  return [maxValue, maxValue / 2, 0].map((value) => formatCompactNumber(value));
+}
+
+function usagePointDescription(point: ReturnType<typeof buildUsageChartPoints>[number]) {
+  return `${formatUsageDay(point.label)}: ${formatCompactNumber(point.requests)} requests, ${formatCompactNumber(point.tokens)} tokens`;
+}
+
+function metricLabel(metric: UsageMetric) {
+  return metric === "tokens" ? "Tokens" : "Requests";
+}
+
+function metricUnit(metric: UsageMetric) {
+  return metric === "tokens" ? "tokens" : "calls";
 }
 
 function formatUsageDay(value: string) {

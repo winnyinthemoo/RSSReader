@@ -6,6 +6,7 @@ import type {
   ArticleListItem,
   FeedAddRequest,
   FeedSummary,
+  TagMatchMode,
   TagSummary,
 } from "../../shared/feed";
 import { ArticleList } from "./features/articles/components/ArticleList";
@@ -14,6 +15,7 @@ import { AiSettingsPage } from "./features/ai/components/AiSettingsPage";
 import { ReaderView } from "./features/reader/components/ReaderView";
 import {
   addFeed,
+  deleteTag,
   deleteFeed,
   getArticle,
   listArticles,
@@ -21,6 +23,8 @@ import {
   listTags,
   markArticleFavorite,
   markArticleRead,
+  mergeTags,
+  renameTag,
   refreshFeed,
 } from "./services/feedService";
 
@@ -29,7 +33,7 @@ type SidebarSelection =
   | { type: "all" }
   | { type: "feed"; feedId: string }
   | { type: "starred" }
-  | { type: "tag"; tagId: string };
+  | { type: "tag"; tagIds: string[]; tagMatch: TagMatchMode };
 
 export default function App() {
   const [feeds, setFeeds] = useState<FeedSummary[]>([]);
@@ -222,6 +226,71 @@ export default function App() {
     }
   }
 
+  function handleToggleTag(tagId: string) {
+    setSelection((currentSelection) => {
+      const currentTagIds = currentSelection.type === "tag" ? currentSelection.tagIds : [];
+      const nextTagIds = currentTagIds.includes(tagId)
+        ? currentTagIds.filter((currentTagId) => currentTagId !== tagId)
+        : [...currentTagIds, tagId].slice(0, 5);
+
+      if (nextTagIds.length === 0) {
+        return { type: "all" };
+      }
+
+      return {
+        type: "tag",
+        tagIds: nextTagIds,
+        tagMatch: currentSelection.type === "tag" ? currentSelection.tagMatch : "any",
+      };
+    });
+    setSidebarMode("tags");
+  }
+
+  function handleTagMatchChange(tagMatch: TagMatchMode) {
+    setSelection((currentSelection) => {
+      if (currentSelection.type !== "tag") {
+        return currentSelection;
+      }
+
+      return { ...currentSelection, tagMatch };
+    });
+  }
+
+  async function handleRenameTag(tagId: string, name: string) {
+    try {
+      const tagResult = await renameTag({ tagId, name });
+      setTags(tagResult.tags);
+      setErrorMessage(undefined);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+      throw error;
+    }
+  }
+
+  async function handleMergeTags(sourceTagId: string, targetTagId: string) {
+    try {
+      const tagResult = await mergeTags({ sourceTagId, targetTagId });
+      setTags(tagResult.tags);
+      setSelection((currentSelection) => reconcileSelectionAfterTagRemoval(currentSelection, sourceTagId));
+      setErrorMessage(undefined);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+      throw error;
+    }
+  }
+
+  async function handleDeleteTag(tagId: string) {
+    try {
+      const tagResult = await deleteTag({ tagId });
+      setTags(tagResult.tags);
+      setSelection((currentSelection) => reconcileSelectionAfterTagRemoval(currentSelection, tagId));
+      setErrorMessage(undefined);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+      throw error;
+    }
+  }
+
   function handleExportOpml() {
     try {
       exportFeedsAsOpml(activeFeeds);
@@ -246,7 +315,12 @@ export default function App() {
         onSelectAll={() => setSelection({ type: "all" })}
         onSelectFeed={(feedId) => setSelection({ type: "feed", feedId })}
         onSelectStarred={() => setSelection({ type: "starred" })}
-        onSelectTag={(tagId) => setSelection({ type: "tag", tagId })}
+        onToggleTag={handleToggleTag}
+        onClearTags={() => setSelection({ type: "all" })}
+        onTagMatchChange={handleTagMatchChange}
+        onRenameTag={handleRenameTag}
+        onMergeTags={handleMergeTags}
+        onDeleteTag={handleDeleteTag}
         onAddFeed={handleAddFeed}
         onExportOpml={handleExportOpml}
         onRefreshFeed={handleRefreshFeed}
@@ -279,6 +353,22 @@ export default function App() {
   );
 }
 
+function reconcileSelectionAfterTagRemoval(
+  selection: SidebarSelection,
+  removedTagId: string,
+): SidebarSelection {
+  if (selection.type !== "tag") {
+    return selection;
+  }
+
+  const nextTagIds = selection.tagIds.filter((tagId) => tagId !== removedTagId);
+  if (nextTagIds.length === 0) {
+    return { type: "all" };
+  }
+
+  return { ...selection, tagIds: nextTagIds };
+}
+
 function filterFromSelection(selection: SidebarSelection): ArticleListFilter {
   switch (selection.type) {
     case "feed":
@@ -286,7 +376,7 @@ function filterFromSelection(selection: SidebarSelection): ArticleListFilter {
     case "starred":
       return { favoritesOnly: true };
     case "tag":
-      return { tagId: selection.tagId };
+      return { tagIds: selection.tagIds, tagMatch: selection.tagMatch };
     case "all":
     default:
       return {};

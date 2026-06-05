@@ -4,7 +4,7 @@ use crate::database::run_migrations;
 
 use super::{
     ArticleDetail, ArticleListFilter, ArticleListItem, ArticleNote, ArticleTag, FeedStatus,
-    FeedSummary, TagSummary,
+    FeedSummary, TagMatchMode, TagSummary,
 };
 
 pub struct FeedRepository {
@@ -99,6 +99,21 @@ impl FeedRepository {
                 ],
             )
             .map_err(|error| format!("Failed to save article: {error}"))?;
+        Ok(())
+    }
+
+    /// Update only the sanitized_html field (used for on-demand content enrichment).
+    pub fn update_article_content(
+        &self,
+        article_id: &str,
+        sanitized_html: &str,
+    ) -> Result<(), String> {
+        self.connection
+            .execute(
+                "UPDATE articles SET sanitized_html = ?1, updated_at = ?2 WHERE id = ?3",
+                params![sanitized_html, now_marker(), article_id],
+            )
+            .map_err(|error| format!("Failed to update article content: {error}"))?;
         Ok(())
     }
 
@@ -229,15 +244,45 @@ impl FeedRepository {
         if filter.favorites_only {
             clauses.push("a.is_favorite = 1".to_string());
         }
-        if filter.tag_id.is_some() {
-            params.push(filter.tag_id.clone().unwrap_or_default());
-            clauses.push(format!(
-                "EXISTS (
-                    SELECT 1 FROM article_tags at
-                    WHERE at.article_id = a.id AND at.tag_id = ?{}
-                )",
-                params.len()
-            ));
+        let mut selected_tag_ids = if filter.tag_ids.is_empty() {
+            filter.tag_id.iter().cloned().collect::<Vec<_>>()
+        } else {
+            filter.tag_ids.clone()
+        };
+        selected_tag_ids.retain(|tag_id| !tag_id.trim().is_empty());
+        selected_tag_ids.sort();
+        selected_tag_ids.dedup();
+        if !selected_tag_ids.is_empty() {
+            let tag_count = selected_tag_ids.len();
+            let param_start = params.len();
+            let placeholders = selected_tag_ids
+                .iter()
+                .enumerate()
+                .map(|(index, _)| format!("?{}", param_start + index + 1))
+                .collect::<Vec<_>>()
+                .join(", ");
+            params.extend(selected_tag_ids.iter().cloned());
+            match filter.tag_match {
+                TagMatchMode::All => {
+                    clauses.push(format!(
+                        "a.id IN (
+                            SELECT at.article_id
+                            FROM article_tags at
+                            WHERE at.tag_id IN ({placeholders})
+                            GROUP BY at.article_id
+                            HAVING COUNT(DISTINCT at.tag_id) = {tag_count}
+                        )"
+                    ));
+                }
+                TagMatchMode::Any => {
+                    clauses.push(format!(
+                        "EXISTS (
+                            SELECT 1 FROM article_tags at
+                            WHERE at.article_id = a.id AND at.tag_id IN ({placeholders})
+                        )"
+                    ));
+                }
+            }
         }
         if !clauses.is_empty() {
             query.push_str(" WHERE ");
@@ -443,6 +488,69 @@ impl FeedRepository {
         Ok(())
     }
 
+    pub fn rename_tag(
+        &self,
+        tag_id: &str,
+        display_name: &str,
+        normalized_name: &str,
+    ) -> Result<(), String> {
+        let updated = self
+            .connection
+            .execute(
+                "UPDATE tags SET name = ?1, normalized_name = ?2 WHERE id = ?3",
+                params![display_name, normalized_name, tag_id],
+            )
+            .map_err(|error| format!("Failed to rename tag: {error}"))?;
+
+        if updated == 0 {
+            return Err("Tag not found".to_string());
+        }
+
+        Ok(())
+    }
+
+    pub fn merge_tags(&self, source_tag_id: &str, target_tag_id: &str) -> Result<(), String> {
+        if source_tag_id == target_tag_id {
+            return Err("Cannot merge a tag into itself".to_string());
+        }
+
+        let source_exists = self.tag_exists(source_tag_id)?;
+        let target_exists = self.tag_exists(target_tag_id)?;
+        if !source_exists || !target_exists {
+            return Err("Tag not found".to_string());
+        }
+
+        self.connection
+            .execute(
+                "INSERT OR IGNORE INTO article_tags (article_id, tag_id, source, created_at)
+                SELECT article_id, ?1, source, created_at
+                FROM article_tags
+                WHERE tag_id = ?2",
+                params![target_tag_id, source_tag_id],
+            )
+            .map_err(|error| format!("Failed to merge tag assignments: {error}"))?;
+
+        self.connection
+            .execute("DELETE FROM tags WHERE id = ?1", params![source_tag_id])
+            .map_err(|error| format!("Failed to delete merged tag: {error}"))?;
+        self.refresh_tag_usage(target_tag_id)?;
+
+        Ok(())
+    }
+
+    pub fn delete_tag(&self, tag_id: &str) -> Result<(), String> {
+        let deleted = self
+            .connection
+            .execute("DELETE FROM tags WHERE id = ?1", params![tag_id])
+            .map_err(|error| format!("Failed to delete tag: {error}"))?;
+
+        if deleted == 0 {
+            return Err("Tag not found".to_string());
+        }
+
+        Ok(())
+    }
+
     pub fn get_article_note(&self, article_id: &str) -> Result<Option<ArticleNote>, String> {
         self.connection
             .query_row(
@@ -509,6 +617,31 @@ impl FeedRepository {
         }
 
         Ok(())
+    }
+
+    fn tag_exists(&self, tag_id: &str) -> Result<bool, String> {
+        self.connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM tags WHERE id = ?1)",
+                params![tag_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|exists| exists != 0)
+            .map_err(|error| format!("Failed to check tag: {error}"))
+    }
+
+    fn refresh_tag_usage(&self, tag_id: &str) -> Result<(), String> {
+        self.connection
+            .execute(
+                "UPDATE tags
+                SET usage_count = (
+                    SELECT COUNT(*) FROM article_tags WHERE tag_id = ?1
+                )
+                WHERE id = ?1",
+                params![tag_id],
+            )
+            .map(|_| ())
+            .map_err(|error| format!("Failed to refresh tag usage: {error}"))
     }
 }
 

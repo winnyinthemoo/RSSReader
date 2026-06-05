@@ -121,6 +121,12 @@ export interface SummaryStreamChunk {
   done: boolean;
 }
 
+export interface TranslationStreamChunk {
+  translation: TranslationView | null;
+  done: boolean;
+  errorMessage: string | null;
+}
+
 export interface TranslationSegmentView {
   id: string;
   segmentIndex: number;
@@ -146,6 +152,7 @@ export interface TranslationView {
 export interface StartTranslationRequest {
   articleId: string;
   targetLanguage: string;
+  selectedText?: string;
 }
 
 export interface TaggingSuggestRequest {
@@ -189,6 +196,7 @@ export interface UsageDailyRow {
 export interface UsageReportResult {
   dimension: string;
   windowDays: number;
+  key?: string;
   rows: UsageReportRow[];
   dailyRows?: UsageDailyRow[];
   totalRequests: number;

@@ -252,7 +252,12 @@ impl AiRepository {
             .map_err(Into::into)
     }
 
-    pub fn usage_report(&self, dimension: &str, window_days: u32) -> AiResult<Vec<UsageReportRow>> {
+    pub fn usage_report(
+        &self,
+        dimension: &str,
+        window_days: u32,
+        key: Option<&str>,
+    ) -> AiResult<Vec<UsageReportRow>> {
         let group_expr = usage_dimension_expr(dimension);
         let sql = format!(
             "SELECT
@@ -264,12 +269,13 @@ impl AiRepository {
                 SUM(CASE WHEN request_status = 'failed' THEN 1 ELSE 0 END) AS failed_count
              FROM llm_usage_events
              WHERE CAST(created_at AS INTEGER) >= CAST(strftime('%s', 'now', ?1) AS INTEGER)
+                AND (?2 IS NULL OR COALESCE({group_expr}, 'unknown') = ?2)
              GROUP BY usage_key, usage_label
              ORDER BY request_count DESC, usage_label COLLATE NOCASE"
         );
         let window = format!("-{} days", window_days.saturating_sub(1));
         let mut stmt = self.connection.prepare(&sql)?;
-        let rows = stmt.query_map(params![window], |row| {
+        let rows = stmt.query_map(params![window, key], |row| {
             Ok(UsageReportRow {
                 key: row.get(0)?,
                 label: row.get(1)?,
@@ -282,9 +288,15 @@ impl AiRepository {
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 
-    pub fn usage_daily_report(&self, window_days: u32) -> AiResult<Vec<UsageDailyRow>> {
+    pub fn usage_daily_report(
+        &self,
+        dimension: &str,
+        window_days: u32,
+        key: Option<&str>,
+    ) -> AiResult<Vec<UsageDailyRow>> {
         let window = format!("-{} days", window_days.saturating_sub(1));
-        let mut stmt = self.connection.prepare(
+        let group_expr = usage_dimension_expr_with_alias(dimension, "events");
+        let sql = format!(
             "WITH RECURSIVE days(day, remaining) AS (
                 SELECT date('now', ?1), ?2
                 UNION ALL
@@ -297,10 +309,12 @@ impl AiRepository {
              FROM days
              LEFT JOIN llm_usage_events events
                 ON date(events.created_at, 'unixepoch') = days.day
+                AND (?3 IS NULL OR COALESCE({group_expr}, 'unknown') = ?3)
              GROUP BY days.day
-             ORDER BY days.day",
-        )?;
-        let rows = stmt.query_map(params![window, window_days.max(1)], |row| {
+             ORDER BY days.day"
+        );
+        let mut stmt = self.connection.prepare(&sql)?;
+        let rows = stmt.query_map(params![window, window_days.max(1), key], |row| {
             Ok(UsageDailyRow {
                 date: row.get(0)?,
                 request_count: row.get::<_, i64>(1)?.max(0) as u64,
@@ -571,6 +585,15 @@ fn usage_dimension_expr(dimension: &str) -> &'static str {
         "model" => "COALESCE(model_id, model_name_snapshot)",
         "agent" => "task_type",
         _ => "task_type",
+    }
+}
+
+fn usage_dimension_expr_with_alias(dimension: &str, alias: &str) -> String {
+    match dimension {
+        "provider" => format!("{alias}.provider_id"),
+        "model" => format!("COALESCE({alias}.model_id, {alias}.model_name_snapshot)"),
+        "agent" => format!("{alias}.task_type"),
+        _ => format!("{alias}.task_type"),
     }
 }
 

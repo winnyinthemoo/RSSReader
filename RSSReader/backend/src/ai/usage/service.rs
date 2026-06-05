@@ -50,15 +50,23 @@ impl UsageService {
         })
     }
 
-    pub fn report(&self, dimension: &str, window_days: u32) -> AiResult<UsageReportResult> {
+    pub fn report(
+        &self,
+        dimension: &str,
+        window_days: u32,
+        key: Option<&str>,
+    ) -> AiResult<UsageReportResult> {
         let window_days = window_days.max(1);
-        let rows = self.repository.usage_report(dimension, window_days)?;
-        let daily_rows = self.repository.usage_daily_report(window_days)?;
+        let rows = self.repository.usage_report(dimension, window_days, key)?;
+        let daily_rows = self
+            .repository
+            .usage_daily_report(dimension, window_days, key)?;
         let total_requests = rows.iter().map(|row| row.request_count).sum();
         let total_tokens = rows.iter().map(|row| row.total_tokens).sum();
         Ok(UsageReportResult {
             dimension: dimension.to_string(),
             window_days,
+            key: key.map(ToString::to_string),
             rows,
             daily_rows,
             total_requests,

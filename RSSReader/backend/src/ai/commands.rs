@@ -117,6 +117,17 @@ pub fn ai_start_translation(request: StartTranslationRequest) -> Result<Translat
     })
 }
 
+pub fn ai_start_translation_stream(
+    request: StartTranslationRequest,
+    emit: impl FnMut(&TranslationView),
+) -> Result<TranslationView, String> {
+    with_service(|service| {
+        service
+            .stream_translation(request, emit)
+            .map_err(|e| e.into_message())
+    })
+}
+
 pub fn ai_suggest_tags(request: TaggingSuggestRequest) -> Result<TaggingSuggestResult, String> {
     with_service(|service| service.suggest_tags(request).map_err(|e| e.into_message()))
 }
@@ -125,10 +136,14 @@ pub fn ai_assign_tags(request: AssignTagsRequest) -> Result<AssignTagsResult, St
     with_service(|service| service.assign_tags(request).map_err(|e| e.into_message()))
 }
 
-pub fn ai_usage_report(dimension: String, window_days: u32) -> Result<UsageReportResult, String> {
+pub fn ai_usage_report(
+    dimension: String,
+    window_days: u32,
+    key: Option<String>,
+) -> Result<UsageReportResult, String> {
     with_service(|service| {
         service
-            .usage_report(&dimension, window_days)
+            .usage_report(&dimension, window_days, key.as_deref())
             .map_err(|e| e.into_message())
     })
 }

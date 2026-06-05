@@ -1,26 +1,34 @@
 import {
   Download,
+  GitMerge,
+  Pencil,
   FolderOpen,
   Plus,
   RefreshCw,
   Rss,
+  Search,
   Star,
   Tags,
   Trash2,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import vortexLogo from "../../../assets/vortex-logo.png";
-import type { FeedAddRequest, FeedSummary, TagSummary } from "../../../../../shared/feed";
+import type {
+  FeedAddRequest,
+  FeedSummary,
+  TagMatchMode,
+  TagSummary,
+} from "../../../../../shared/feed";
 
 type SidebarMode = "feeds" | "tags";
 type SidebarSelection =
   | { type: "all" }
   | { type: "feed"; feedId: string }
   | { type: "starred" }
-  | { type: "tag"; tagId: string };
+  | { type: "tag"; tagIds: string[]; tagMatch: TagMatchMode };
 
 interface FeedSidebarProps {
   feeds: FeedSummary[];
@@ -35,7 +43,12 @@ interface FeedSidebarProps {
   onSelectAll: () => void;
   onSelectFeed: (feedId: string) => void;
   onSelectStarred: () => void;
-  onSelectTag: (tagId: string) => void;
+  onToggleTag: (tagId: string) => void;
+  onClearTags: () => void;
+  onTagMatchChange: (mode: TagMatchMode) => void;
+  onRenameTag: (tagId: string, name: string) => Promise<void>;
+  onMergeTags: (sourceTagId: string, targetTagId: string) => Promise<void>;
+  onDeleteTag: (tagId: string) => Promise<void>;
   onAddFeed: (request: FeedAddRequest) => Promise<void>;
   onExportOpml: () => void;
   onRefreshFeed: (feedId: string) => Promise<void>;
@@ -55,7 +68,12 @@ export function FeedSidebar({
   onSelectAll,
   onSelectFeed,
   onSelectStarred,
-  onSelectTag,
+  onToggleTag,
+  onClearTags,
+  onTagMatchChange,
+  onRenameTag,
+  onMergeTags,
+  onDeleteTag,
   onAddFeed,
   onExportOpml,
   onRefreshFeed,
@@ -65,6 +83,8 @@ export function FeedSidebar({
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [formHint, setFormHint] = useState<string | undefined>();
+  const [tagSearch, setTagSearch] = useState("");
+  const [tagSort, setTagSort] = useState<"name" | "count">("count");
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -101,7 +121,56 @@ export function FeedSidebar({
     setFormHint(undefined);
   }
 
+  async function handleRenameTag(tag: TagSummary) {
+    const nextName = window.prompt("Rename tag", tag.name)?.trim();
+    if (!nextName || nextName === tag.name) {
+      return;
+    }
+
+    await onRenameTag(tag.id, nextName);
+  }
+
+  async function handleMergeTag(tag: TagSummary) {
+    const targetName = window.prompt("Merge into tag name")?.trim();
+    if (!targetName) {
+      return;
+    }
+    const targetTag = tags.find(
+      (candidate) => candidate.id !== tag.id && candidate.name.toLowerCase() === targetName.toLowerCase(),
+    );
+    if (!targetTag) {
+      window.alert("Target tag not found.");
+      return;
+    }
+
+    await onMergeTags(tag.id, targetTag.id);
+  }
+
+  async function handleDeleteTag(tag: TagSummary) {
+    if (!window.confirm(`Delete tag "${tag.name}" from all articles?`)) {
+      return;
+    }
+
+    await onDeleteTag(tag.id);
+  }
+
   const selectedFeedId = selection.type === "feed" ? selection.feedId : undefined;
+  const selectedTagIds = selection.type === "tag" ? selection.tagIds : [];
+  const selectedTagSet = useMemo(() => new Set(selectedTagIds), [selectedTagIds]);
+  const selectedTags = selectedTagIds
+    .map((tagId) => tags.find((tag) => tag.id === tagId))
+    .filter((tag): tag is TagSummary => Boolean(tag));
+  const visibleTags = useMemo(() => {
+    const normalizedSearch = tagSearch.trim().toLowerCase();
+    return tags
+      .filter((tag) => tag.name.toLowerCase().includes(normalizedSearch))
+      .sort((first, second) => {
+        if (tagSort === "count") {
+          return second.articleCount - first.articleCount || first.name.localeCompare(second.name);
+        }
+        return first.name.localeCompare(second.name);
+      });
+  }, [tagSearch, tagSort, tags]);
   const totalUnread = feeds.reduce((total, feed) => total + feed.unreadCount, 0);
   const addFeedDialog = isAddDialogOpen ? (
     <div className="modal-backdrop" role="presentation" onMouseDown={handleCloseDialog}>
@@ -270,28 +339,108 @@ export function FeedSidebar({
           ))}
         </div>
       ) : (
-        <div className="feed-list">
+        <div className="tag-workspace">
+          <label className="tag-search-field">
+            <Search size={15} />
+            <input
+              value={tagSearch}
+              onChange={(event) => setTagSearch(event.target.value)}
+              placeholder="Search tags"
+            />
+          </label>
+
+          <div className="tag-filter-toolbar">
+            <div className="tag-match-toggle" aria-label="Tag match mode">
+              <button
+                className={selection.type !== "tag" || selection.tagMatch === "any" ? "active" : ""}
+                type="button"
+                disabled={selectedTagIds.length <= 1}
+                onClick={() => onTagMatchChange("any")}
+              >
+                Any
+              </button>
+              <button
+                className={selection.type === "tag" && selection.tagMatch === "all" ? "active" : ""}
+                type="button"
+                disabled={selectedTagIds.length <= 1}
+                onClick={() => onTagMatchChange("all")}
+              >
+                All
+              </button>
+            </div>
+            <select
+              value={tagSort}
+              onChange={(event) => setTagSort(event.target.value as "name" | "count")}
+              aria-label="Sort tags"
+            >
+              <option value="count">Usage</option>
+              <option value="name">Name</option>
+            </select>
+          </div>
+
+          {selectedTags.length > 0 ? (
+            <div className="selected-tag-strip" aria-label="Selected tags">
+              {selectedTags.map((tag) => (
+                <button type="button" key={tag.id} onClick={() => onToggleTag(tag.id)}>
+                  {tag.name}
+                  <X size={12} />
+                </button>
+              ))}
+              <button className="clear-tags-button" type="button" onClick={onClearTags}>
+                Clear
+              </button>
+            </div>
+          ) : null}
+
+          <div className="feed-list tag-list">
           {tags.length === 0 ? (
             <div className="sidebar-empty">No tags yet.</div>
+          ) : visibleTags.length === 0 ? (
+            <div className="sidebar-empty">No matching tags.</div>
           ) : (
-            tags.map((tag) => (
-              <button
-                className={`feed-item ${selection.type === "tag" && selection.tagId === tag.id ? "selected" : ""}`}
-                type="button"
-                key={tag.id}
-                onClick={() => onSelectTag(tag.id)}
-              >
-                <span className="feed-icon tag-icon">
-                  <Tags size={17} />
-                </span>
-                <span className="feed-main">
-                  <span className="feed-title">{tag.name}</span>
-                  <span className="feed-url">Tagged articles</span>
-                </span>
-                <span className="unread-count">{tag.articleCount}</span>
-              </button>
-            ))
+            visibleTags.map((tag) => {
+              const isSelected = selectedTagSet.has(tag.id);
+              const isDisabled = !isSelected && selectedTagIds.length >= 5;
+              return (
+                <div className="feed-item-row tag-item-row" key={tag.id}>
+                  <button
+                    className={`feed-item ${isSelected ? "selected" : ""}`}
+                    type="button"
+                    disabled={isDisabled}
+                    onClick={() => onToggleTag(tag.id)}
+                  >
+                    <span className="feed-icon tag-icon">
+                      <Tags size={17} />
+                    </span>
+                    <span className="feed-main">
+                      <span className="feed-title">{tag.name}</span>
+                      <span className="feed-url">
+                        {isSelected ? "Selected" : isDisabled ? "Limit reached" : "Tagged articles"}
+                      </span>
+                    </span>
+                    <span className="unread-count">{tag.articleCount}</span>
+                  </button>
+                  <div className="tag-row-actions" aria-label={`${tag.name} tag actions`}>
+                    <button type="button" title="Rename tag" onClick={() => void handleRenameTag(tag)}>
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Merge tag"
+                      disabled={tags.length < 2}
+                      onClick={() => void handleMergeTag(tag)}
+                    >
+                      <GitMerge size={12} />
+                    </button>
+                    <button type="button" title="Delete tag" onClick={() => void handleDeleteTag(tag)}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
           )}
+          </div>
         </div>
       )}
 
