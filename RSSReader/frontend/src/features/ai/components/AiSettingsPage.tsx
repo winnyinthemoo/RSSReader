@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from "react";
-import { LineChart } from "lucide-react";
+import { LineChart, X } from "lucide-react";
 
 import type {
   AgentType,
@@ -74,6 +74,10 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
   const [statusMessage, setStatusMessage] = useState<string | undefined>();
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(false);
+  
+  const [deleteProviderId, setDeleteProviderId] = useState<string | null>(null);
+  const [deleteModelId, setDeleteModelId] = useState<string | null>(null);
+
 
   const selectedProvider = providers.find((provider) => provider.id === selectedProviderId);
   const selectedModel = models.find((model) => model.id === selectedModelId);
@@ -250,21 +254,25 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
     if (!selectedProvider) {
       return;
     }
-    if (!window.confirm(`Delete provider "${selectedProvider.displayName}"?`)) {
-      return;
-    }
+    setDeleteProviderId(selectedProvider.id);
+  }
+
+  async function confirmDeleteProvider() {
+    if (!deleteProviderId) return;
+    const provider = providers.find(p => p.id === deleteProviderId);
     try {
       setIsLoading(true);
-      await deleteAiProvider(selectedProvider.id);
+      await deleteAiProvider(deleteProviderId);
       setSelectedProviderId("");
       setTestResult(undefined);
       await loadAll();
-      setStatusMessage(`Provider "${selectedProvider.displayName}" deleted.`);
+      setStatusMessage(`Provider "${provider?.displayName}" deleted.`);
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setIsLoading(false);
+      setDeleteProviderId(null);
     }
   }
 
@@ -322,20 +330,24 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
     if (!selectedModel) {
       return;
     }
-    if (!window.confirm(`Delete model "${selectedModel.modelName}"?`)) {
-      return;
-    }
+    setDeleteModelId(selectedModel.id);
+  }
+
+  async function confirmDeleteModel() {
+    if (!deleteModelId) return;
+    const model = models.find(m => m.id === deleteModelId);
     try {
       setIsLoading(true);
-      await deleteAiModel(selectedModel.id);
+      await deleteAiModel(deleteModelId);
       setSelectedModelId("");
       await loadAll();
-      setStatusMessage(`Model "${selectedModel.modelName}" deleted.`);
+      setStatusMessage(`Model "${model?.modelName}" deleted.`);
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setIsLoading(false);
+      setDeleteModelId(null);
     }
   }
 
@@ -508,6 +520,59 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
             {errorMessage ? <span className="ai-status-error">{errorMessage}</span> : null}
           </div>
         </footer>
+        
+        {/* 删除 Provider 确认弹窗 */}
+        {deleteProviderId && (
+          <div className="modal-backdrop" role="presentation" onMouseDown={() => setDeleteProviderId(null)}>
+            <div className="add-feed-dialog" role="dialog" onMouseDown={(e) => e.stopPropagation()}>
+              <div className="dialog-header">
+                <h2>Confirm Delete</h2>
+                <button type="button" onClick={() => setDeleteProviderId(null)}>
+                  <X size={17} />
+                </button>
+              </div>
+              <div className="confirm-body">
+                <p>Are you sure you want to delete provider &quot;{providers.find(p => p.id === deleteProviderId)?.displayName}&quot;?</p>
+              </div>
+              <div className="dialog-actions">
+                <button className="secondary-button" onClick={() => setDeleteProviderId(null)}>
+                  Cancel
+                </button>
+                <button className="primary-button delete-button" onClick={confirmDeleteProvider}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 删除 Model 确认弹窗 */}
+        {deleteModelId && (
+          <div className="modal-backdrop" role="presentation" onMouseDown={() => setDeleteModelId(null)}>
+            <div className="add-feed-dialog" role="dialog" onMouseDown={(e) => e.stopPropagation()}>
+              <div className="dialog-header">
+                <h2>Confirm Delete</h2>
+                <button type="button" onClick={() => setDeleteModelId(null)}>
+                  <X size={17} />
+                </button>
+              </div>
+              <div className="confirm-body">
+                <p>Are you sure you want to delete model &quot;{models.find(m => m.id === deleteModelId)?.modelName}&quot;?</p>
+              </div>
+              <div className="dialog-actions">
+                <button className="secondary-button" onClick={() => setDeleteModelId(null)}>
+                  Cancel
+                </button>
+                <button className="primary-button delete-button" onClick={confirmDeleteModel}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+
       </section>
     </div>
   );
