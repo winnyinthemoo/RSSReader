@@ -8,6 +8,8 @@ import {
   Tags,
   Trash2,
   X,
+  ChevronDown,  // 添加这个
+  ChevronUp,  // 添加这个
 } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -62,10 +64,13 @@ export function FeedSidebar({
   onDeleteFeed,
 }: FeedSidebarProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [showMoreFeeds, setShowMoreFeeds] = useState(false);
+  const FEEDS_TO_SHOW = 4; // 默认显示 4 个
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [formHint, setFormHint] = useState<string | undefined>();
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const [deleteConfirmFeedId, setDeleteConfirmFeedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isAddDialogOpen) {
@@ -102,7 +107,7 @@ export function FeedSidebar({
   }
 
   const selectedFeedId = selection.type === "feed" ? selection.feedId : undefined;
-  const totalUnread = feeds.reduce((total, feed) => total + feed.unreadCount, 0);
+  const totalUnread = feeds.reduce((total, feed) => total + feed.articleCount, 0);
   const addFeedDialog = isAddDialogOpen ? (
     <div className="modal-backdrop" role="presentation" onMouseDown={handleCloseDialog}>
       <form
@@ -236,23 +241,30 @@ export function FeedSidebar({
         <span className="unread-count">{starredCount}</span>
       </button>
 
+      {/* 分割线 */}
+      <div className="sidebar-divider"></div>
+
+      {/* FEEDS 标题 */}
+      <div className="feeds-header">
+        <span>FEEDS</span>
+      </div>
+
       {mode === "feeds" ? (
         <div className="feed-list">
-          {feeds.map((feed) => (
+          {(showMoreFeeds ? feeds : feeds.slice(0, FEEDS_TO_SHOW)).map((feed) => (
             <div className="feed-item-row" key={feed.id}>
               <button
                 className={`feed-item ${selectedFeedId === feed.id ? "selected" : ""}`}
                 type="button"
                 onClick={() => onSelectFeed(feed.id)}
               >
-                <span className="feed-icon">
-                  <Rss size={18} />
+                <span className="feed-icon-custom">
+                  {feed.title.charAt(0).toUpperCase()}
                 </span>
                 <span className="feed-main">
                   <span className="feed-title">{feed.title}</span>
-                  <span className="feed-url">{feed.siteUrl ?? feed.url}</span>
                 </span>
-                <span className="unread-count">{feed.unreadCount}</span>
+                <span className="unread-count">{feed.articleCount}</span>
               </button>
               <button
                 className="feed-delete-button"
@@ -261,13 +273,24 @@ export function FeedSidebar({
                 disabled={isDeleting}
                 onClick={(event) => {
                   event.stopPropagation();
-                  void onDeleteFeed(feed.id);
+                  setDeleteConfirmFeedId(feed.id);
                 }}
               >
                 <Trash2 size={13} />
               </button>
             </div>
           ))}
+          {/* 底部折叠按钮 - 放在 feed-list 内部 */}
+          {feeds.length > FEEDS_TO_SHOW && (
+            <button 
+              className="more-feeds-button" 
+              type="button"
+              onClick={() => setShowMoreFeeds(!showMoreFeeds)}
+            >
+              <span>{showMoreFeeds ? "Show less" : "More feeds"}</span>
+              {showMoreFeeds ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+          )}
         </div>
       ) : (
         <div className="feed-list">
@@ -295,6 +318,16 @@ export function FeedSidebar({
         </div>
       )}
 
+      {/* 底部折叠按钮
+      <button 
+        className="more-feeds-button" 
+        type="button"
+        onClick={() => setShowMoreFeeds(!showMoreFeeds)}
+      >
+        <span>{showMoreFeeds ? "Show less" : "More feeds"}</span>
+        {showMoreFeeds ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      </button> */}
+
       <button
         className="refresh-button"
         type="button"
@@ -304,6 +337,41 @@ export function FeedSidebar({
         <RefreshCw size={17} />
         <span>Refresh selected</span>
       </button>
+
+      {/* 删除确认弹窗 */}
+      {deleteConfirmFeedId && createPortal(
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setDeleteConfirmFeedId(null)}>
+          <div className="add-feed-dialog" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="dialog-header">
+              <h2>Confirm Delete</h2>
+              <button type="button" onClick={() => setDeleteConfirmFeedId(null)}>
+                <X size={17} />
+              </button>
+            </div>
+            <div className="confirm-body">
+              <p>Are you sure you want to delete &quot;{feeds.find(f => f.id === deleteConfirmFeedId)?.title}&quot;?</p>
+            </div>
+            <div className="dialog-actions">
+              <button className="secondary-button" onClick={() => setDeleteConfirmFeedId(null)}>
+                Cancel
+              </button>
+              <button 
+                className="primary-button" 
+                onClick={() => {
+                  if (deleteConfirmFeedId) {
+                    onDeleteFeed(deleteConfirmFeedId);
+                    setDeleteConfirmFeedId(null);
+                  }
+                }}
+                disabled={isDeleting}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {addFeedDialog ? createPortal(addFeedDialog, document.body) : null}
     </aside>
