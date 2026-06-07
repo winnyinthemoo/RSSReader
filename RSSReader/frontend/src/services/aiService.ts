@@ -26,6 +26,14 @@ import type {
 } from "../../../shared/ai";
 
 type TauriInvoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+type TauriUnlisten = () => void;
+type TauriEvent<T> = {
+  payload: T;
+};
+type TauriListen = <T>(
+  event: string,
+  handler: (event: TauriEvent<T>) => void,
+) => Promise<TauriUnlisten>;
 
 declare global {
   interface Window {
@@ -36,14 +44,22 @@ declare global {
       tauri?: {
         invoke?: TauriInvoke;
       };
+      event?: {
+        listen?: TauriListen;
+      };
     };
   }
 }
 
 const backendBaseUrl = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:5181";
+const translationStreamEventPrefix = "ai-translation-stream-";
 
 function getInvoke(): TauriInvoke | undefined {
   return window.__TAURI__?.core?.invoke ?? window.__TAURI__?.tauri?.invoke;
+}
+
+function getEventListen(): TauriListen | undefined {
+  return window.__TAURI__?.event?.listen;
 }
 
 export async function listAiProviders(): Promise<AiProviderListResult> {
@@ -280,12 +296,54 @@ export async function startTranslation(
 ): Promise<TranslationView> {
   const invoke = getInvoke();
   if (invoke) {
+    const listen = getEventListen();
+    if (onChunk && listen) {
+      return streamTauriTranslationRequest(invoke, listen, request, onChunk);
+    }
     const result = await invoke<TranslationView>("ai_start_translation", { request });
     onChunk?.(result);
     return result;
   }
 
   return streamTranslationRequest(request, onChunk);
+}
+
+async function streamTauriTranslationRequest(
+  invoke: TauriInvoke,
+  listen: TauriListen,
+  request: StartTranslationRequest,
+  onChunk: (view: TranslationView) => void,
+): Promise<TranslationView> {
+  const eventId = createTranslationEventId();
+  const eventName = `${translationStreamEventPrefix}${eventId}`;
+  let latestView: TranslationView | undefined;
+  const unlisten = await listen<TranslationStreamChunk>(eventName, (event) => {
+    const chunk = event.payload;
+    if (chunk.translation) {
+      latestView = chunk.translation;
+      onChunk(chunk.translation);
+    }
+  });
+
+  try {
+    const result = await invoke<TranslationView>("ai_start_translation", {
+      request,
+      eventId,
+    });
+    if (!latestView || latestView.runId !== result.runId || latestView.status !== result.status) {
+      onChunk(result);
+    }
+    return result;
+  } finally {
+    unlisten();
+  }
+}
+
+function createTranslationEventId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export async function getUsageReport(

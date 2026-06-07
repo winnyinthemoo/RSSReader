@@ -22,6 +22,14 @@ import type {
 } from "../../../shared/feed";
 
 type TauriInvoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+type TauriUnlisten = () => void;
+type TauriEvent<T> = {
+  payload: T;
+};
+type TauriListen = <T>(
+  event: string,
+  handler: (event: TauriEvent<T>) => void,
+) => Promise<TauriUnlisten>;
 
 declare global {
   interface Window {
@@ -31,6 +39,9 @@ declare global {
       };
       tauri?: {
         invoke?: TauriInvoke;
+      };
+      event?: {
+        listen?: TauriListen;
       };
     };
   }

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::database::run_migrations;
@@ -20,6 +22,7 @@ impl AiRepository {
     }
 
     pub fn from_connection(connection: Connection) -> AiResult<Self> {
+        connection.busy_timeout(Duration::from_secs(5))?;
         run_migrations(&connection).map_err(AiError::Database)?;
         Ok(Self { connection })
     }

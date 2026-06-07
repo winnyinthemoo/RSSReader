@@ -271,7 +271,9 @@ export default function App() {
     try {
       const tagResult = await mergeTags({ sourceTagId, targetTagId });
       setTags(tagResult.tags);
-      setSelection((currentSelection) => reconcileSelectionAfterTagRemoval(currentSelection, sourceTagId));
+      setSelection((currentSelection) =>
+        reconcileSelectionAfterTagMerge(currentSelection, sourceTagId, targetTagId),
+      );
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -362,6 +364,29 @@ function reconcileSelectionAfterTagRemoval(
   }
 
   const nextTagIds = selection.tagIds.filter((tagId) => tagId !== removedTagId);
+  if (nextTagIds.length === 0) {
+    return { type: "all" };
+  }
+
+  return { ...selection, tagIds: nextTagIds };
+}
+
+function reconcileSelectionAfterTagMerge(
+  selection: SidebarSelection,
+  sourceTagId: string,
+  targetTagId: string,
+): SidebarSelection {
+  if (selection.type !== "tag") {
+    return selection;
+  }
+
+  if (!selection.tagIds.includes(sourceTagId) && !selection.tagIds.includes(targetTagId)) {
+    return selection;
+  }
+
+  const nextTagIds = Array.from(
+    new Set(selection.tagIds.map((tagId) => (tagId === sourceTagId ? targetTagId : tagId))),
+  );
   if (nextTagIds.length === 0) {
     return { type: "all" };
   }

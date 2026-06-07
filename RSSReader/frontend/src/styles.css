@@ -808,9 +808,28 @@ h2 {
   outline: none;
 }
 
-.dialog-field input:focus {
+.dialog-field select {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #cbd7cc;
+  border-radius: 8px;
+  padding: 0 11px;
+  color: #20221f;
+  background: #ffffff;
+  outline: none;
+}
+
+.dialog-field input:focus,
+.dialog-field select:focus {
   border-color: #2f6f7c;
   box-shadow: 0 0 0 3px rgba(47, 111, 124, 0.15);
+}
+
+.merge-tag-summary {
+  margin: 0;
+  color: #4b574f;
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .dialog-actions {
@@ -3116,6 +3135,7 @@ h2 {
 }
 
 .dialog-field input,
+.dialog-field select,
 .reader-panel-field input,
 .reader-panel-field textarea,
 .ai-field input,
@@ -3129,6 +3149,7 @@ h2 {
 }
 
 .dialog-field input:focus,
+.dialog-field select:focus,
 .reader-panel-field input:focus,
 .reader-panel-field textarea:focus,
 .ai-field input:focus,

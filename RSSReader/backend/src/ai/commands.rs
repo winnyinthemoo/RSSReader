@@ -1,9 +1,5 @@
-use std::sync::{Mutex, OnceLock};
-
 use super::model::*;
 use super::service::{agent_type_from_str, AiService};
-
-static AI_SERVICE: OnceLock<Mutex<AiService>> = OnceLock::new();
 
 pub fn ai_list_providers() -> Result<AiProviderListResult, String> {
     with_service(|service| service.list_providers().map_err(|e| e.into_message()))
@@ -148,11 +144,7 @@ pub fn ai_usage_report(
     })
 }
 
-fn with_service<T>(handler: impl FnOnce(&AiService) -> T) -> T {
-    let service = AI_SERVICE
-        .get_or_init(|| Mutex::new(AiService::new().expect("ai service should initialize")));
-    let guard = service
-        .lock()
-        .expect("ai service lock should not be poisoned");
-    handler(&guard)
+fn with_service<T>(handler: impl FnOnce(&AiService) -> Result<T, String>) -> Result<T, String> {
+    let service = AiService::new().map_err(|error| error.into_message())?;
+    handler(&service)
 }

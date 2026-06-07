@@ -91,6 +91,10 @@ export function FeedSidebar({
   const [tagSort, setTagSort] = useState<"name" | "count">("count");
   const nameInputRef = useRef<HTMLInputElement>(null);
   const [deleteConfirmFeedId, setDeleteConfirmFeedId] = useState<string | null>(null);
+  const [mergeSourceTagId, setMergeSourceTagId] = useState<string | null>(null);
+  const [mergeTargetTagId, setMergeTargetTagId] = useState("");
+  const [mergeHint, setMergeHint] = useState<string | undefined>();
+  const [isMergingTag, setIsMergingTag] = useState(false);
 
   useEffect(() => {
     if (isAddDialogOpen) {
@@ -136,19 +140,36 @@ export function FeedSidebar({
   }
 
   async function handleMergeTag(tag: TagSummary) {
-    const targetName = window.prompt("Merge into tag name")?.trim();
-    if (!targetName) {
+    setMergeSourceTagId(tag.id);
+    setMergeTargetTagId(tags.find((candidate) => candidate.id !== tag.id)?.id ?? "");
+    setMergeHint(undefined);
+  }
+
+  function handleCloseMergeDialog() {
+    if (isMergingTag) {
       return;
     }
-    const targetTag = tags.find(
-      (candidate) => candidate.id !== tag.id && candidate.name.toLowerCase() === targetName.toLowerCase(),
-    );
-    if (!targetTag) {
-      window.alert("Target tag not found.");
+    setMergeSourceTagId(null);
+    setMergeTargetTagId("");
+    setMergeHint(undefined);
+  }
+
+  async function handleConfirmMergeTag() {
+    if (!mergeSourceTagId || !mergeTargetTagId || mergeSourceTagId === mergeTargetTagId) {
+      setMergeHint("请选择一个不同的目标标签。");
       return;
     }
 
-    await onMergeTags(tag.id, targetTag.id);
+    try {
+      setIsMergingTag(true);
+      setMergeHint(undefined);
+      await onMergeTags(mergeSourceTagId, mergeTargetTagId);
+      handleCloseMergeDialog();
+    } catch (error) {
+      setMergeHint(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsMergingTag(false);
+    }
   }
 
   async function handleDeleteTag(tag: TagSummary) {
@@ -165,6 +186,8 @@ export function FeedSidebar({
   const selectedTags = selectedTagIds
     .map((tagId) => tags.find((tag) => tag.id === tagId))
     .filter((tag): tag is TagSummary => Boolean(tag));
+  const mergeSourceTag = tags.find((tag) => tag.id === mergeSourceTagId);
+  const mergeTargetTags = tags.filter((tag) => tag.id !== mergeSourceTagId);
   const visibleTags = useMemo(() => {
     const normalizedSearch = tagSearch.trim().toLowerCase();
     return tags
@@ -231,6 +254,67 @@ export function FeedSidebar({
           </button>
         </div>
       </form>
+    </div>
+  ) : null;
+  const mergeTagDialog = mergeSourceTag ? (
+    <div className="modal-backdrop" role="presentation" onMouseDown={handleCloseMergeDialog}>
+      <div
+        className="add-feed-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Merge tag"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="dialog-header">
+          <h2>Merge Tag</h2>
+          <button type="button" title="Close" onClick={handleCloseMergeDialog}>
+            <X size={17} />
+          </button>
+        </div>
+
+        <p className="merge-tag-summary">
+          Merge <strong>{mergeSourceTag.name}</strong> into another tag.
+        </p>
+
+        <label className="dialog-field">
+          <span>Target tag</span>
+          <select
+            value={mergeTargetTagId}
+            onChange={(event) => {
+              setMergeTargetTagId(event.target.value);
+              setMergeHint(undefined);
+            }}
+            disabled={isMergingTag}
+          >
+            {mergeTargetTags.map((tag) => (
+              <option value={tag.id} key={tag.id}>
+                {tag.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {mergeHint ? <p className="feed-form-hint">{mergeHint}</p> : null}
+
+        <div className="dialog-actions">
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={handleCloseMergeDialog}
+            disabled={isMergingTag}
+          >
+            Cancel
+          </button>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => void handleConfirmMergeTag()}
+            disabled={isMergingTag || mergeTargetTags.length === 0}
+          >
+            {isMergingTag ? "Merging..." : "Merge"}
+          </button>
+        </div>
+      </div>
     </div>
   ) : null;
 
@@ -523,6 +607,7 @@ export function FeedSidebar({
       )}
 
       {addFeedDialog ? createPortal(addFeedDialog, document.body) : null}
+      {mergeTagDialog ? createPortal(mergeTagDialog, document.body) : null}
     </aside>
   );
 }

@@ -75,7 +75,6 @@ turndown.addRule("paragraph", {
 function normalizeMarkdown(html: string): string {
   const prepared = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   const md = turndown.turndown(prepared);
-  console.log("HAS IMG in markdown:", md.includes("<img"));
   const unescaped = md.replace(/\\([*])/g, "$1");
   return unescaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
@@ -301,6 +300,9 @@ export function ReaderView({
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const [shareStatus, setShareStatus] = useState<string | undefined>();
   const articleContentRef = useRef<HTMLDivElement>(null);
+  const markdownRenderTokenRef = useRef(0);
+  const [markdown, setMarkdown] = useState("");
+  const [markdownLoading, setMarkdownLoading] = useState(false);
 
   // AI translation state
   const [bilingualOpen, setBilingualOpen] = useState(false);
@@ -310,6 +312,7 @@ export function ReaderView({
   const [translationError, setTranslationError] = useState<string | undefined>();
   const [translationSkipped, setTranslationSkipped] = useState(false);
   const translationRequestTokenRef = useRef(0);
+  const selectionTranslationRequestTokenRef = useRef(0);
   const [selectionTranslation, setSelectionTranslation] = useState<SelectionTranslationState>({
     selectedText: "",
     status: "idle",
@@ -335,6 +338,7 @@ export function ReaderView({
   }, [article?.id, targetLanguage]);
 
   function handleTargetLanguageChange(value: string) {
+    selectionTranslationRequestTokenRef.current += 1;
     setTargetLanguage(value);
     setTranslation(undefined);
     setTranslationError(undefined);
@@ -345,8 +349,10 @@ export function ReaderView({
   // Reset bilingual state on article change
   useEffect(() => {
     translationRequestTokenRef.current += 1;
+    selectionTranslationRequestTokenRef.current += 1;
     setBilingualOpen(false);
     setTranslation(undefined);
+    setTranslationLoading(false);
     setTranslationError(undefined);
     setActivePanel(undefined);
     setTags([]);
@@ -360,6 +366,7 @@ export function ReaderView({
   }, [article?.id]);
 
   useEffect(() => {
+    selectionTranslationRequestTokenRef.current += 1;
     setSelectionTranslation({ selectedText: "", status: "idle" });
   }, [article?.id, bilingualOpen, viewMode]);
 
@@ -373,6 +380,7 @@ export function ReaderView({
       window.setTimeout(() => {
         const nextText = getReaderSelectedText(articleContentRef.current);
         if (nextText !== selectedText) {
+          selectionTranslationRequestTokenRef.current += 1;
           setSelectionTranslation({ selectedText: "", status: "idle" });
         }
       }, 0);
@@ -389,10 +397,27 @@ export function ReaderView({
     }
   }, [bilingualOpen, loadCachedTranslation, article?.id, targetLanguage]);
 
-  const markdown = useMemo(() => {
-    if (!article?.sanitizedHtml) return "";
-    return normalizeMarkdown(article.sanitizedHtml);
-  }, [article?.sanitizedHtml]);
+  useEffect(() => {
+    const html = article?.sanitizedHtml ?? "";
+    const token = ++markdownRenderTokenRef.current;
+    setMarkdown("");
+    setMarkdownLoading(Boolean(html));
+
+    if (!html) {
+      setMarkdownLoading(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const nextMarkdown = normalizeMarkdown(html);
+      if (markdownRenderTokenRef.current === token) {
+        setMarkdown(nextMarkdown);
+        setMarkdownLoading(false);
+      }
+    }, 20);
+
+    return () => window.clearTimeout(timer);
+  }, [article?.id, article?.sanitizedHtml]);
 
   const copyMarkdown = useMemo(
     () => markdownForCopy(markdown),
@@ -540,7 +565,9 @@ export function ReaderView({
 
     const requestToken = ++translationRequestTokenRef.current;
     setSelectionTranslation({ selectedText: "", status: "idle" });
-    const detectionText = `${article.title}\n${markdown}`;
+    const detectionText = `${article.title}\n${
+      markdown || article.sanitizedHtml.replace(/<[^>]+>/g, " ")
+    }`;
     const detectedLanguage = detectContentLanguage(detectionText);
     const shouldSkipSameLanguage = isSameLanguageTarget(detectedLanguage, targetLanguage);
     setTranslationSkipped(shouldSkipSameLanguage);
@@ -608,6 +635,7 @@ export function ReaderView({
     }
 
     const selectedText = selectionTranslation.selectedText;
+    const requestToken = ++selectionTranslationRequestTokenRef.current;
     const detectedLanguage = detectContentLanguage(selectedText);
     const shouldSkipSameLanguage = isSameLanguageTarget(detectedLanguage, targetLanguage);
     const notice = translationLanguageNotice(detectedLanguage, targetLanguage, shouldSkipSameLanguage);
@@ -633,6 +661,9 @@ export function ReaderView({
         targetLanguage,
         selectedText,
       });
+      if (selectionTranslationRequestTokenRef.current !== requestToken) {
+        return;
+      }
       const translatedText = selectionTranslationText(result);
       setSelectionTranslation({
         selectedText,
@@ -641,6 +672,9 @@ export function ReaderView({
         translatedText: translatedText || "No translation returned.",
       });
     } catch (error) {
+      if (selectionTranslationRequestTokenRef.current !== requestToken) {
+        return;
+      }
       setSelectionTranslation({
         selectedText,
         status: "error",
@@ -886,6 +920,10 @@ export function ReaderView({
                 showEmptyMessage={!translationSkipped}
                 isSelection={false}
               />
+            ) : markdownLoading ? (
+              <div className="reader-content reader-content-md">
+                <p className="muted">Loading article...</p>
+              </div>
             ) : (
               <MarkdownArticle
                 markdown={markdown}

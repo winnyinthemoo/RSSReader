@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::database::run_migrations;
@@ -24,6 +26,9 @@ impl FeedRepository {
     }
 
     fn from_connection(connection: Connection) -> Result<Self, String> {
+        connection
+            .busy_timeout(Duration::from_secs(5))
+            .map_err(|error| error.to_string())?;
         run_migrations(&connection)?;
         Ok(Self { connection })
     }

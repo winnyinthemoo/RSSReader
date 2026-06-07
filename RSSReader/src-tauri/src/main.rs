@@ -8,14 +8,14 @@ use rssreader_backend::ai::{
     ArticleSummaryRecord, AssignTagsRequest, CreateAiModelRequest, CreateAiProviderRequest,
     GetSummaryRequest, PromptRevealResult, ProviderTestRequest, ProviderTestResult,
     StartSummaryRequest, StartTranslationRequest, SummaryStreamChunk, TaggingSuggestRequest,
-    TaggingSuggestResult, TranslationView, UpdateAiModelRequest, UpdateAiProviderRequest,
-    UsageReportResult,
+    TaggingSuggestResult, TranslationStreamChunk, TranslationView, UpdateAiModelRequest,
+    UpdateAiProviderRequest, UsageReportResult,
 };
 use rssreader_backend::{
     ArticleDetail, ArticleListFilter, ArticleListResult, ArticleNote, ArticleTagsResult,
     FeedListResult, FeedRefreshResult, FeedWithArticles, TagListResult,
 };
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 async fn run_blocking<T>(
     operation: impl FnOnce() -> Result<T, String> + Send + 'static,
@@ -199,8 +199,41 @@ fn ai_get_translation(
 }
 
 #[tauri::command]
-async fn ai_start_translation(request: StartTranslationRequest) -> Result<TranslationView, String> {
-    run_blocking(move || backend::ai::ai_start_translation(request)).await
+async fn ai_start_translation(
+    app_handle: tauri::AppHandle,
+    request: StartTranslationRequest,
+    event_id: Option<String>,
+) -> Result<TranslationView, String> {
+    run_blocking(move || {
+        let Some(event_id) = event_id else {
+            return backend::ai::ai_start_translation(request);
+        };
+
+        let event_name = translation_stream_event_name(&event_id);
+        let emit_handle = app_handle.clone();
+        let result = backend::ai::ai_start_translation_stream(request, |view| {
+            let chunk = TranslationStreamChunk {
+                translation: Some(view.clone()),
+                done: view.status != "running",
+                error_message: None,
+            };
+            if let Err(error) = emit_handle.emit(&event_name, chunk) {
+                eprintln!("translation stream emit failed: {error}");
+            }
+        });
+
+        if let Err(message) = &result {
+            let chunk = TranslationStreamChunk {
+                translation: None,
+                done: true,
+                error_message: Some(message.clone()),
+            };
+            let _ = app_handle.emit(&event_name, chunk);
+        }
+
+        result
+    })
+    .await
 }
 
 #[tauri::command]
@@ -231,6 +264,10 @@ fn configure_data_dir(app: &mut tauri::App) -> Result<(), Box<dyn Error>> {
     std::env::set_var("RSSREADER_DB_PATH", db_path);
 
     Ok(())
+}
+
+fn translation_stream_event_name(event_id: &str) -> String {
+    format!("ai-translation-stream-{event_id}")
 }
 
 fn main() {
