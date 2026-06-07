@@ -5,7 +5,7 @@ use super::{
     ArticleMarkFavoriteRequest, ArticleMarkReadRequest, ArticleNote, ArticleNoteSaveRequest,
     ArticleTagDeleteRequest, ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest,
     FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedService,
-    FeedWithArticles, TagListResult,
+    FeedWithArticles, TagDeleteRequest, TagListResult, TagMergeRequest, TagRenameRequest,
 };
 
 static FEED_SERVICE: OnceLock<Mutex<FeedService>> = OnceLock::new();
@@ -46,9 +46,8 @@ pub fn article_get(article_id: String) -> Result<ArticleDetail, String> {
             > strip_html(&article.sanitized_html).chars().count()
         {
             article.sanitized_html = enriched.clone();
-            let _ = with_service(|service| {
-                service.update_article_content(&article_id, &enriched).ok()
-            });
+            let _ =
+                with_service(|service| service.update_article_content(&article_id, &enriched).ok());
         }
     }
 
@@ -101,6 +100,23 @@ pub fn article_delete_tag(article_id: String, tag_id: String) -> Result<(), Stri
     })
 }
 
+pub fn tag_rename(tag_id: String, name: String) -> Result<TagListResult, String> {
+    with_service(|service| service.rename_tag(TagRenameRequest { tag_id, name }))
+}
+
+pub fn tag_merge(source_tag_id: String, target_tag_id: String) -> Result<TagListResult, String> {
+    with_service(|service| {
+        service.merge_tags(TagMergeRequest {
+            source_tag_id,
+            target_tag_id,
+        })
+    })
+}
+
+pub fn tag_delete(tag_id: String) -> Result<TagListResult, String> {
+    with_service(|service| service.delete_tag(TagDeleteRequest { tag_id }))
+}
+
 pub fn article_get_note(article_id: String) -> Option<ArticleNote> {
     with_service(|service| service.get_article_note(&article_id))
 }
@@ -115,9 +131,10 @@ pub fn article_save_note(article_id: String, content: String) -> Result<ArticleN
 }
 
 fn with_service<T>(handler: impl FnOnce(&mut FeedService) -> T) -> T {
-    let service = FEED_SERVICE.get_or_init(|| {
-        Mutex::new(FeedService::new().expect("feed service should initialize"))
-    });
-    let mut guard = service.lock().expect("feed service lock should not be poisoned");
+    let service = FEED_SERVICE
+        .get_or_init(|| Mutex::new(FeedService::new().expect("feed service should initialize")));
+    let mut guard = service
+        .lock()
+        .expect("feed service lock should not be poisoned");
     handler(&mut guard)
 }

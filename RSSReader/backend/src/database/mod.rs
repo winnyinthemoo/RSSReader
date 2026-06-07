@@ -5,11 +5,11 @@ pub const MIGRATION_0001: &str =
 pub const MIGRATION_0002: &str =
     include_str!("../../../db/migrations/0002_ai_providers_models.sql");
 pub const MIGRATION_0003: &str = include_str!("../../../db/migrations/0003_tags.sql");
-pub const MIGRATION_0004: &str =
-    include_str!("../../../db/migrations/0004_ai_results_usage.sql");
+pub const MIGRATION_0004: &str = include_str!("../../../db/migrations/0004_ai_results_usage.sql");
 pub const MIGRATION_0005: &str = include_str!("../../../db/migrations/0005_article_notes.sql");
 pub const MIGRATION_0006: &str =
     include_str!("../../../db/migrations/0006_feed_display_titles.sql");
+pub const MIGRATION_0007: &str = include_str!("../../../db/migrations/0007_translation_title.sql");
 
 /// Legacy alias used by feed repository.
 pub const INITIAL_MIGRATION: &str = MIGRATION_0001;
@@ -21,6 +21,7 @@ const ALL_MIGRATIONS: &[&str] = &[
     MIGRATION_0004,
     MIGRATION_0005,
     MIGRATION_0006,
+    MIGRATION_0007,
 ];
 
 pub fn run_migrations(connection: &Connection) -> Result<(), String> {
@@ -60,4 +61,28 @@ pub fn run_migrations(connection: &Connection) -> Result<(), String> {
             .map_err(|error| format!("Failed to record migration {version}: {error}"))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use rusqlite::Connection;
+
+    use super::run_migrations;
+
+    #[test]
+    fn migrations_create_translation_title_column() {
+        let connection = Connection::open_in_memory().expect("open in-memory database");
+        run_migrations(&connection).expect("migrations run");
+
+        let mut stmt = connection
+            .prepare("PRAGMA table_info(article_translation_runs)")
+            .expect("read table info");
+        let columns = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("map columns")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect columns");
+
+        assert!(columns.iter().any(|column| column == "translated_title"));
+    }
 }

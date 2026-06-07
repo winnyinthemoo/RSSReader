@@ -1,5 +1,4 @@
 mod client;
-mod text;
 mod commands;
 pub mod error;
 pub mod http;
@@ -11,6 +10,7 @@ mod secrets;
 mod service;
 mod summary;
 mod tagging;
+mod text;
 mod translation;
 mod usage;
 

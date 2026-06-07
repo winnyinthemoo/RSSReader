@@ -1,0 +1,23 @@
+# Agent Log: AI Usage Agents 七日折线图修复
+
+- 日期：2026-06-05
+- 负责人：Codex
+- 使用工具：Codex CLI、find、grep、sed、cargo fmt、cargo check、cargo test、npm run build
+- 对应 Issue / PR：未指定
+- 任务目标：修复 model setting 中 Agents 窗口七日用量折线图显示不正确的问题。
+- 关键 Prompt 摘要：用户指出当前项目前端 model setting 的 Agents 窗口下七日用量折线图显示不正确，要求检查 ai usage 模块并修复。
+- Agent 修改内容摘要：
+  - Usage report 增加可选 `key` 字段，用于表示当前报表过滤的 provider / model / agent key。
+  - 后端 `ai_usage_report` 支持可选 `key` 参数。
+  - 后端 usage 汇总和每日明细查询支持按维度 key 过滤。
+  - 前端 `getUsageReport` 支持传入可选 key。
+  - Agents 页切换 Summary / Translation / Tagging 时，会按当前 agent 重新加载七日用量。
+  - 前端不再在过滤当前 agent 时丢弃 `dailyRows`，折线图会使用后端返回的当前 agent 每日明细。
+- 人工检查结果：尚未人工触发真实模型调用检查 UI 曲线，但已确认代码路径按当前 agent 请求过滤后的 usage report。
+- 是否运行测试：
+  - 已运行 `npm run build`，通过，存在 Vite chunk size warning。
+  - 已运行 `cargo check`，通过，存在既有未使用代码 warning。
+  - 已运行 `cargo test`，22 个测试通过，存在既有 warning。
+  - 已运行 `cargo fmt`。
+- 未解决问题：
+  - 当前折线图仍以 tokens 为纵轴；若模型服务不返回 token usage，会显示为 0，但 Requests 汇总仍可显示调用次数。

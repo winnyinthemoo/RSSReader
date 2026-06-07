@@ -2,19 +2,19 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::time::Duration;
 
-use reqwest::header::*;
 use rssreader_backend::ai::http::try_handle as try_handle_ai;
 use rssreader_backend::feeds::{
     article_delete_tag, article_get, article_get_note, article_list, article_list_tags,
     article_mark_favorite, article_mark_read, article_save_note, article_save_tags, feed_add,
-    feed_delete, feed_list, feed_refresh, tag_list, ArticleDetail, ArticleListFilter,
-    ArticleListItem, ArticleListResult, ArticleNote, ArticleTagsResult, FeedListResult,
-    FeedRefreshResult, FeedStatus, FeedSummary, FeedWithArticles, TagListResult, TagSummary,
+    feed_delete, feed_list, feed_refresh, tag_delete, tag_list, tag_merge, tag_rename,
+    ArticleDetail, ArticleListFilter, ArticleListItem, ArticleListResult, ArticleNote,
+    ArticleTagsResult, FeedListResult, FeedRefreshResult, FeedStatus, FeedSummary,
+    FeedWithArticles, TagListResult, TagMatchMode, TagSummary,
 };
 
 fn main() -> std::io::Result<()> {
-    let address = std::env::var("RSSREADER_BACKEND_ADDR")
-        .unwrap_or_else(|_| "127.0.0.1:5181".to_string());
+    let address =
+        std::env::var("RSSREADER_BACKEND_ADDR").unwrap_or_else(|_| "127.0.0.1:5181".to_string());
     let listener = TcpListener::bind(&address)?;
 
     println!("Vortex backend dev server listening on http://{address}");
@@ -56,9 +56,7 @@ fn handle_connection(mut stream: TcpStream) {
     }
 
     if path.starts_with("/api/ai") {
-        let handled = try_handle_ai(method, path, body, &mut |status, payload| {
-            write_json(&mut stream, status, payload);
-        });
+        let handled = try_handle_ai(method, path, body, &mut stream);
         if handled {
             return;
         }
@@ -67,6 +65,47 @@ fn handle_connection(mut stream: TcpStream) {
     match (method, path) {
         ("GET", "/api/feeds") => write_json(&mut stream, 200, &feed_list_json(&feed_list())),
         ("GET", "/api/tags") => write_json(&mut stream, 200, &tag_list_json(&tag_list())),
+        ("POST", "/api/tags/rename") => {
+            let Some(tag_id) = json_string_field(body, "tagId") else {
+                write_json(&mut stream, 400, &error_json("Missing tagId"));
+                return;
+            };
+            let Some(name) = json_string_field(body, "name") else {
+                write_json(&mut stream, 400, &error_json("Missing name"));
+                return;
+            };
+
+            match tag_rename(tag_id, name) {
+                Ok(result) => write_json(&mut stream, 200, &tag_list_json(&result)),
+                Err(message) => write_json(&mut stream, 400, &error_json(&message)),
+            }
+        }
+        ("POST", "/api/tags/merge") => {
+            let Some(source_tag_id) = json_string_field(body, "sourceTagId") else {
+                write_json(&mut stream, 400, &error_json("Missing sourceTagId"));
+                return;
+            };
+            let Some(target_tag_id) = json_string_field(body, "targetTagId") else {
+                write_json(&mut stream, 400, &error_json("Missing targetTagId"));
+                return;
+            };
+
+            match tag_merge(source_tag_id, target_tag_id) {
+                Ok(result) => write_json(&mut stream, 200, &tag_list_json(&result)),
+                Err(message) => write_json(&mut stream, 400, &error_json(&message)),
+            }
+        }
+        ("POST", "/api/tags/delete") => {
+            let Some(tag_id) = json_string_field(body, "tagId") else {
+                write_json(&mut stream, 400, &error_json("Missing tagId"));
+                return;
+            };
+
+            match tag_delete(tag_id) {
+                Ok(result) => write_json(&mut stream, 200, &tag_list_json(&result)),
+                Err(message) => write_json(&mut stream, 400, &error_json(&message)),
+            }
+        }
         ("POST", "/api/feeds") => {
             let Some(url) = json_string_field(body, "url") else {
                 write_json(&mut stream, 400, &error_json("Missing url"));
@@ -197,11 +236,17 @@ fn handle_connection(mut stream: TcpStream) {
         }
         ("GET", path) if path.starts_with("/api/articles") => {
             let filter = parse_article_filter(path);
-            write_json(&mut stream, 200, &article_list_result_json(&article_list(filter)));
+            write_json(
+                &mut stream,
+                200,
+                &article_list_result_json(&article_list(filter)),
+            );
         }
         ("GET", path) if path.starts_with("/api/render") => {
             let target_url = parse_query_param(path, "url").unwrap_or_default();
-            if target_url.is_empty() || !target_url.starts_with("http://") && !target_url.starts_with("https://") {
+            if target_url.is_empty()
+                || !target_url.starts_with("http://") && !target_url.starts_with("https://")
+            {
                 write_json(&mut stream, 400, &error_json("Missing or invalid url"));
                 return;
             }
@@ -282,6 +327,14 @@ fn parse_article_filter(path: &str) -> ArticleListFilter {
                 "unreadOnly" => filter.unread_only = value == "true",
                 "favoritesOnly" => filter.favorites_only = value == "true",
                 "tagId" if !value.is_empty() => filter.tag_id = Some(url_decode(value)),
+                "tagIds" if !value.is_empty() => filter.tag_ids.push(url_decode(value)),
+                "tagMatch" => {
+                    filter.tag_match = if value == "all" {
+                        TagMatchMode::All
+                    } else {
+                        TagMatchMode::Any
+                    };
+                }
                 _ => {}
             }
         }
@@ -313,9 +366,8 @@ fn write_json(stream: &mut TcpStream, status: u16, body: &str) {
 }
 
 fn write_empty(stream: &mut TcpStream, status: u16) {
-    let response = format!(
-        "HTTP/1.1 {status} No Content\r\n{CORS_RESPONSE_HEADERS}Content-Length: 0\r\n\r\n"
-    );
+    let response =
+        format!("HTTP/1.1 {status} No Content\r\n{CORS_RESPONSE_HEADERS}Content-Length: 0\r\n\r\n");
 
     let _ = stream.write_all(response.as_bytes());
 }
@@ -652,7 +704,12 @@ fn fetch_raw_page(url: &str) -> Option<String> {
     headers.insert(USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36".parse().unwrap());
     headers.insert(ACCEPT, "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8".parse().unwrap());
     headers.insert(ACCEPT_LANGUAGE, "zh-CN,zh;q=0.9,en;q=0.8".parse().unwrap());
-    headers.insert("sec-ch-ua", "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"".parse().unwrap());
+    headers.insert(
+        "sec-ch-ua",
+        "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\""
+            .parse()
+            .unwrap(),
+    );
     headers.insert("sec-ch-ua-mobile", "?0".parse().unwrap());
     headers.insert("sec-ch-ua-platform", "\"Windows\"".parse().unwrap());
     headers.insert("sec-fetch-dest", "document".parse().unwrap());
@@ -664,7 +721,9 @@ fn fetch_raw_page(url: &str) -> Option<String> {
         .build()
         .ok()?;
     let response = client.get(url).send().ok()?;
-    if !response.status().is_success() { return None; }
+    if !response.status().is_success() {
+        return None;
+    }
     let html = response.text().ok()?;
 
     // Inject a <base> tag after <head> so relative asset paths resolve.
@@ -679,8 +738,14 @@ fn fetch_raw_page(url: &str) -> Option<String> {
     // Expose lazy-loaded images:
     // 1. Strip the base64 placeholder src so browsers don't pick it.
     // 2. Rewrite data-src -> src so the real URL becomes visible.
-    result = result.replace("src=\"data:image/gif;base64", "old_src=\"data:image/gif;base64");
-    result = result.replace("src=\"data:image/png;base64", "old_src=\"data:image/png;base64");
+    result = result.replace(
+        "src=\"data:image/gif;base64",
+        "old_src=\"data:image/gif;base64",
+    );
+    result = result.replace(
+        "src=\"data:image/png;base64",
+        "old_src=\"data:image/png;base64",
+    );
     result = result.replace("data-src", "src");
     Some(result)
 }

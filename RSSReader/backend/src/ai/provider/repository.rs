@@ -5,7 +5,7 @@ use crate::database::run_migrations;
 use super::super::error::{AiError, AiResult};
 use super::super::model::{
     AgentSettingsRecord, AgentType, AiModel, AiProvider, ArticleSummaryRecord, SummaryDetailLevel,
-    TranslationSegmentView, TranslationView, UsageDailyRow, UsageReportRow,
+    TranslationSegmentView, TranslationView, UsageDailyRow, UsageEventRecord, UsageReportRow,
 };
 
 pub struct AiRepository {
@@ -201,8 +201,8 @@ impl AiRepository {
         record: &AgentSettingsRecord,
         updated_at: &str,
     ) -> AiResult<()> {
-        let config_json = serde_json::to_string(&record.config)
-            .map_err(|e| AiError::Database(e.to_string()))?;
+        let config_json =
+            serde_json::to_string(&record.config).map_err(|e| AiError::Database(e.to_string()))?;
         self.connection.execute(
             "INSERT INTO ai_agent_settings (agent_type, primary_model_id, fallback_model_id, config_json, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5)
@@ -252,7 +252,12 @@ impl AiRepository {
             .map_err(Into::into)
     }
 
-    pub fn usage_report(&self, dimension: &str, window_days: u32) -> AiResult<Vec<UsageReportRow>> {
+    pub fn usage_report(
+        &self,
+        dimension: &str,
+        window_days: u32,
+        key: Option<&str>,
+    ) -> AiResult<Vec<UsageReportRow>> {
         let group_expr = usage_dimension_expr(dimension);
         let sql = format!(
             "SELECT
@@ -264,12 +269,13 @@ impl AiRepository {
                 SUM(CASE WHEN request_status = 'failed' THEN 1 ELSE 0 END) AS failed_count
              FROM llm_usage_events
              WHERE CAST(created_at AS INTEGER) >= CAST(strftime('%s', 'now', ?1) AS INTEGER)
+                AND (?2 IS NULL OR COALESCE({group_expr}, 'unknown') = ?2)
              GROUP BY usage_key, usage_label
              ORDER BY request_count DESC, usage_label COLLATE NOCASE"
         );
         let window = format!("-{} days", window_days.saturating_sub(1));
         let mut stmt = self.connection.prepare(&sql)?;
-        let rows = stmt.query_map(params![window], |row| {
+        let rows = stmt.query_map(params![window, key], |row| {
             Ok(UsageReportRow {
                 key: row.get(0)?,
                 label: row.get(1)?,
@@ -282,9 +288,15 @@ impl AiRepository {
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 
-    pub fn usage_daily_report(&self, window_days: u32) -> AiResult<Vec<UsageDailyRow>> {
+    pub fn usage_daily_report(
+        &self,
+        dimension: &str,
+        window_days: u32,
+        key: Option<&str>,
+    ) -> AiResult<Vec<UsageDailyRow>> {
         let window = format!("-{} days", window_days.saturating_sub(1));
-        let mut stmt = self.connection.prepare(
+        let group_expr = usage_dimension_expr_with_alias(dimension, "events");
+        let sql = format!(
             "WITH RECURSIVE days(day, remaining) AS (
                 SELECT date('now', ?1), ?2
                 UNION ALL
@@ -297,10 +309,12 @@ impl AiRepository {
              FROM days
              LEFT JOIN llm_usage_events events
                 ON date(events.created_at, 'unixepoch') = days.day
+                AND (?3 IS NULL OR COALESCE({group_expr}, 'unknown') = ?3)
              GROUP BY days.day
-             ORDER BY days.day",
-        )?;
-        let rows = stmt.query_map(params![window, window_days.max(1)], |row| {
+             ORDER BY days.day"
+        );
+        let mut stmt = self.connection.prepare(&sql)?;
+        let rows = stmt.query_map(params![window, window_days.max(1), key], |row| {
             Ok(UsageDailyRow {
                 date: row.get(0)?,
                 request_count: row.get::<_, i64>(1)?.max(0) as u64,
@@ -308,6 +322,33 @@ impl AiRepository {
             })
         })?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub fn insert_usage_event(&self, event: &UsageEventRecord) -> AiResult<()> {
+        self.connection.execute(
+            "INSERT INTO llm_usage_events (
+                id, task_type, article_id, provider_id, model_id, model_name_snapshot,
+                base_url_snapshot, request_status, prompt_tokens, completion_tokens,
+                total_tokens, started_at, finished_at, created_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            params![
+                event.id,
+                event.task_type,
+                event.article_id,
+                event.provider_id,
+                event.model_id,
+                event.model_name_snapshot,
+                event.base_url_snapshot,
+                event.request_status,
+                event.prompt_tokens,
+                event.completion_tokens,
+                event.total_tokens,
+                event.started_at,
+                event.finished_at,
+                event.created_at,
+            ],
+        )?;
+        Ok(())
     }
 
     pub fn list_tag_names(&self) -> AiResult<Vec<String>> {
@@ -350,11 +391,15 @@ impl AiRepository {
         source: &str,
         now: &str,
     ) -> AiResult<()> {
-        let tag_id: String = if let Some(existing) = self.connection.query_row(
-            "SELECT id FROM tags WHERE normalized_name = ?1",
-            params![normalized_name],
-            |row| row.get(0),
-        ).optional()? {
+        let tag_id: String = if let Some(existing) = self
+            .connection
+            .query_row(
+                "SELECT id FROM tags WHERE normalized_name = ?1",
+                params![normalized_name],
+                |row| row.get(0),
+            )
+            .optional()?
+        {
             existing
         } else {
             let id = uuid::Uuid::new_v4().to_string();
@@ -395,19 +440,33 @@ impl AiRepository {
         run_id: &str,
         article_id: &str,
         target_language: &str,
+        translated_title: Option<&str>,
         status: &str,
         now: &str,
     ) -> AiResult<()> {
         self.connection.execute(
             "INSERT INTO article_translation_runs (
-                id, article_id, target_language, status, created_at, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![run_id, article_id, target_language, status, now, now],
+                id, article_id, target_language, translated_title, status, created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                run_id,
+                article_id,
+                target_language,
+                translated_title,
+                status,
+                now,
+                now
+            ],
         )?;
         Ok(())
     }
 
-    pub fn update_translation_run_status(&self, run_id: &str, status: &str, now: &str) -> AiResult<()> {
+    pub fn update_translation_run_status(
+        &self,
+        run_id: &str,
+        status: &str,
+        now: &str,
+    ) -> AiResult<()> {
         self.connection.execute(
             "UPDATE article_translation_runs SET status = ?1, updated_at = ?2 WHERE id = ?3",
             params![status, now, run_id],
@@ -450,7 +509,7 @@ impl AiRepository {
         let run = self
             .connection
             .query_row(
-                "SELECT id, article_id, target_language, status
+                "SELECT id, article_id, target_language, translated_title, status
                  FROM article_translation_runs
                  WHERE article_id = ?1 AND target_language = ?2",
                 params![article_id, target_language],
@@ -459,13 +518,14 @@ impl AiRepository {
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, String>(2)?,
-                        row.get::<_, String>(3)?,
+                        row.get::<_, Option<String>>(3)?,
+                        row.get::<_, String>(4)?,
                     ))
                 },
             )
             .optional()?;
 
-        let Some((run_id, article_id, target_language, status)) = run else {
+        let Some((run_id, article_id, target_language, translated_title, status)) = run else {
             return Ok(None);
         };
 
@@ -492,7 +552,12 @@ impl AiRepository {
             run_id,
             article_id,
             target_language,
+            translated_title,
             status,
+            bilingual_html: None,
+            bilingual_aligned: false,
+            bilingual_placed: 0,
+            bilingual_expected: segments.len(),
             segments,
         }))
     }
@@ -520,6 +585,15 @@ fn usage_dimension_expr(dimension: &str) -> &'static str {
         "model" => "COALESCE(model_id, model_name_snapshot)",
         "agent" => "task_type",
         _ => "task_type",
+    }
+}
+
+fn usage_dimension_expr_with_alias(dimension: &str, alias: &str) -> String {
+    match dimension {
+        "provider" => format!("{alias}.provider_id"),
+        "model" => format!("COALESCE({alias}.model_id, {alias}.model_name_snapshot)"),
+        "agent" => format!("{alias}.task_type"),
+        _ => format!("{alias}.task_type"),
     }
 }
 

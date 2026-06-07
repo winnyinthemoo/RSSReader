@@ -6,6 +6,7 @@ import type {
   AiProviderListResult,
   ArticleSummaryRecord,
   AssignTagsRequest,
+  AssignTagsResult,
   CreateAiModelRequest,
   CreateAiProviderRequest,
   GetSummaryRequest,
@@ -18,6 +19,7 @@ import type {
   TaggingSuggestRequest,
   TaggingSuggestResult,
   TranslationView,
+  TranslationStreamChunk,
   UpdateAiModelRequest,
   UpdateAiProviderRequest,
   UsageReportResult,
@@ -241,13 +243,13 @@ export async function suggestTags(
   });
 }
 
-export async function assignTags(request: AssignTagsRequest): Promise<void> {
+export async function assignTags(request: AssignTagsRequest): Promise<AssignTagsResult> {
   const invoke = getInvoke();
   if (invoke) {
-    return invoke<void>("ai_assign_tags", { request });
+    return invoke<AssignTagsResult>("ai_assign_tags", { request });
   }
 
-  await requestJson<{ ok: boolean }>("/api/ai/tags/assign", {
+  return requestJson<AssignTagsResult>("/api/ai/tags/assign", {
     method: "POST",
     body: JSON.stringify(request),
   });
@@ -274,31 +276,35 @@ export async function getArticleTranslation(
 
 export async function startTranslation(
   request: StartTranslationRequest,
+  onChunk?: (view: TranslationView) => void,
 ): Promise<TranslationView> {
   const invoke = getInvoke();
   if (invoke) {
-    return invoke<TranslationView>("ai_start_translation", { request });
+    const result = await invoke<TranslationView>("ai_start_translation", { request });
+    onChunk?.(result);
+    return result;
   }
 
-  return requestJson<TranslationView>("/api/ai/translation/start", {
-    method: "POST",
-    body: JSON.stringify(request),
-  });
+  return streamTranslationRequest(request, onChunk);
 }
 
 export async function getUsageReport(
   dimension: string,
   windowDays: number,
+  key?: string,
 ): Promise<UsageReportResult> {
   const invoke = getInvoke();
   if (invoke) {
-    return invoke<UsageReportResult>("ai_usage_report", { dimension, windowDays });
+    return invoke<UsageReportResult>("ai_usage_report", { dimension, windowDays, key });
   }
 
   const params = new URLSearchParams({
     dimension,
     windowDays: String(windowDays),
   });
+  if (key) {
+    params.set("key", key);
+  }
   return requestJson<UsageReportResult>(`/api/ai/usage/report?${params.toString()}`);
 }
 
@@ -324,6 +330,82 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
   }
 
   return response.json() as Promise<T>;
+}
+
+async function streamTranslationRequest(
+  request: StartTranslationRequest,
+  onChunk?: (view: TranslationView) => void,
+): Promise<TranslationView> {
+  const response = await fetch(`${backendBaseUrl}/api/ai/translation/stream`, {
+    method: "POST",
+    body: JSON.stringify(request),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new Error(message);
+  }
+
+  if (!response.body) {
+    throw new Error("Streaming response is not available in this browser.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalView: TranslationView | undefined;
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    let newlineIndex = buffer.indexOf("\n");
+    while (newlineIndex >= 0) {
+      const rawLine = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+      if (rawLine) {
+        const chunk = JSON.parse(rawLine) as TranslationStreamChunk;
+        if (chunk.translation) {
+          finalView = chunk.translation;
+          onChunk?.(chunk.translation);
+        }
+        if (chunk.errorMessage) {
+          throw new Error(chunk.errorMessage);
+        }
+        if (chunk.done && finalView) {
+          return finalView;
+        }
+      }
+      newlineIndex = buffer.indexOf("\n");
+    }
+  }
+
+  const tail = buffer.trim();
+  if (tail) {
+    const chunk = JSON.parse(tail) as TranslationStreamChunk;
+    if (chunk.translation) {
+      finalView = chunk.translation;
+      onChunk?.(chunk.translation);
+    }
+    if (chunk.errorMessage) {
+      throw new Error(chunk.errorMessage);
+    }
+    if (chunk.done && finalView) {
+      return finalView;
+    }
+  }
+
+  if (finalView) {
+    return finalView;
+  }
+
+  throw new Error("Translation stream ended without a result.");
 }
 
 async function readErrorMessage(response: Response) {

@@ -1,6 +1,6 @@
 use super::error::{AiError, AiResult};
-use super::model::*;
 use super::model::TranslationPromptStrategy;
+use super::model::*;
 use super::prompt::{AgentPromptKind, PromptCustomization, PromptResolver};
 use super::provider::AiProviderService;
 use super::summary::SummaryService;
@@ -98,7 +98,10 @@ impl AiService {
         })
     }
 
-    pub fn get_summary(&self, request: GetSummaryRequest) -> AiResult<Option<ArticleSummaryRecord>> {
+    pub fn get_summary(
+        &self,
+        request: GetSummaryRequest,
+    ) -> AiResult<Option<ArticleSummaryRecord>> {
         self.summary.get_summary(request)
     }
 
@@ -111,23 +114,37 @@ impl AiService {
         article_id: &str,
         target_language: &str,
     ) -> AiResult<Option<TranslationView>> {
-        self.translation.get_translation(article_id, target_language)
+        self.translation
+            .get_translation(article_id, target_language)
     }
 
     pub fn start_translation(&self, request: StartTranslationRequest) -> AiResult<TranslationView> {
         self.translation.start_translation(request)
     }
 
+    pub fn stream_translation(
+        &self,
+        request: StartTranslationRequest,
+        emit: impl FnMut(&TranslationView),
+    ) -> AiResult<TranslationView> {
+        self.translation.stream_translation(request, emit)
+    }
+
     pub fn suggest_tags(&self, request: TaggingSuggestRequest) -> AiResult<TaggingSuggestResult> {
         self.tagging.suggest(request)
     }
 
-    pub fn assign_tags(&self, request: AssignTagsRequest) -> AiResult<()> {
+    pub fn assign_tags(&self, request: AssignTagsRequest) -> AiResult<AssignTagsResult> {
         self.tagging.assign_tags(request)
     }
 
-    pub fn usage_report(&self, dimension: &str, window_days: u32) -> AiResult<UsageReportResult> {
-        self.usage.report(dimension, window_days)
+    pub fn usage_report(
+        &self,
+        dimension: &str,
+        window_days: u32,
+        key: Option<&str>,
+    ) -> AiResult<UsageReportResult> {
+        self.usage.report(dimension, window_days, key)
     }
 }
 

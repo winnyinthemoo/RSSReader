@@ -1,0 +1,32 @@
+# Agent Log: AI 标签建议闭环
+
+- 日期：2026-05-29
+- 负责人：Codex
+- 使用工具：Codex CLI、rg、sed、cargo fmt、cargo check、cargo test、npm run build
+- 对应 Issue / PR：未指定
+- 任务目标：完善 AI tag 功能的最小可用闭环。
+- 关键 Prompt 摘要：用户要求执行 AI tag 的优先完善建议。
+- Agent 修改内容摘要：
+  - Reader 标签面板新增 AI 建议按钮、建议结果展示和一键应用。
+  - 后端 AI tag 建议增加规范化、去重、长度和数量限制。
+  - `ai_assign_tags` 改为返回最新文章标签列表，便于前端同步状态。
+  - dev-server 补充 `/api/ai/tags/assign` 路由。
+  - 后续补充：`TaggingPanel.tsx` 从 TODO 壳子改为真实 AI 标签结果组件，并接入 Reader 标签侧栏；Reader 只把 AI 标签建议/应用结果渲染委托给该组件。
+  - 后续补充：Tauri 层 `ai_assign_tags` 返回类型修正为 `ArticleTagsResult`，与前端 `AssignTagsResult` 期望一致。
+  - 后续补充：修复 `TaggingPanel` 复用旧浮层样式导致遮挡界面的问题，改为 Reader 侧栏内联样式。
+  - 后续补充：前端 REST fallback 的 AI 标签应用路径改为 `/api/ai/tags/assign`，兼容当前运行中的 dev-server 旧路由；后端源码同时保留 `/api/ai/tagging/assign` 兼容。
+  - 后续补充：AI 标签建议支持逐个选择/取消，只应用已选中的建议；切换文章时会清空上一文章的 AI 建议状态。
+- 人工检查结果：尚未人工点击 UI 验收；构建和测试已通过。
+- 是否运行测试：
+  - 已运行 `cargo fmt`
+  - 已运行 `cargo check`，通过，存在既有未使用代码 warning。
+  - 已运行 `cargo test`，20 个测试通过。
+  - 已用 Node v22.22.3 运行 `npm run build`，通过，存在 Vite chunk size warning。
+  - 后续补充：再次运行 `npm run build`，通过，存在 Vite chunk size warning。
+  - 后续补充：再次运行 backend `cargo check` / `cargo test`，通过，20 个测试通过，存在既有未使用代码 warning。
+  - 后续补充：针对路由修复再次运行 `npm run build`，通过；运行 `cargo test ai:: --lib`，13 个 AI 相关测试通过。
+  - 后续补充：运行 `src-tauri` `cargo check` 被系统依赖阻断，当前环境缺少 `dbus-1.pc`，需安装 `libdbus-1-dev` 和 `pkg-config` 后再验。
+- 未解决问题：
+  - AI tag usage 写入已在 `2026-05-29-ai-usage-write-path.md` 中补齐。
+  - 标签写入逻辑仍分散在 AI repository 和 feed repository，后续可抽为统一 tags service。
+  - 当前环境未能完成 `src-tauri` 编译验收，原因是 Linux Tauri 系统依赖缺失。

@@ -13,8 +13,9 @@ impl SecretStore {
     pub fn save_provider_key(provider_id: &str, api_key: &str) -> AiResult<()> {
         let path = provider_key_path(provider_id)?;
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|error| AiError::Provider(format!("Failed to create secrets dir: {error}")))?;
+            fs::create_dir_all(parent).map_err(|error| {
+                AiError::Provider(format!("Failed to create secrets dir: {error}"))
+            })?;
         }
         fs::write(&path, api_key.trim())
             .map_err(|error| AiError::Provider(format!("Failed to write API key: {error}")))?;

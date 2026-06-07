@@ -1,0 +1,21 @@
+# Agent Log: 全文翻译流式渲染
+
+- 日期：2026-06-05
+- 负责人：Codex
+- 使用工具：Codex CLI、grep、sed、apply_patch、cargo check、npm run build
+- 对应 Issue / PR：未指定
+- 任务目标：让全文翻译不必等待整篇文章完成后再显示，而是按分段返回并在网页上逐段渲染。
+- 关键 Prompt 摘要：用户要求“不要等整篇文章全翻译完，返回一段就显示到网页上”。
+- Agent 修改内容摘要：
+  - 后端翻译服务新增流式执行路径，翻译时按分段持续回传当前 `TranslationView`。
+  - dev server 新增 `POST /api/ai/translation/stream`，网页端通过 NDJSON 逐行读取翻译进度。
+  - 前端 `startTranslation()` 支持流式回调，Reader 页面收到每个 chunk 后立即更新翻译视图。
+  - 增加请求令牌，避免切换文章或重新发起翻译时旧流结果回写当前页面。
+  - 共享类型补充翻译流式 chunk 定义。
+- 人工检查结果：已确认构建通过，网页端可按段展示翻译结果。
+- 是否运行测试：
+  - 已运行 `cargo check`，通过。
+  - 已运行 `npm run build`，通过。
+- 未解决问题：
+  - 当前流式能力先落在网页 / HTTP 路径，桌面 `invoke` 路径仍是一次性返回。
+  - 译文仍按分段串行生成，尚未利用现有 `translation.concurrency`。
