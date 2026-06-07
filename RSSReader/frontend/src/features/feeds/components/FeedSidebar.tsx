@@ -107,7 +107,7 @@ export function FeedSidebar({
   }
 
   const selectedFeedId = selection.type === "feed" ? selection.feedId : undefined;
-  const totalUnread = feeds.reduce((total, feed) => total + feed.articleCount, 0);
+  const totalUnread = feeds.reduce((total, feed) => total + feed.unreadCount, 0);
   const addFeedDialog = isAddDialogOpen ? (
     <div className="modal-backdrop" role="presentation" onMouseDown={handleCloseDialog}>
       <form
@@ -264,7 +264,7 @@ export function FeedSidebar({
                 <span className="feed-main">
                   <span className="feed-title">{feed.title}</span>
                 </span>
-                <span className="unread-count">{feed.articleCount}</span>
+                <span className="unread-count">{feed.unreadCount}</span>
               </button>
               <button
                 className="feed-delete-button"
