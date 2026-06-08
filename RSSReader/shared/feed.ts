@@ -82,6 +82,15 @@ export interface ArticleNoteSaveRequest {
   content: string;
 }
 
+export interface ArticleNoteExportRequest {
+  content: string;
+  defaultFileName: string;
+}
+
+export interface ArticleNoteExportResult {
+  saved: boolean;
+}
+
 export interface ArticleListItem {
   id: string;
   feedId: string;
@@ -119,6 +128,35 @@ export interface ArticleListResult {
 export interface FeedRefreshResult {
   feed: FeedSummary;
   newArticles: ArticleListItem[];
+}
+
+export interface OpmlExportRequest {
+  content: string;
+  defaultFileName: string;
+}
+
+export interface OpmlExportResult {
+  saved: boolean;
+}
+
+export interface OpmlImportRequest {
+  content?: string;
+}
+
+export interface OpmlImportItemResult {
+  url: string;
+  title?: string;
+  status: "imported" | "skipped" | "failed";
+  message?: string;
+}
+
+export interface OpmlImportResult {
+  selected: boolean;
+  total: number;
+  imported: number;
+  skipped: number;
+  failed: number;
+  items: OpmlImportItemResult[];
 }
 
 export interface AppErrorPayload {

@@ -5,6 +5,8 @@ import type {
   ArticleMarkFavoriteRequest,
   ArticleMarkReadRequest,
   ArticleNote,
+  ArticleNoteExportRequest,
+  ArticleNoteExportResult,
   ArticleNoteSaveRequest,
   ArticleTagDeleteRequest,
   ArticleTagsResult,
@@ -15,6 +17,11 @@ import type {
   FeedRefreshRequest,
   FeedRefreshResult,
   FeedWithArticles,
+  OpmlExportRequest,
+  OpmlExportResult,
+  OpmlImportItemResult,
+  OpmlImportRequest,
+  OpmlImportResult,
   TagListResult,
 } from "../../../shared/feed";
 
@@ -222,6 +229,194 @@ export async function saveArticleNote(
     method: "POST",
     body: JSON.stringify(request),
   });
+}
+
+export async function exportArticleNote(
+  request: ArticleNoteExportRequest,
+): Promise<ArticleNoteExportResult> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<ArticleNoteExportResult>("article_note_export", { request });
+  }
+
+  downloadTextFile(request.content, request.defaultFileName, "text/markdown;charset=utf-8");
+  return { saved: true };
+}
+
+export async function exportOpml(request: OpmlExportRequest): Promise<OpmlExportResult> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<OpmlExportResult>("opml_export", { request });
+  }
+
+  downloadTextFile(request.content, request.defaultFileName, "text/x-opml;charset=utf-8");
+  return { saved: true };
+}
+
+export async function importOpml(request: OpmlImportRequest = {}): Promise<OpmlImportResult> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<OpmlImportResult>("opml_import", { request });
+  }
+
+  const content = request.content ?? (await pickTextFile(".opml,.xml,text/xml"));
+  if (!content) {
+    return emptyOpmlImportResult(false);
+  }
+
+  const outlines = parseOpmlOutlines(content);
+  const items: OpmlImportItemResult[] = [];
+  const seenUrls = new Set<string>();
+  const knownUrls = new Set(
+    (await listFeeds()).feeds
+      .map((feed) => normalizeFeedUrl(feed.url))
+      .filter((url): url is string => Boolean(url)),
+  );
+
+  for (const outline of outlines) {
+    const url = normalizeFeedUrl(outline.url);
+    if (!url) {
+      items.push({
+        url: outline.url,
+        title: outline.title,
+        status: "failed",
+        message: "Feed URL must start with http:// or https://",
+      });
+      continue;
+    }
+
+    if (seenUrls.has(url)) {
+      items.push({
+        url,
+        title: outline.title,
+        status: "skipped",
+        message: "Duplicate feed in OPML",
+      });
+      continue;
+    }
+
+    seenUrls.add(url);
+    if (knownUrls.has(url)) {
+      items.push({
+        url,
+        title: outline.title,
+        status: "skipped",
+        message: "Feed already subscribed",
+      });
+      continue;
+    }
+
+    try {
+      await addFeed({ url, name: outline.title });
+      knownUrls.add(url);
+      items.push({ url, title: outline.title, status: "imported" });
+    } catch (error) {
+      items.push({
+        url,
+        title: outline.title,
+        status: "failed",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return summarizeOpmlImport(true, items);
+}
+
+function downloadTextFile(content: string, fileName: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function pickTextFile(accept: string): Promise<string | undefined> {
+  return new Promise((resolve, reject) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = accept;
+    input.style.display = "none";
+
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      input.remove();
+      if (!file) {
+        resolve(undefined);
+        return;
+      }
+
+      try {
+        resolve(await file.text());
+      } catch (error) {
+        reject(error);
+      }
+    });
+
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+function parseOpmlOutlines(content: string) {
+  const document = new DOMParser().parseFromString(content, "text/xml");
+  const parseError = document.querySelector("parsererror");
+  if (parseError) {
+    throw new Error("Invalid OPML file.");
+  }
+
+  return Array.from(document.querySelectorAll("outline"))
+    .map((outline) => ({
+      url:
+        outline.getAttribute("xmlUrl") ??
+        outline.getAttribute("xmlurl") ??
+        outline.getAttribute("url") ??
+        "",
+      title:
+        outline.getAttribute("title") ??
+        outline.getAttribute("text") ??
+        outline.getAttribute("description") ??
+        undefined,
+    }))
+    .filter((outline) => outline.url.trim().length > 0);
+}
+
+function normalizeFeedUrl(value: string) {
+  const url = value.trim();
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    return undefined;
+  }
+
+  return url.replace(/\/+$/, "");
+}
+
+function summarizeOpmlImport(
+  selected: boolean,
+  items: OpmlImportItemResult[],
+): OpmlImportResult {
+  return {
+    selected,
+    total: items.length,
+    imported: items.filter((item) => item.status === "imported").length,
+    skipped: items.filter((item) => item.status === "skipped").length,
+    failed: items.filter((item) => item.status === "failed").length,
+    items,
+  };
+}
+
+function emptyOpmlImportResult(selected: boolean): OpmlImportResult {
+  return {
+    selected,
+    total: 0,
+    imported: 0,
+    skipped: 0,
+    failed: 0,
+    items: [],
+  };
 }
 
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {

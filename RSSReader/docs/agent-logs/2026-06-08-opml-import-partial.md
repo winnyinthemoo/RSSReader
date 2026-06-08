@@ -1,0 +1,23 @@
+# 2026-06-08 Agent 工作记录：OPML 批量导入部分实现
+
+- 日期：2026-06-08
+- 负责人：Codex
+- 使用工具：Codex、PowerShell、apply_patch、npm.cmd、cargo
+- 对应 Issue / PR：未指定
+- 任务目标：部分实现 OPML 批量导入，让用户可以选择 OPML/XML 文件并批量导入订阅源。
+- 关键 Prompt 摘要：用户询问 RSS 导入 OPML 批量功能是否已实现，并要求先做部分实现。
+- Agent 修改内容摘要：
+  - 新增共享类型 `OpmlImportRequest`、`OpmlImportResult` 和单条导入结果类型。
+  - 前端 Feed 侧边栏新增 OPML 导入按钮，并在导入时显示禁用状态。
+  - 前端服务新增 `importOpml`，Tauri 环境调用 `opml_import`，浏览器开发环境使用文件选择器降级导入。
+  - 桌面端新增 `opml_import` Tauri Command，通过原生文件选择器读取 OPML/XML 文件。
+  - 新增 `src-tauri/src/opml.rs`，负责解析 OPML outline、URL 去重、跳过已订阅源，并逐条调用现有 `feed_add`。
+- 人工检查结果：待人工在桌面应用中选择真实 OPML 文件，确认导入、取消选择、重复订阅跳过、单条失败不中断四类路径；Browser 自动化连接失败，未完成视觉检查。
+- 是否运行测试：
+  - 已运行 `npm.cmd run build`，通过；沙箱内因 `tsconfig.tsbuildinfo` 写入 EPERM 失败一次，提升权限后通过，有既有 Vite chunk size warning。
+  - 已运行 `cargo check`，通过；有既有后端 AI 模块 dead_code warning。
+  - 已运行 `cargo test`，通过；新增 OPML 解析相关测试 2 个。
+  - 已尝试 `npm.cmd run dev -- --port 5174`，常驻服务在命令超时后退出；当前本机 `http://127.0.0.1:5173` 可返回 200。
+- 未解决问题：
+  - 当前为部分实现，尚未提供导入前预览/勾选、失败详情弹窗、并发控制或导入历史。
+  - 导入会逐条抓取订阅源内容，因此网络不可用或源不可访问时对应条目会失败。

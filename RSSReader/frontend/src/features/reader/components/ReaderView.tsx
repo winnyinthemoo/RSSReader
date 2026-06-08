@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronUp,
   Columns2,
+  Download,
   ExternalLink,
   FileText,
   Globe2,
@@ -27,10 +28,11 @@ import rehypeRaw from "rehype-raw";
 import { BilingualTranslationView } from "../../ai/components/BilingualTranslationView";
 import { SummaryPanel } from "../../ai/components/SummaryPanel";
 import type { TranslationView } from "../../../../../shared/ai";
-import type { ArticleDetail, ArticleTag } from "../../../../../shared/feed";
+import type { ArticleDetail, ArticleNoteExportRequest, ArticleTag } from "../../../../../shared/feed";
 import { getArticleTranslation, startTranslation } from "../../../services/aiService";
 import {
   deleteArticleTag,
+  exportArticleNote,
   getArticleNote,
   listArticleTags,
   saveArticleNote,
@@ -456,6 +458,50 @@ export function ReaderView({
     }
   }
 
+  async function handleShareNote() {
+    if (!article) {
+      return;
+    }
+
+    try {
+      const request = buildArticleNoteExport(article, noteContent);
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: `Note: ${article.title}`,
+            text: request.content,
+            url: article.url,
+          });
+          setNoteStatus("Shared");
+          return;
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            setNoteStatus("Share canceled");
+            return;
+          }
+        }
+      }
+
+      await navigator.clipboard.writeText(request.content);
+      setNoteStatus("Copied for sharing");
+    } catch (error) {
+      setNoteStatus(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function handleExportNote() {
+    if (!article) {
+      return;
+    }
+
+    try {
+      const result = await exportArticleNote(buildArticleNoteExport(article, noteContent));
+      setNoteStatus(result.saved ? "Exported" : "Export canceled");
+    } catch (error) {
+      setNoteStatus(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   function handleSearchStep(direction: 1 | -1) {
     if (searchMatches.length === 0) {
       return;
@@ -578,6 +624,8 @@ export function ReaderView({
           onDeleteTag={(tagId) => void handleDeleteTag(tagId)}
           onNoteChange={setNoteContent}
           onSaveNote={() => void handleSaveNote()}
+          onShareNote={() => void handleShareNote()}
+          onExportNote={() => void handleExportNote()}
         />
       ) : null}
       {viewMode === "markdown" ? (
@@ -755,6 +803,8 @@ interface ReaderSidePanelProps {
   onDeleteTag: (tagId: string) => void;
   onNoteChange: (value: string) => void;
   onSaveNote: () => void;
+  onShareNote: () => void;
+  onExportNote: () => void;
 }
 
 const ReaderSidePanel = forwardRef<HTMLElement, ReaderSidePanelProps>(function ReaderSidePanel({
@@ -771,6 +821,8 @@ const ReaderSidePanel = forwardRef<HTMLElement, ReaderSidePanelProps>(function R
   onDeleteTag,
   onNoteChange,
   onSaveNote,
+  onShareNote,
+  onExportNote,
 }, ref) {
   const title = activePanel === "tag" ? "Tags" : "Note";
 
@@ -817,6 +869,7 @@ const ReaderSidePanel = forwardRef<HTMLElement, ReaderSidePanelProps>(function R
 
       {activePanel === "note" ? (
         <div className="reader-panel-body">
+          {!articleId ? <p className="muted">Select an article first.</p> : null}
           <label className="reader-panel-field">
             <span>Article note</span>
             <textarea
@@ -825,9 +878,34 @@ const ReaderSidePanel = forwardRef<HTMLElement, ReaderSidePanelProps>(function R
               placeholder="Write a local note for this article..."
             />
           </label>
-          <button className="secondary-button" type="button" onClick={onSaveNote}>
-            Save note
-          </button>
+          <div className="note-panel-actions">
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={!articleId}
+              onClick={onSaveNote}
+            >
+              Save note
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={!articleId || !noteContent.trim()}
+              onClick={onShareNote}
+            >
+              <Share2 size={15} />
+              <span>Share</span>
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={!articleId || !noteContent.trim()}
+              onClick={onExportNote}
+            >
+              <Download size={15} />
+              <span>Export</span>
+            </button>
+          </div>
           {noteStatus ? <p className="reader-panel-status">{noteStatus}</p> : null}
         </div>
       ) : null}
@@ -1175,6 +1253,42 @@ function escapeHtml(value: string) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+function buildArticleNoteExport(
+  article: ArticleDetail,
+  noteContent: string,
+): ArticleNoteExportRequest {
+  const title = article.title.trim() || "Untitled article";
+  const publishedAt = article.publishedAt ? formatFullDate(article.publishedAt) : "No date";
+  const content = [
+    `# ${title}`,
+    "",
+    `- Source: ${article.feedTitle}`,
+    `- Published: ${publishedAt}`,
+    `- URL: ${article.url}`,
+    "",
+    "## Note",
+    "",
+    noteContent.trim(),
+    "",
+  ].join("\n");
+
+  return {
+    content,
+    defaultFileName: `${slugifyFileName(title)}-note.md`,
+  };
+}
+
+function slugifyFileName(value: string) {
+  const normalized = value
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return (normalized || "article").slice(0, 80);
 }
 
 const ThemePanel = forwardRef<HTMLDivElement, {

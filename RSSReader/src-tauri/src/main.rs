@@ -1,7 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::error::Error;
+mod opml;
 
+use std::error::Error;
+use std::path::{Path, PathBuf};
+
+use opml::{OpmlImportRequest, OpmlImportResult};
 use rssreader_backend as backend;
 use rssreader_backend::ai::{
     AiAgentSettings, AiModel, AiModelListResult, AiProvider, AiProviderListResult,
@@ -15,6 +19,7 @@ use rssreader_backend::{
     ArticleDetail, ArticleListFilter, ArticleListResult, ArticleNote, ArticleTagsResult,
     FeedListResult, FeedRefreshResult, FeedWithArticles, TagListResult,
 };
+use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
 async fn run_blocking<T>(
@@ -100,6 +105,166 @@ fn article_get_note(article_id: String) -> Option<ArticleNote> {
 #[tauri::command]
 fn article_save_note(article_id: String, content: String) -> Result<ArticleNote, String> {
     backend::feeds::article_save_note(article_id, content)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OpmlExportRequest {
+    content: String,
+    default_file_name: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OpmlExportResult {
+    saved: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ArticleNoteExportRequest {
+    content: String,
+    default_file_name: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ArticleNoteExportResult {
+    saved: bool,
+}
+
+#[tauri::command]
+async fn opml_export(request: OpmlExportRequest) -> Result<OpmlExportResult, String> {
+    run_blocking(move || {
+        let default_file_name = normalize_opml_file_name(&request.default_file_name);
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Export OPML")
+            .set_file_name(&default_file_name)
+            .add_filter("OPML", &["opml"])
+            .add_filter("XML", &["xml"])
+            .save_file()
+        else {
+            return Ok(OpmlExportResult { saved: false });
+        };
+
+        let path = ensure_opml_extension(path);
+        std::fs::write(&path, request.content)
+            .map_err(|error| format!("Failed to save OPML file: {error}"))?;
+
+        Ok(OpmlExportResult { saved: true })
+    })
+    .await
+}
+
+#[tauri::command]
+async fn opml_import(request: OpmlImportRequest) -> Result<OpmlImportResult, String> {
+    run_blocking(move || {
+        let content = match request.content.map(|content| content.trim().to_string()) {
+            Some(content) if !content.is_empty() => content,
+            _ => {
+                let Some(path) = rfd::FileDialog::new()
+                    .set_title("Import OPML")
+                    .add_filter("OPML", &["opml"])
+                    .add_filter("XML", &["xml"])
+                    .pick_file()
+                else {
+                    return Ok(OpmlImportResult::not_selected());
+                };
+
+                std::fs::read_to_string(&path)
+                    .map_err(|error| format!("Failed to read OPML file: {error}"))?
+            }
+        };
+
+        opml::import_opml_from_content(&content)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn article_note_export(
+    request: ArticleNoteExportRequest,
+) -> Result<ArticleNoteExportResult, String> {
+    run_blocking(move || {
+        let default_file_name = normalize_note_file_name(&request.default_file_name);
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Export Note")
+            .set_file_name(&default_file_name)
+            .add_filter("Markdown", &["md", "markdown"])
+            .add_filter("Text", &["txt"])
+            .save_file()
+        else {
+            return Ok(ArticleNoteExportResult { saved: false });
+        };
+
+        let path = ensure_note_extension(path);
+        std::fs::write(&path, request.content)
+            .map_err(|error| format!("Failed to save note file: {error}"))?;
+
+        Ok(ArticleNoteExportResult { saved: true })
+    })
+    .await
+}
+
+fn normalize_opml_file_name(file_name: &str) -> String {
+    let trimmed = file_name.trim();
+    let fallback = "vortex-subscriptions.opml";
+    let sanitized = trimmed
+        .chars()
+        .map(|character| match character {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '-',
+            _ => character,
+        })
+        .collect::<String>();
+
+    let file_name = sanitized.trim().trim_matches('.');
+    if file_name.is_empty() {
+        fallback.to_string()
+    } else if Path::new(file_name).extension().is_some() {
+        file_name.to_string()
+    } else {
+        format!("{file_name}.opml")
+    }
+}
+
+fn ensure_opml_extension(path: PathBuf) -> PathBuf {
+    if path.extension().is_some() {
+        return path;
+    }
+
+    path.with_extension("opml")
+}
+
+fn normalize_note_file_name(file_name: &str) -> String {
+    normalize_export_file_name(file_name, "article-note.md", "md")
+}
+
+fn ensure_note_extension(path: PathBuf) -> PathBuf {
+    if path.extension().is_some() {
+        return path;
+    }
+
+    path.with_extension("md")
+}
+
+fn normalize_export_file_name(file_name: &str, fallback: &str, extension: &str) -> String {
+    let trimmed = file_name.trim();
+    let sanitized = trimmed
+        .chars()
+        .map(|character| match character {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '-',
+            _ => character,
+        })
+        .collect::<String>();
+
+    let file_name = sanitized.trim().trim_matches('.');
+    if file_name.is_empty() {
+        fallback.to_string()
+    } else if Path::new(file_name).extension().is_some() {
+        file_name.to_string()
+    } else {
+        format!("{file_name}.{extension}")
+    }
 }
 
 #[tauri::command]
@@ -235,6 +400,9 @@ fn main() {
             article_delete_tag,
             article_get_note,
             article_save_note,
+            article_note_export,
+            opml_import,
+            opml_export,
             ai_list_providers,
             ai_create_provider,
             ai_update_provider,

@@ -1,0 +1,23 @@
+# 2026-06-08 Agent 工作记录：笔记分享与导出
+
+- 日期：2026-06-08
+- 负责人：Codex
+- 使用工具：Codex、PowerShell、apply_patch、npm.cmd、cargo、Browser
+- 对应 Issue / PR：未指定
+- 任务目标：实现文章 note 笔记分享与导出，导出时可由用户选择保存路径。
+- 关键 Prompt 摘要：用户要求“note笔记分享与导出(可设置导出路径) 进行实现”。
+- Agent 修改内容摘要：
+  - 新增共享契约 `ArticleNoteExportRequest` 和 `ArticleNoteExportResult`。
+  - 新增前端服务 `exportArticleNote`，Tauri 环境调用 `article_note_export`，浏览器开发环境使用 Markdown 文件下载降级。
+  - 在 Reader 笔记面板新增分享和导出操作；分享优先使用系统 Web Share，不可用时复制 Markdown 文本到剪贴板。
+  - 在 Tauri 桌面端新增 `article_note_export` 命令，通过原生保存对话框选择导出路径并写入 Markdown 文件；取消保存时返回 `saved: false`。
+  - 为笔记面板操作区补充响应式按钮样式。
+- 人工检查结果：待人工在 Tauri 桌面端分别确认导出保存、取消保存、分享/复制三条路径。
+- 是否运行测试：
+  - 已运行 `npm.cmd run build`，通过；有既有 Vite chunk size warning。
+  - 已运行 `cargo check`，通过；有既有后端 AI 模块 dead_code warning。
+  - 已运行 `cargo test`，通过；桌面 crate 当前无单元测试，构建测试目标时有既有后端 AI 模块 dead_code warning。
+- 未解决问题：
+  - `npm run build` 在 PowerShell 下会因 `npm.ps1` 执行策略被拦截，已改用 `npm.cmd run build`。
+  - 首次沙箱内 `npm.cmd run build` 写入 `tsconfig.tsbuildinfo` 报 EPERM；沙箱外同命令通过。
+  - Browser 插件初始化连续失败，未完成浏览器可视化冒烟检查；需人工在本地 UI 中确认笔记面板按钮布局。

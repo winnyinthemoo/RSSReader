@@ -1,6 +1,7 @@
 import {
   Download,
   FolderOpen,
+  Upload,
   Plus,
   RefreshCw,
   Rss,
@@ -31,12 +32,14 @@ interface FeedSidebarProps {
   isAdding: boolean;
   isRefreshing: boolean;
   isDeleting: boolean;
+  isImporting: boolean;
   onModeChange: (mode: SidebarMode) => void;
   onSelectAll: () => void;
   onSelectFeed: (feedId: string) => void;
   onSelectStarred: () => void;
   onSelectTag: (tagId: string) => void;
   onAddFeed: (request: FeedAddRequest) => Promise<void>;
+  onImportOpml: () => void;
   onExportOpml: () => void;
   onRefreshFeed: (feedId: string) => Promise<void>;
   onDeleteFeed: (feedId: string) => Promise<void>;
@@ -51,12 +54,14 @@ export function FeedSidebar({
   isAdding,
   isRefreshing,
   isDeleting,
+  isImporting,
   onModeChange,
   onSelectAll,
   onSelectFeed,
   onSelectStarred,
   onSelectTag,
   onAddFeed,
+  onImportOpml,
   onExportOpml,
   onRefreshFeed,
   onDeleteFeed,
@@ -200,6 +205,9 @@ export function FeedSidebar({
       <div className="sidebar-actions" aria-label="Feed actions">
         <button type="button" title="Add feed" onClick={() => setIsAddDialogOpen(true)}>
           <Plus size={16} />
+        </button>
+        <button type="button" title="Import OPML" disabled={isImporting} onClick={onImportOpml}>
+          <Upload size={16} />
         </button>
         <button type="button" title="Export OPML" disabled={feeds.length === 0} onClick={onExportOpml}>
           <Download size={16} />

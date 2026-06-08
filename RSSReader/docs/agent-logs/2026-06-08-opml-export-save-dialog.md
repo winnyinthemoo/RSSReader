@@ -1,0 +1,22 @@
+# 2026-06-08 Agent 工作记录：OPML 导出保存路径选择
+
+- 日期：2026-06-08
+- 负责人：Codex
+- 使用工具：Codex、PowerShell、apply_patch、npm.cmd、cargo
+- 对应 Issue / PR：未指定
+- 任务目标：修改 OPML 导出下载逻辑，避免打包后依赖浏览器默认下载行为，改为由用户选择导出文件保存位置。
+- 关键 Prompt 摘要：用户反馈当前下载部分直接走浏览器默认下载，但打包后不处于浏览器环境，需要让用户自行选择下载文件目录。
+- Agent 修改内容摘要：
+  - 将前端 OPML 导出逻辑拆为“生成 OPML 内容”和“执行导出保存”两步。
+  - 新增 `exportOpml` 前端服务，Tauri 环境调用 `opml_export` 命令，浏览器开发环境保留 Blob 下载降级。
+  - 新增共享类型 `OpmlExportRequest` 和 `OpmlExportResult`。
+  - 在 Tauri 桌面端新增 `opml_export` 命令，通过原生保存对话框选择路径并写入 OPML 文件；用户取消保存时不报错。
+  - 增加 `rfd` 依赖用于跨平台原生文件保存对话框。
+- 人工检查结果：待人工在打包应用中点击 OPML 导出并确认保存对话框、取消保存、实际保存文件三种路径。
+- 是否运行测试：
+  - 已运行 `npm.cmd exec tsc -- --noEmit --incremental false`，通过。
+  - 已运行 `npm.cmd exec vite -- build`，通过，有既有 Vite chunk size warning。
+  - 已运行 `cargo check --locked`，通过，有既有后端 AI 模块 dead_code warning。
+- 未解决问题：
+  - `npm.cmd run build` 在当前沙箱中写入 `tsconfig.tsbuildinfo` 时报 EPERM，因此改用不写增量缓存的 `tsc --noEmit --incremental false` 与单独 `vite build` 完成验证。
+  - `src-tauri/gen/schemas/*.json` 在 `git status` 中显示修改，但 `git diff --ignore-cr-at-eol` 无内容差异，属于换行符状态变化。

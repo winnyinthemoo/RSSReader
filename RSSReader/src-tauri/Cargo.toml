@@ -7,6 +7,8 @@ edition = "2021"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+quick-xml = "0.39"
+rfd = "0.15"
 rssreader-backend = { path = "../backend" }
 serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = [] }

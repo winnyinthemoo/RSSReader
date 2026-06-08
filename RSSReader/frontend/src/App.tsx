@@ -6,6 +6,7 @@ import type {
   ArticleListItem,
   FeedAddRequest,
   FeedSummary,
+  OpmlImportResult,
   TagSummary,
 } from "../../shared/feed";
 import { ArticleList } from "./features/articles/components/ArticleList";
@@ -15,7 +16,9 @@ import { ReaderView } from "./features/reader/components/ReaderView";
 import {
   addFeed,
   deleteFeed,
+  exportOpml,
   getArticle,
+  importOpml,
   listArticles,
   listFeeds,
   listTags,
@@ -44,6 +47,7 @@ export default function App() {
   const [isAdding, setIsAdding] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [showAiSettings, setShowAiSettings] = useState(false);
   const [readerTheme, setReaderTheme] = useState("white");
 
@@ -222,12 +226,32 @@ export default function App() {
     }
   }
 
-  function handleExportOpml() {
+  async function handleExportOpml() {
     try {
-      exportFeedsAsOpml(activeFeeds);
+      const opmlExport = buildFeedsOpmlExport(activeFeeds);
+      await exportOpml(opmlExport);
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  async function handleImportOpml() {
+    try {
+      setIsImporting(true);
+      const result = await importOpml();
+      if (!result.selected) {
+        setErrorMessage(undefined);
+        return;
+      }
+
+      await loadFeedsTagsAndArticles();
+      setSidebarMode("feeds");
+      setErrorMessage(formatOpmlImportResult(result));
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsImporting(false);
     }
   }
 
@@ -242,12 +266,14 @@ export default function App() {
         isAdding={isAdding}
         isRefreshing={isRefreshing}
         isDeleting={isDeleting}
+        isImporting={isImporting}
         onModeChange={setSidebarMode}
         onSelectAll={() => setSelection({ type: "all" })}
         onSelectFeed={(feedId) => setSelection({ type: "feed", feedId })}
         onSelectStarred={() => setSelection({ type: "starred" })}
         onSelectTag={(tagId) => setSelection({ type: "tag", tagId })}
         onAddFeed={handleAddFeed}
+        onImportOpml={handleImportOpml}
         onExportOpml={handleExportOpml}
         onRefreshFeed={handleRefreshFeed}
         onDeleteFeed={handleDeleteFeed}
@@ -302,7 +328,7 @@ function upsertFeed(feeds: FeedSummary[], nextFeed: FeedSummary) {
   return feeds.map((feed) => (feed.id === nextFeed.id ? nextFeed : feed));
 }
 
-function exportFeedsAsOpml(feeds: FeedSummary[]) {
+function buildFeedsOpmlExport(feeds: FeedSummary[]) {
   if (feeds.length === 0) {
     throw new Error("No feeds to export.");
   }
@@ -329,15 +355,26 @@ ${outlines}
 </opml>
 `;
 
-  const blob = new Blob([opml], { type: "text/x-opml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `vortex-subscriptions-${new Date().toISOString().slice(0, 10)}.opml`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  return {
+    content: opml,
+    defaultFileName: `vortex-subscriptions-${new Date().toISOString().slice(0, 10)}.opml`,
+  };
+}
+
+function formatOpmlImportResult(result: OpmlImportResult) {
+  if (result.total === 0) {
+    return "OPML import found no feed URLs.";
+  }
+
+  const parts = [`Imported ${result.imported}/${result.total} feeds`];
+  if (result.skipped > 0) {
+    parts.push(`${result.skipped} skipped`);
+  }
+  if (result.failed > 0) {
+    parts.push(`${result.failed} failed`);
+  }
+
+  return `${parts.join(", ")}.`;
 }
 
 function escapeXml(value: string) {
