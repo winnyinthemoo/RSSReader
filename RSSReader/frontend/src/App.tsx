@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   ArticleDetail,
@@ -10,7 +10,7 @@ import type {
   TagSummary,
 } from "../../shared/feed";
 import { ArticleList } from "./features/articles/components/ArticleList";
-import { FeedSidebar } from "./features/feeds/components/FeedSidebar";
+import { FeedSidebar, type FeedSyncMode } from "./features/feeds/components/FeedSidebar";
 import { AiSettingsPage } from "./features/ai/components/AiSettingsPage";
 import { ReaderView } from "./features/reader/components/ReaderView";
 import {
@@ -33,6 +33,16 @@ type SidebarSelection =
   | { type: "feed"; feedId: string }
   | { type: "starred" }
   | { type: "tag"; tagId: string };
+interface FeedSyncSettings {
+  mode: FeedSyncMode;
+  intervalMinutes: number;
+}
+
+const feedSyncSettingsKey = "vortex.feedSyncSettings";
+const defaultFeedSyncSettings: FeedSyncSettings = {
+  mode: "manual",
+  intervalMinutes: 30,
+};
 
 export default function App() {
   const [feeds, setFeeds] = useState<FeedSummary[]>([]);
@@ -48,8 +58,20 @@ export default function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [syncSettings, setSyncSettings] = useState<FeedSyncSettings>(() =>
+    readFeedSyncSettings(),
+  );
+  const [lastSyncAt, setLastSyncAt] = useState<Date | undefined>();
+  const [syncStatusText, setSyncStatusText] = useState("Ready");
   const [showAiSettings, setShowAiSettings] = useState(false);
   const [readerTheme, setReaderTheme] = useState("white");
+  const launchSyncStartedRef = useRef(false);
+
+  const activeFeeds = useMemo(
+    () => feeds.filter((feed) => feed.status === "active"),
+    [feeds],
+  );
 
   useEffect(() => {
     void loadFeedsTagsAndArticles();
@@ -59,10 +81,49 @@ export default function App() {
     void loadArticles(selection);
   }, [selection]);
 
-  const activeFeeds = useMemo(
-    () => feeds.filter((feed) => feed.status === "active"),
-    [feeds],
-  );
+  useEffect(() => {
+    writeFeedSyncSettings(syncSettings);
+  }, [syncSettings]);
+
+  useEffect(() => {
+    if (
+      syncSettings.mode !== "launch" ||
+      activeFeeds.length === 0 ||
+      launchSyncStartedRef.current
+    ) {
+      return;
+    }
+
+    launchSyncStartedRef.current = true;
+    void syncAllFeeds("opening the app");
+  }, [syncSettings.mode, activeFeeds.length]);
+
+  useEffect(() => {
+    if (syncSettings.mode !== "timer" || activeFeeds.length === 0) {
+      return;
+    }
+
+    const timerId = window.setInterval(() => {
+      void syncAllFeeds("timer");
+    }, syncSettings.intervalMinutes * 60 * 1000);
+
+    return () => window.clearInterval(timerId);
+  }, [syncSettings.mode, syncSettings.intervalMinutes, activeFeeds.length]);
+
+  const nextSyncText = useMemo(() => {
+    if (syncSettings.mode !== "timer") {
+      return undefined;
+    }
+
+    if (!lastSyncAt) {
+      return `Every ${formatSyncInterval(syncSettings.intervalMinutes)}`;
+    }
+
+    const nextSyncAt = new Date(
+      lastSyncAt.getTime() + syncSettings.intervalMinutes * 60 * 1000,
+    );
+    return `Next ${formatClockTime(nextSyncAt)}`;
+  }, [lastSyncAt, syncSettings.intervalMinutes, syncSettings.mode]);
 
   async function loadFeedsTagsAndArticles() {
     try {
@@ -236,6 +297,41 @@ export default function App() {
     }
   }
 
+  async function syncAllFeeds(reason: string) {
+    if (isSyncingAll || activeFeeds.length === 0) {
+      return;
+    }
+
+    try {
+      setIsSyncingAll(true);
+      setSyncStatusText(`Syncing ${activeFeeds.length} feeds`);
+      let failedCount = 0;
+      let newArticleCount = 0;
+
+      for (const feed of activeFeeds) {
+        try {
+          const result = await refreshFeed({ feedId: feed.id });
+          newArticleCount += result.newArticles.length;
+        } catch {
+          failedCount += 1;
+        }
+      }
+
+      await loadFeedsTagsAndArticles();
+      const completedAt = new Date();
+      setLastSyncAt(completedAt);
+      setSyncStatusText(formatFeedSyncStatus(activeFeeds.length, failedCount, completedAt));
+      setErrorMessage(
+        formatFeedSyncToast(activeFeeds.length, failedCount, newArticleCount, reason),
+      );
+    } catch (error) {
+      setSyncStatusText("Sync failed");
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsSyncingAll(false);
+    }
+  }
+
   async function handleImportOpml() {
     try {
       setIsImporting(true);
@@ -255,6 +351,19 @@ export default function App() {
     }
   }
 
+  function handleSyncModeChange(mode: FeedSyncMode) {
+    setSyncSettings((currentSettings) => ({ ...currentSettings, mode }));
+    setSyncStatusText(mode === "manual" ? "Manual" : "Ready");
+
+    if (mode === "launch" && activeFeeds.length > 0) {
+      void syncAllFeeds("opening the app");
+    }
+  }
+
+  function handleSyncIntervalChange(intervalMinutes: number) {
+    setSyncSettings((currentSettings) => ({ ...currentSettings, intervalMinutes }));
+  }
+
   return (
     <main className="app-shell" data-reader-theme={readerTheme}>
       <FeedSidebar
@@ -267,6 +376,12 @@ export default function App() {
         isRefreshing={isRefreshing}
         isDeleting={isDeleting}
         isImporting={isImporting}
+        isSyncingAll={isSyncingAll}
+        syncFeedCount={activeFeeds.length}
+        syncMode={syncSettings.mode}
+        syncIntervalMinutes={syncSettings.intervalMinutes}
+        syncStatusText={syncStatusText}
+        nextSyncText={nextSyncText}
         onModeChange={setSidebarMode}
         onSelectAll={() => setSelection({ type: "all" })}
         onSelectFeed={(feedId) => setSelection({ type: "feed", feedId })}
@@ -275,6 +390,9 @@ export default function App() {
         onAddFeed={handleAddFeed}
         onImportOpml={handleImportOpml}
         onExportOpml={handleExportOpml}
+        onSyncModeChange={handleSyncModeChange}
+        onSyncIntervalChange={handleSyncIntervalChange}
+        onSyncAllFeeds={() => void syncAllFeeds("manual sync")}
         onRefreshFeed={handleRefreshFeed}
         onDeleteFeed={handleDeleteFeed}
       />
@@ -375,6 +493,73 @@ function formatOpmlImportResult(result: OpmlImportResult) {
   }
 
   return `${parts.join(", ")}.`;
+}
+
+function readFeedSyncSettings(): FeedSyncSettings {
+  try {
+    const rawSettings = window.localStorage.getItem(feedSyncSettingsKey);
+    if (!rawSettings) {
+      return defaultFeedSyncSettings;
+    }
+
+    const parsedSettings = JSON.parse(rawSettings) as Partial<FeedSyncSettings>;
+    const mode = isFeedSyncMode(parsedSettings.mode)
+      ? parsedSettings.mode
+      : defaultFeedSyncSettings.mode;
+    const intervalMinutes =
+      typeof parsedSettings.intervalMinutes === "number" &&
+      [15, 30, 60, 120].includes(parsedSettings.intervalMinutes)
+        ? parsedSettings.intervalMinutes
+        : defaultFeedSyncSettings.intervalMinutes;
+
+    return { mode, intervalMinutes };
+  } catch {
+    return defaultFeedSyncSettings;
+  }
+}
+
+function writeFeedSyncSettings(settings: FeedSyncSettings) {
+  window.localStorage.setItem(feedSyncSettingsKey, JSON.stringify(settings));
+}
+
+function isFeedSyncMode(value: unknown): value is FeedSyncMode {
+  return value === "manual" || value === "launch" || value === "timer";
+}
+
+function formatFeedSyncStatus(feedCount: number, failedCount: number, completedAt: Date) {
+  if (failedCount > 0) {
+    return `${feedCount - failedCount}/${feedCount} synced`;
+  }
+
+  return `Synced ${formatClockTime(completedAt)}`;
+}
+
+function formatFeedSyncToast(
+  feedCount: number,
+  failedCount: number,
+  newArticleCount: number,
+  reason: string,
+) {
+  const parts = [
+    `Synced ${feedCount - failedCount}/${feedCount} feeds`,
+    `${newArticleCount} new articles`,
+  ];
+  if (failedCount > 0) {
+    parts.push(`${failedCount} failed`);
+  }
+
+  return `${parts.join(", ")} (${reason}).`;
+}
+
+function formatSyncInterval(minutes: number) {
+  return minutes >= 60 ? `${minutes / 60}h` : `${minutes}m`;
+}
+
+function formatClockTime(date: Date) {
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function escapeXml(value: string) {

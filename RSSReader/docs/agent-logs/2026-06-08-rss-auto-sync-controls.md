@@ -1,0 +1,24 @@
+# 2026-06-08 Agent 工作记录：RSS 源自动同步控制
+
+- 日期：2026-06-08
+- 负责人：Codex
+- 使用工具：Codex、PowerShell、apply_patch、npm.cmd
+- 对应 Issue / PR：未指定
+- 任务目标：在左下角增加 RSS 源同步控制，支持手动同步、打开软件同步和定时同步。
+- 关键 Prompt 摘要：用户要求实现 RSS 源自动同步，包括定时、打开软件、自行选择，并放在左下角。
+- Agent 修改内容摘要：
+  - 左侧 Feed 侧边栏底部新增 Sync 面板。
+  - 新增同步模式：Manual、On open、Timer。
+  - 新增定时间隔选择：15m、30m、1h、2h。
+  - 新增 Sync all 按钮，批量刷新所有 active feeds；保留 Selected 单源刷新。
+  - 同步设置保存到 `localStorage`，不新增数据库迁移。
+  - 批量同步复用现有 `refreshFeed` 服务，逐条同步，单个 Feed 失败不阻断后续 Feed。
+- 人工检查结果：待人工在桌面应用中确认左下角 Sync 面板布局、打开应用自动同步、定时同步和手动同步全部源；Browser 自动化连接失败，未完成视觉检查。
+- 是否运行测试：
+  - 已运行 `npm.cmd run build`，通过；沙箱内因 `tsconfig.tsbuildinfo` 写入 EPERM 失败一次，提升权限后通过，有既有 Vite chunk size warning。
+  - 已运行 `npm.cmd exec tsc -- --noEmit --incremental false`，通过。
+  - 已确认本机 `http://127.0.0.1:5173` 返回 200。
+- 未解决问题：
+  - 当前同步设置保存在前端本地 `localStorage`，还没有落到 SQLite。
+  - 批量同步是前端逐条串行调用，不是后端统一调度；应用关闭后不会后台同步。
+  - 尚未提供每个 Feed 的失败详情列表。
