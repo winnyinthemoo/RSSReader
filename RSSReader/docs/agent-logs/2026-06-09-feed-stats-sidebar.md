@@ -1,0 +1,22 @@
+# 2026-06-09 Agent 工作记录：左下角订阅源统计展示
+
+- 日期：2026-06-09
+- 负责人：Codex
+- 使用工具：Codex、PowerShell、apply_patch、npm.cmd、Browser 插件尝试
+- 对应 Issue / PR：未指定
+- 任务目标：在左下角增加订阅源统计展示，包括文章数、未读数和上次同步时间。
+- 关键 Prompt 摘要：用户要求在应用左下角增加订阅源统计展示，展示文章数、未读数和上次同步时间。
+- Agent 修改内容摘要：
+  - 在左侧 FeedSidebar 底部新增 Feed Stats 面板。
+  - 选中单个订阅源时展示该订阅源的文章数、未读数和上次同步时间。
+  - 未选中单个订阅源时展示所有 active 订阅源的汇总文章数、汇总未读数和最近同步时间。
+  - 复用现有 `FeedSummary.articleCount`、`FeedSummary.unreadCount`、`FeedSummary.lastFetchedAt` 字段，未新增后端 Command、数据库 migration 或数据访问逻辑。
+  - 新增浅色和当前 Apple 风格主题下的统计面板样式。
+- 人工检查结果：待人工在桌面应用或浏览器中确认左下角统计面板视觉效果；Browser 插件运行时在当前环境启动失败，未能完成截图检查。
+- 是否运行测试：
+  - 已运行 `npm.cmd run build`，通过。
+  - 首次普通沙箱构建因 `tsconfig.tsbuildinfo` 写入 EPERM 失败；提升权限重跑后通过。
+  - Vite 仍有既有 chunk size warning。
+- 未解决问题：
+  - Browser 插件连续两次启动失败，错误发生在浏览器运行时连接阶段，未完成自动化视觉验证。
+  - 统计面板的上次同步时间基于现有 `lastFetchedAt` 字段格式解析；当前后端主要返回 Unix 秒级字符串，也兼容 ISO 字符串。

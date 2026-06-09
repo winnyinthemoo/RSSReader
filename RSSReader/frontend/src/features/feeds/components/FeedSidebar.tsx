@@ -135,7 +135,11 @@ export function FeedSidebar({
   }
 
   const selectedFeedId = selection.type === "feed" ? selection.feedId : undefined;
+  const selectedFeed = selectedFeedId
+    ? feeds.find((feed) => feed.id === selectedFeedId)
+    : undefined;
   const totalUnread = feeds.reduce((total, feed) => total + feed.unreadCount, 0);
+  const feedStats = getFeedStats(feeds, selectedFeed);
   const addFeedDialog = isAddDialogOpen ? (
     <div className="modal-backdrop" role="presentation" onMouseDown={handleCloseDialog}>
       <form
@@ -398,7 +402,79 @@ export function FeedSidebar({
         </div>
       </div>
 
+      <div className="feed-stats-panel" aria-label="Feed statistics">
+        <div className="feed-stats-header">
+          <span className="feed-stats-title">Feed Stats</span>
+          <span className="feed-stats-scope" title={feedStats.scope}>
+            {feedStats.scope}
+          </span>
+        </div>
+        <div className="feed-stats-grid">
+          <span className="feed-stat-label">Articles</span>
+          <span className="feed-stat-value">{feedStats.articleCount}</span>
+          <span className="feed-stat-label">Unread</span>
+          <span className="feed-stat-value">{feedStats.unreadCount}</span>
+          <span className="feed-stat-label">Last Sync</span>
+          <span className="feed-stat-value">{formatLastFetchedAt(feedStats.lastFetchedAt)}</span>
+        </div>
+      </div>
+
       {addFeedDialog ? createPortal(addFeedDialog, document.body) : null}
     </aside>
   );
+}
+
+function getFeedStats(feeds: FeedSummary[], selectedFeed?: FeedSummary) {
+  if (selectedFeed) {
+    return {
+      scope: selectedFeed.title,
+      articleCount: selectedFeed.articleCount,
+      unreadCount: selectedFeed.unreadCount,
+      lastFetchedAt: selectedFeed.lastFetchedAt,
+    };
+  }
+
+  return {
+    scope: "All subscriptions",
+    articleCount: feeds.reduce((total, feed) => total + feed.articleCount, 0),
+    unreadCount: feeds.reduce((total, feed) => total + feed.unreadCount, 0),
+    lastFetchedAt: latestFetchedAt(feeds),
+  };
+}
+
+function latestFetchedAt(feeds: FeedSummary[]) {
+  const newest = feeds
+    .map((feed) => toFetchedAtDate(feed.lastFetchedAt))
+    .filter((date): date is Date => Boolean(date))
+    .sort((left, right) => right.getTime() - left.getTime())[0];
+
+  return newest?.toISOString();
+}
+
+function formatLastFetchedAt(value?: string) {
+  const date = toFetchedAtDate(value);
+  if (!date) {
+    return "Never";
+  }
+
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function toFetchedAtDate(value?: string) {
+  if (!value) {
+    return undefined;
+  }
+
+  const numericValue = Number(value);
+  const date =
+    Number.isFinite(numericValue) && value.trim() !== ""
+      ? new Date(numericValue * 1000)
+      : new Date(value);
+
+  return Number.isNaN(date.getTime()) ? undefined : date;
 }
