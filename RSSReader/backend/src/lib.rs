@@ -12,6 +12,6 @@ pub use feeds::{
     ArticleDetail, ArticleListFilter, ArticleListItem, ArticleListResult,
     ArticleMarkFavoriteRequest, ArticleMarkReadRequest, ArticleNote, ArticleNoteSaveRequest,
     ArticleTag, ArticleTagDeleteRequest, ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest,
-    FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedService,
-    FeedStatus, FeedSummary, FeedWithArticles, TagListResult, TagSummary,
+    FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedRenameRequest,
+    FeedService, FeedStatus, FeedSummary, FeedWithArticles, TagListResult, TagSummary,
 };

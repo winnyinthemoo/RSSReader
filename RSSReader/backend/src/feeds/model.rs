@@ -39,6 +39,13 @@ pub struct FeedDeleteRequest {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct FeedRenameRequest {
+    pub feed_id: String,
+    pub title: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FeedRefreshRequest {
     pub feed_id: String,
 }
@@ -72,6 +79,8 @@ pub struct ArticleListFilter {
     pub tag_ids: Vec<String>,
     #[serde(default)]
     pub tag_match: TagMatchMode,
+    #[serde(default)]
+    pub search_query: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

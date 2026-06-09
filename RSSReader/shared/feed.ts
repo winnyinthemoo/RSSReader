@@ -3,6 +3,8 @@ export type FeedStatus = "active" | "error";
 export interface FeedSummary {
   id: string;
   title: string;
+  sourceTitle?: string;
+  customTitle?: string;
   url: string;
   siteUrl?: string;
   description?: string;
@@ -20,6 +22,11 @@ export interface FeedAddRequest {
 
 export interface FeedDeleteRequest {
   feedId: string;
+}
+
+export interface FeedRenameRequest {
+  feedId: string;
+  title: string;
 }
 
 export interface FeedRefreshRequest {
@@ -43,6 +50,7 @@ export interface ArticleListFilter {
   tagId?: string;
   tagIds?: string[];
   tagMatch?: TagMatchMode;
+  searchQuery?: string;
 }
 
 export type TagMatchMode = "any" | "all";

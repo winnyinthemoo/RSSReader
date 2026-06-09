@@ -5,7 +5,6 @@ pub mod http;
 mod model;
 mod prompt;
 mod provider;
-mod runtime;
 mod secrets;
 mod service;
 mod summary;

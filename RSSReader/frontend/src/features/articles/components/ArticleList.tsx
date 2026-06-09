@@ -4,15 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   ArticleListItem,
   FeedSummary,
-  TagMatchMode,
   TagSummary,
 } from "../../../../../shared/feed";
-
-type SidebarSelection =
-  | { type: "all" }
-  | { type: "feed"; feedId: string }
-  | { type: "starred" }
-  | { type: "tag"; tagIds: string[]; tagMatch: TagMatchMode };
+import type { SidebarSelection } from "../../feeds/types";
 
 interface ArticleListProps {
   articles: ArticleListItem[];
@@ -20,6 +14,7 @@ interface ArticleListProps {
   tags: TagSummary[];
   selectedArticleId?: string;
   selection: SidebarSelection;
+  searchQuery?: string;
   onSelectArticle: (articleId: string) => void;
   onToggleFavorite: (articleId: string, isFavorite: boolean) => void;
 }
@@ -35,14 +30,16 @@ export function ArticleList({
   tags,
   selectedArticleId,
   selection,
+  searchQuery = "",
   onSelectArticle,
   onToggleFavorite,
 }: ArticleListProps) {
   const [filterType, setFilterType] = useState<"unread" | "read" | null>(null);
+  const normalizedSearchQuery = searchQuery.trim();
 
   useEffect(() => {
     setFilterType(null);
-  }, [selection]);
+  }, [selection, normalizedSearchQuery]);
 
   const title = getArticleListTitle(selection, feeds, tags);
   const { filteredArticles, readCount, unreadCount } = useMemo(() => {
@@ -73,9 +70,11 @@ export function ArticleList({
     <section className="article-list-pane">
       <div className="pane-header article-header">
         <div>
-          <p className="eyebrow">{selection.type === "starred" ? "Saved" : "Inbox"}</p>
+          <p className="eyebrow">
+            {normalizedSearchQuery ? "Search" : selection.type === "starred" ? "Saved" : "Inbox"}
+          </p>
           <div className="header-title-row">
-            <h2>{title}</h2>
+            <h2>{normalizedSearchQuery ? "Search results" : title}</h2>
             <div className="article-stats">
               <span
                 className={`unread-count-badge ${filterType === "unread" ? "active" : ""}`}
@@ -93,13 +92,27 @@ export function ArticleList({
               </span>
             </div>
           </div>
+          {normalizedSearchQuery ? (
+            <p className="article-search-context">
+              {articles.length} result{articles.length === 1 ? "" : "s"} in {title} for "
+              {normalizedSearchQuery}"
+            </p>
+          ) : null}
         </div>
       </div>
 
       <div className="article-list">
         {articles.length === 0 ? (
           <div className="empty-panel">
-            <p>No articles yet.</p>
+            <p>
+              {normalizedSearchQuery
+                ? `No articles found for "${normalizedSearchQuery}".`
+                : "No articles yet."}
+            </p>
+          </div>
+        ) : filteredArticles.length === 0 ? (
+          <div className="empty-panel">
+            <p>No articles match the current read filter.</p>
           </div>
         ) : (
           filteredArticles.map((article) => (

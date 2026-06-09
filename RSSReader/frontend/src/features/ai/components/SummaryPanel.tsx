@@ -62,7 +62,6 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
 
   useEffect(() => {
     requestTokenRef.current += 1;
-    setIsOpen(false);
     setContent("");
     setStatus("idle");
     setErrorMessage(undefined);

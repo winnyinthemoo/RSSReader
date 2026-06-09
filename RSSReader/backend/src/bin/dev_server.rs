@@ -6,7 +6,7 @@ use rssreader_backend::ai::http::try_handle as try_handle_ai;
 use rssreader_backend::feeds::{
     article_delete_tag, article_get, article_get_note, article_list, article_list_tags,
     article_mark_favorite, article_mark_read, article_save_note, article_save_tags, feed_add,
-    feed_delete, feed_list, feed_refresh, tag_delete, tag_list, tag_merge, tag_rename,
+    feed_delete, feed_list, feed_refresh, feed_rename, tag_delete, tag_list, tag_merge, tag_rename,
     ArticleDetail, ArticleListFilter, ArticleListItem, ArticleListResult, ArticleNote,
     ArticleTagsResult, FeedListResult, FeedRefreshResult, FeedStatus, FeedSummary,
     FeedWithArticles, TagListResult, TagMatchMode, TagSummary,
@@ -127,6 +127,24 @@ fn handle_connection(mut stream: TcpStream) {
             match feed_refresh(feed_id) {
                 Ok(result) => write_json(&mut stream, 200, &feed_refresh_json(&result)),
                 Err(message) => write_json(&mut stream, 404, &error_json(&message)),
+            }
+        }
+        ("POST", "/api/feeds/rename") => {
+            let Some(feed_id) = json_string_field(body, "feedId") else {
+                write_json(&mut stream, 400, &error_json("Missing feedId"));
+                return;
+            };
+            let Some(title) = json_string_field(body, "title") else {
+                write_json(&mut stream, 400, &error_json("Missing title"));
+                return;
+            };
+
+            match feed_rename(feed_id, title) {
+                Ok(result) => write_json(&mut stream, 200, &feed_list_json(&result)),
+                Err(message) => {
+                    let status = if message == "Feed not found" { 404 } else { 400 };
+                    write_json(&mut stream, status, &error_json(&message));
+                }
             }
         }
         ("POST", "/api/feeds/delete") => {
@@ -335,6 +353,7 @@ fn parse_article_filter(path: &str) -> ArticleListFilter {
                         TagMatchMode::Any
                     };
                 }
+                "searchQuery" if !value.is_empty() => filter.search_query = Some(url_decode(value)),
                 _ => {}
             }
         }
@@ -659,28 +678,35 @@ fn json_string_array_field(body: &str, field: &str) -> Vec<String> {
 }
 
 fn url_decode(value: &str) -> String {
-    let mut output = String::new();
-    let mut chars = value.chars();
+    let mut bytes = Vec::with_capacity(value.len());
+    let raw_bytes = value.as_bytes();
+    let mut index = 0;
 
-    while let Some(ch) = chars.next() {
-        if ch == '%' {
-            let high = chars.next();
-            let low = chars.next();
-            if let (Some(high), Some(low)) = (high, low) {
+    while index < raw_bytes.len() {
+        match raw_bytes[index] {
+            b'%' if index + 2 < raw_bytes.len() => {
+                let high = raw_bytes[index + 1] as char;
+                let low = raw_bytes[index + 2] as char;
                 if let Ok(byte) = u8::from_str_radix(&format!("{high}{low}"), 16) {
-                    output.push(byte as char);
+                    bytes.push(byte);
+                    index += 3;
                     continue;
                 }
+                bytes.push(raw_bytes[index]);
+                index += 1;
             }
-            output.push(ch);
-        } else if ch == '+' {
-            output.push(' ');
-        } else {
-            output.push(ch);
+            b'+' => {
+                bytes.push(b' ');
+                index += 1;
+            }
+            byte => {
+                bytes.push(byte);
+                index += 1;
+            }
         }
     }
 
-    output
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 /// Extract a single query parameter value from a path like "/path?key=value&..."
@@ -790,4 +816,22 @@ fn write_proxied_html(stream: &mut TcpStream, html: &str) {
     );
     let _ = stream.write_all(response.as_bytes());
     let _ = stream.write_all(body);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn url_decode_handles_utf8_query_values() {
+        assert_eq!(url_decode("%E4%B8%AD%E5%9B%BD+AI"), "中国 AI");
+    }
+
+    #[test]
+    fn parse_article_filter_reads_search_query() {
+        let filter = parse_article_filter("/api/articles?feedId=feed-1&searchQuery=AI+policy");
+
+        assert_eq!(filter.feed_id.as_deref(), Some("feed-1"));
+        assert_eq!(filter.search_query.as_deref(), Some("AI policy"));
+    }
 }

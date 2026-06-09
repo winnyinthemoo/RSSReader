@@ -1,0 +1,24 @@
+# 2026-06-09 Agent 工作记录：RSS 源重命名与删除
+
+- 日期：2026-06-09
+- 负责人：Codex
+- 使用工具：Codex、PowerShell、apply_patch、cargo、npm.cmd
+- 对应 Issue / PR：未指定
+- 任务目标：实现 RSS 源名称可编辑/可删除，并确保前端状态、后端 Command 和本地 dev server 行为一致。
+- 关键 Prompt 摘要：用户要求“实现rss源名称可编辑/可删除”。
+- Agent 修改内容摘要：
+  - 新增 `FeedRenameRequest` 共享契约，补齐前端 `renameFeed` service、App 状态同步和侧栏 Feed 列表编辑入口。
+  - 新增后端 `feed_rename` command、service 方法、repository 更新方法、Tauri command 和 `/api/feeds/rename` dev server 路由。
+  - 删除 RSS 源后重新拉取 feeds、tags、文章列表和收藏计数，避免 UI 保留已删除源的文章。
+  - 启用 SQLite foreign keys，让现有 schema 的级联删除规则生效。
+  - 调整 Feed 行编辑/删除按钮样式，hover/focus 时显示，并补充可访问性标签。
+  - 新增 service 单元测试覆盖重命名后 feed 列表和文章来源名使用自定义标题。
+- 人工检查结果：待人工在桌面应用或浏览器中确认编辑按钮、删除确认和状态刷新体验。
+- 是否运行测试：
+  - 已运行 `cargo check`，通过。
+  - 已运行 `cargo test`，通过；首次普通沙箱运行因 target 写入权限失败，提升权限重跑后通过。
+  - 已运行 `npm.cmd run build`，通过；Vite 仍有既有 chunk size warning。
+  - 已尝试 `cargo fmt`；`src-tauri` crate 格式化通过，`backend` crate 因 Windows 拒绝写入 `dev_server.rs` / `ai/http.rs` 未完成。
+- 未解决问题：
+  - 后端 `cargo fmt` 的文件写入权限问题需要在本机环境中确认文件锁或权限来源。
+  - Vite chunk size warning 仍存在，后续可用动态导入或 manualChunks 单独优化。

@@ -10,7 +10,7 @@ use super::resolver::AgentPromptKind;
 #[derive(Debug, Clone, Deserialize)]
 pub struct AgentPromptTemplate {
     #[serde(default)]
-    pub id: Option<String>,
+    _id: Option<String>,
     #[serde(deserialize_with = "deserialize_version")]
     pub version: u32,
     #[serde(default, alias = "systemTemplate")]
@@ -150,7 +150,7 @@ mod tests {
     #[test]
     fn translation_conditional_strips_empty_previous_context() {
         let template = AgentPromptTemplate {
-            id: None,
+            _id: None,
             version: 5,
             system_template: None,
             user_template:
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn translation_conditional_keeps_previous_context() {
         let template = AgentPromptTemplate {
-            id: None,
+            _id: None,
             version: 5,
             system_template: None,
             user_template: "{{#previousSourceText}}prev: {{previousSourceText}}\n{{/previousSourceText}}now: {{sourceText}}".to_string(),

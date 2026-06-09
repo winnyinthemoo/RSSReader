@@ -24,5 +24,5 @@
   - `frontend/src/App.tsx` 承担全局数据加载、同步策略、OPML、标签管理和文章状态更新，建议抽出 `useFeedsData`、`useArticleSelection`、`useFeedSync` 等 hooks。
   - `backend/src/feeds/repository.rs` 约 30KB，SQL 和 repository 方法集中度过高，建议按 feeds/articles/tags/notes 分 repository。
   - `backend/src/feeds/service.rs` 的 `refresh_feed` 对每篇文章逐个 `has_article` + `save_article`，并在末尾重新 count，文章多时写入开销会放大。建议改为事务内批量 upsert，并用 SQL 一次返回新增文章或先批量查询已有 id。
-  - `article_get` 会按需执行正文 enrichment，虽然在 Tauri 中部分命令已后台化，但读取文章时仍可能触发网络和 readability 计算，建议改成显式后台任务或缓存队列，避免点击文章时卡顿。
   - AI 相关模块已有多处 dead_code warning，建议单独清理未接入的 runtime/router/task_queue，避免后续维护成本继续上升。
+  - `article_get` 会按需执行正文 enrichment，虽然在 Tauri 中部分命令已后台化，但读取文章时仍可能触发网络和 readability 计算，建议改成显式后台任务或缓存队列，避免点击文章时卡顿。

@@ -69,6 +69,11 @@ async fn feed_refresh(feed_id: String) -> Result<FeedRefreshResult, String> {
 }
 
 #[tauri::command]
+fn feed_rename(feed_id: String, title: String) -> Result<FeedListResult, String> {
+    backend::feeds::feed_rename(feed_id, title)
+}
+
+#[tauri::command]
 fn feed_delete(feed_id: String) -> Result<(), String> {
     backend::feeds::feed_delete(feed_id)
 }
@@ -449,6 +454,7 @@ fn main() {
             tag_delete,
             feed_add,
             feed_refresh,
+            feed_rename,
             feed_delete,
             article_list,
             article_get,

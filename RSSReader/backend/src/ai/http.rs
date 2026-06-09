@@ -293,7 +293,3 @@ fn write_json_line<T: serde::Serialize>(stream: &mut TcpStream, value: &T) -> st
     Ok(())
 }
 
-#[allow(dead_code)]
-fn write_sse_chunk(stream: &mut impl Write, data: &str) {
-    let _ = writeln!(stream, "data: {data}\n");
-}

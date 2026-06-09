@@ -1,6 +1,6 @@
-use std::time::Duration;
+﻿use std::time::Duration;
 
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection};
 
 use crate::database::run_migrations;
 
@@ -8,6 +8,11 @@ use super::{
     ArticleDetail, ArticleListFilter, ArticleListItem, ArticleNote, ArticleTag, FeedStatus,
     FeedSummary, TagMatchMode, TagSummary,
 };
+
+mod articles;
+mod feeds;
+mod notes;
+mod tags;
 
 pub struct FeedRepository {
     connection: Connection,
@@ -29,624 +34,11 @@ impl FeedRepository {
         connection
             .busy_timeout(Duration::from_secs(5))
             .map_err(|error| error.to_string())?;
+        connection
+            .execute_batch("PRAGMA foreign_keys = ON;")
+            .map_err(|error| format!("Failed to enable foreign keys: {error}"))?;
         run_migrations(&connection)?;
         Ok(Self { connection })
-    }
-
-    pub fn save_feed(&self, feed: &FeedSummary) -> Result<(), String> {
-        let now = now_marker();
-        self.connection
-            .execute(
-                "INSERT INTO feeds (
-                    id, title, source_title, custom_title, url, site_url, description,
-                    status, error_message, last_fetched_at, created_at, updated_at
-                )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)
-                ON CONFLICT(id) DO UPDATE SET
-                    title = excluded.title,
-                    source_title = excluded.source_title,
-                    custom_title = excluded.custom_title,
-                    url = excluded.url,
-                    site_url = excluded.site_url,
-                    description = excluded.description,
-                    status = excluded.status,
-                    error_message = excluded.error_message,
-                    last_fetched_at = excluded.last_fetched_at,
-                    updated_at = excluded.updated_at",
-                params![
-                    feed.id,
-                    feed.title,
-                    feed.source_title,
-                    feed.custom_title,
-                    feed.url,
-                    feed.site_url,
-                    feed.description,
-                    feed_status_to_string(&feed.status),
-                    feed.error_message,
-                    feed.last_fetched_at,
-                    now,
-                ],
-            )
-            .map_err(|error| format!("Failed to save feed: {error}"))?;
-        Ok(())
-    }
-
-    pub fn save_article(&self, article: &ArticleDetail) -> Result<(), String> {
-        let now = now_marker();
-        self.connection
-            .execute(
-                "INSERT INTO articles (
-                    id, feed_id, title, url, author, published_at, excerpt,
-                    sanitized_html, is_read, is_favorite, created_at, updated_at
-                )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)
-                ON CONFLICT(id) DO UPDATE SET
-                    feed_id = excluded.feed_id,
-                    title = excluded.title,
-                    url = excluded.url,
-                    author = excluded.author,
-                    published_at = excluded.published_at,
-                    excerpt = excluded.excerpt,
-                    sanitized_html = excluded.sanitized_html,
-                    updated_at = excluded.updated_at",
-                params![
-                    article.id,
-                    article.feed_id,
-                    article.title,
-                    article.url,
-                    article.author,
-                    article.published_at,
-                    article.excerpt,
-                    article.sanitized_html,
-                    bool_to_i64(article.is_read),
-                    bool_to_i64(article.is_favorite),
-                    now,
-                ],
-            )
-            .map_err(|error| format!("Failed to save article: {error}"))?;
-        Ok(())
-    }
-
-    /// Update only the sanitized_html field (used for on-demand content enrichment).
-    pub fn update_article_content(
-        &self,
-        article_id: &str,
-        sanitized_html: &str,
-    ) -> Result<(), String> {
-        self.connection
-            .execute(
-                "UPDATE articles SET sanitized_html = ?1, updated_at = ?2 WHERE id = ?3",
-                params![sanitized_html, now_marker(), article_id],
-            )
-            .map_err(|error| format!("Failed to update article content: {error}"))?;
-        Ok(())
-    }
-
-    pub fn has_article(&self, article_id: &str) -> Result<bool, String> {
-        let count = self
-            .connection
-            .query_row(
-                "SELECT COUNT(*) FROM articles WHERE id = ?1",
-                params![article_id],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| format!("Failed to check article: {error}"))?;
-        Ok(count > 0)
-    }
-
-    pub fn list_feeds(&self) -> Result<Vec<FeedSummary>, String> {
-        let mut statement = self
-            .connection
-            .prepare(
-                "SELECT
-                    f.id,
-                    COALESCE(f.custom_title, f.source_title, f.title) AS title,
-                    f.source_title,
-                    f.custom_title,
-                    f.url,
-                    f.site_url,
-                    f.description,
-                    f.status,
-                    f.error_message,
-                    f.last_fetched_at,
-                    COUNT(a.id) AS article_count,
-                    COALESCE(SUM(CASE WHEN a.is_read = 0 THEN 1 ELSE 0 END), 0) AS unread_count
-                FROM feeds f
-                LEFT JOIN articles a ON a.feed_id = f.id
-                GROUP BY f.id
-                ORDER BY title COLLATE NOCASE ASC",
-            )
-            .map_err(|error| format!("Failed to list feeds: {error}"))?;
-
-        let feeds = statement
-            .query_map([], feed_from_row)
-            .map_err(|error| format!("Failed to list feeds: {error}"))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| format!("Failed to read feed row: {error}"))?;
-
-        Ok(feeds)
-    }
-
-    pub fn get_feed(&self, feed_id: &str) -> Result<Option<FeedSummary>, String> {
-        self.connection
-            .query_row(
-                "SELECT
-                    f.id,
-                    COALESCE(f.custom_title, f.source_title, f.title) AS title,
-                    f.source_title,
-                    f.custom_title,
-                    f.url,
-                    f.site_url,
-                    f.description,
-                    f.status,
-                    f.error_message,
-                    f.last_fetched_at,
-                    COUNT(a.id) AS article_count,
-                    COALESCE(SUM(CASE WHEN a.is_read = 0 THEN 1 ELSE 0 END), 0) AS unread_count
-                FROM feeds f
-                LEFT JOIN articles a ON a.feed_id = f.id
-                WHERE f.id = ?1
-                GROUP BY f.id",
-                params![feed_id],
-                feed_from_row,
-            )
-            .optional()
-            .map_err(|error| format!("Failed to get feed: {error}"))
-    }
-
-    pub fn get_feed_by_url(&self, url: &str) -> Result<Option<FeedSummary>, String> {
-        self.connection
-            .query_row(
-                "SELECT
-                    f.id,
-                    COALESCE(f.custom_title, f.source_title, f.title) AS title,
-                    f.source_title,
-                    f.custom_title,
-                    f.url,
-                    f.site_url,
-                    f.description,
-                    f.status,
-                    f.error_message,
-                    f.last_fetched_at,
-                    COUNT(a.id) AS article_count,
-                    COALESCE(SUM(CASE WHEN a.is_read = 0 THEN 1 ELSE 0 END), 0) AS unread_count
-                FROM feeds f
-                LEFT JOIN articles a ON a.feed_id = f.id
-                WHERE f.url = ?1
-                GROUP BY f.id",
-                params![url],
-                feed_from_row,
-            )
-            .optional()
-            .map_err(|error| format!("Failed to get feed by URL: {error}"))
-    }
-
-    pub fn list_articles(&self, filter: ArticleListFilter) -> Result<Vec<ArticleListItem>, String> {
-        let mut query = String::from(
-            "SELECT
-                a.id,
-                a.feed_id,
-                COALESCE(f.custom_title, f.source_title, f.title) AS feed_title,
-                a.title,
-                a.url,
-                a.author,
-                a.published_at,
-                a.excerpt,
-                a.is_read,
-                a.is_favorite
-            FROM articles a
-            JOIN feeds f ON f.id = a.feed_id",
-        );
-        let mut clauses = Vec::new();
-        let mut params = Vec::new();
-        if filter.feed_id.is_some() {
-            params.push(filter.feed_id.clone().unwrap_or_default());
-            clauses.push(format!("a.feed_id = ?{}", params.len()));
-        }
-        if filter.unread_only {
-            clauses.push("a.is_read = 0".to_string());
-        }
-        if filter.favorites_only {
-            clauses.push("a.is_favorite = 1".to_string());
-        }
-        let mut selected_tag_ids = if filter.tag_ids.is_empty() {
-            filter.tag_id.iter().cloned().collect::<Vec<_>>()
-        } else {
-            filter.tag_ids.clone()
-        };
-        selected_tag_ids.retain(|tag_id| !tag_id.trim().is_empty());
-        selected_tag_ids.sort();
-        selected_tag_ids.dedup();
-        if !selected_tag_ids.is_empty() {
-            let tag_count = selected_tag_ids.len();
-            let param_start = params.len();
-            let placeholders = selected_tag_ids
-                .iter()
-                .enumerate()
-                .map(|(index, _)| format!("?{}", param_start + index + 1))
-                .collect::<Vec<_>>()
-                .join(", ");
-            params.extend(selected_tag_ids.iter().cloned());
-            match filter.tag_match {
-                TagMatchMode::All => {
-                    clauses.push(format!(
-                        "a.id IN (
-                            SELECT at.article_id
-                            FROM article_tags at
-                            WHERE at.tag_id IN ({placeholders})
-                            GROUP BY at.article_id
-                            HAVING COUNT(DISTINCT at.tag_id) = {tag_count}
-                        )"
-                    ));
-                }
-                TagMatchMode::Any => {
-                    clauses.push(format!(
-                        "EXISTS (
-                            SELECT 1 FROM article_tags at
-                            WHERE at.article_id = a.id AND at.tag_id IN ({placeholders})
-                        )"
-                    ));
-                }
-            }
-        }
-        if !clauses.is_empty() {
-            query.push_str(" WHERE ");
-            query.push_str(&clauses.join(" AND "));
-        }
-        query.push_str(" ORDER BY COALESCE(a.published_at, a.created_at) DESC, a.created_at DESC");
-
-        let mut statement = self
-            .connection
-            .prepare(&query)
-            .map_err(|error| format!("Failed to list articles: {error}"))?;
-
-        let rows = if params.is_empty() {
-            statement
-                .query_map([], article_item_from_row)
-                .map_err(|error| format!("Failed to list articles: {error}"))?
-                .collect::<Result<Vec<_>, _>>()
-        } else {
-            statement
-                .query_map(
-                    rusqlite::params_from_iter(params.iter()),
-                    article_item_from_row,
-                )
-                .map_err(|error| format!("Failed to list articles: {error}"))?
-                .collect::<Result<Vec<_>, _>>()
-        };
-
-        rows.map_err(|error| format!("Failed to read article row: {error}"))
-    }
-
-    pub fn get_article(&self, article_id: &str) -> Result<Option<ArticleDetail>, String> {
-        self.connection
-            .query_row(
-                "SELECT
-                    a.id,
-                    a.feed_id,
-                    COALESCE(f.custom_title, f.source_title, f.title) AS feed_title,
-                    a.title,
-                    a.url,
-                    a.author,
-                    a.published_at,
-                    a.excerpt,
-                    a.is_read,
-                    a.is_favorite,
-                    a.sanitized_html
-                FROM articles a
-                JOIN feeds f ON f.id = a.feed_id
-                WHERE a.id = ?1",
-                params![article_id],
-                article_detail_from_row,
-            )
-            .optional()
-            .map_err(|error| format!("Failed to get article: {error}"))
-    }
-
-    pub fn mark_article_read(&self, article_id: &str, is_read: bool) -> Result<(), String> {
-        let updated = self
-            .connection
-            .execute(
-                "UPDATE articles SET is_read = ?1, updated_at = ?2 WHERE id = ?3",
-                params![bool_to_i64(is_read), now_marker(), article_id],
-            )
-            .map_err(|error| format!("Failed to mark article read: {error}"))?;
-
-        if updated == 0 {
-            return Err("Article not found".to_string());
-        }
-
-        Ok(())
-    }
-
-    pub fn mark_article_favorite(&self, article_id: &str, is_favorite: bool) -> Result<(), String> {
-        let updated = self
-            .connection
-            .execute(
-                "UPDATE articles SET is_favorite = ?1, updated_at = ?2 WHERE id = ?3",
-                params![bool_to_i64(is_favorite), now_marker(), article_id],
-            )
-            .map_err(|error| format!("Failed to update starred article: {error}"))?;
-
-        if updated == 0 {
-            return Err("Article not found".to_string());
-        }
-
-        Ok(())
-    }
-
-    pub fn list_tags(&self) -> Result<Vec<TagSummary>, String> {
-        let mut statement = self
-            .connection
-            .prepare(
-                "SELECT
-                    t.id,
-                    t.name,
-                    COUNT(at.article_id) AS article_count
-                FROM tags t
-                LEFT JOIN article_tags at ON at.tag_id = t.id
-                GROUP BY t.id
-                ORDER BY t.name COLLATE NOCASE ASC",
-            )
-            .map_err(|error| format!("Failed to list tags: {error}"))?;
-
-        let tags = statement
-            .query_map([], tag_summary_from_row)
-            .map_err(|error| format!("Failed to list tags: {error}"))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| format!("Failed to read tag row: {error}"))?;
-
-        Ok(tags)
-    }
-
-    pub fn list_article_tags(&self, article_id: &str) -> Result<Vec<ArticleTag>, String> {
-        let mut statement = self
-            .connection
-            .prepare(
-                "SELECT t.id, t.name, at.source
-                FROM article_tags at
-                JOIN tags t ON t.id = at.tag_id
-                WHERE at.article_id = ?1
-                ORDER BY t.name COLLATE NOCASE ASC",
-            )
-            .map_err(|error| format!("Failed to list article tags: {error}"))?;
-
-        let tags = statement
-            .query_map(params![article_id], article_tag_from_row)
-            .map_err(|error| format!("Failed to list article tags: {error}"))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| format!("Failed to read article tag row: {error}"))?;
-
-        Ok(tags)
-    }
-
-    pub fn save_article_tag(
-        &self,
-        article_id: &str,
-        display_name: &str,
-        normalized_name: &str,
-        source: &str,
-    ) -> Result<(), String> {
-        let now = now_marker();
-        let tag_id: String = if let Some(existing) = self
-            .connection
-            .query_row(
-                "SELECT id FROM tags WHERE normalized_name = ?1",
-                params![normalized_name],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(|error| format!("Failed to find tag: {error}"))?
-        {
-            existing
-        } else {
-            let id = format!("tag-{}", uuid_like_id(display_name));
-            self.connection
-                .execute(
-                    "INSERT INTO tags (id, name, normalized_name, usage_count, created_at)
-                    VALUES (?1, ?2, ?3, 0, ?4)",
-                    params![id, display_name, normalized_name, now],
-                )
-                .map_err(|error| format!("Failed to create tag: {error}"))?;
-            id
-        };
-
-        let inserted = self
-            .connection
-            .execute(
-                "INSERT OR IGNORE INTO article_tags (article_id, tag_id, source, created_at)
-                VALUES (?1, ?2, ?3, ?4)",
-                params![article_id, tag_id, source, now],
-            )
-            .map_err(|error| format!("Failed to save article tag: {error}"))?;
-
-        if inserted > 0 {
-            self.connection
-                .execute(
-                    "UPDATE tags SET usage_count = usage_count + 1 WHERE id = ?1",
-                    params![tag_id],
-                )
-                .map_err(|error| format!("Failed to update tag usage: {error}"))?;
-        }
-
-        Ok(())
-    }
-
-    pub fn delete_article_tag(&self, article_id: &str, tag_id: &str) -> Result<(), String> {
-        let deleted = self
-            .connection
-            .execute(
-                "DELETE FROM article_tags WHERE article_id = ?1 AND tag_id = ?2",
-                params![article_id, tag_id],
-            )
-            .map_err(|error| format!("Failed to delete article tag: {error}"))?;
-
-        if deleted > 0 {
-            self.connection
-                .execute(
-                    "UPDATE tags SET usage_count = MAX(usage_count - 1, 0) WHERE id = ?1",
-                    params![tag_id],
-                )
-                .map_err(|error| format!("Failed to update tag usage: {error}"))?;
-        }
-
-        Ok(())
-    }
-
-    pub fn rename_tag(
-        &self,
-        tag_id: &str,
-        display_name: &str,
-        normalized_name: &str,
-    ) -> Result<(), String> {
-        let updated = self
-            .connection
-            .execute(
-                "UPDATE tags SET name = ?1, normalized_name = ?2 WHERE id = ?3",
-                params![display_name, normalized_name, tag_id],
-            )
-            .map_err(|error| format!("Failed to rename tag: {error}"))?;
-
-        if updated == 0 {
-            return Err("Tag not found".to_string());
-        }
-
-        Ok(())
-    }
-
-    pub fn merge_tags(&self, source_tag_id: &str, target_tag_id: &str) -> Result<(), String> {
-        if source_tag_id == target_tag_id {
-            return Err("Cannot merge a tag into itself".to_string());
-        }
-
-        let source_exists = self.tag_exists(source_tag_id)?;
-        let target_exists = self.tag_exists(target_tag_id)?;
-        if !source_exists || !target_exists {
-            return Err("Tag not found".to_string());
-        }
-
-        self.connection
-            .execute(
-                "INSERT OR IGNORE INTO article_tags (article_id, tag_id, source, created_at)
-                SELECT article_id, ?1, source, created_at
-                FROM article_tags
-                WHERE tag_id = ?2",
-                params![target_tag_id, source_tag_id],
-            )
-            .map_err(|error| format!("Failed to merge tag assignments: {error}"))?;
-
-        self.connection
-            .execute("DELETE FROM tags WHERE id = ?1", params![source_tag_id])
-            .map_err(|error| format!("Failed to delete merged tag: {error}"))?;
-        self.refresh_tag_usage(target_tag_id)?;
-
-        Ok(())
-    }
-
-    pub fn delete_tag(&self, tag_id: &str) -> Result<(), String> {
-        let deleted = self
-            .connection
-            .execute("DELETE FROM tags WHERE id = ?1", params![tag_id])
-            .map_err(|error| format!("Failed to delete tag: {error}"))?;
-
-        if deleted == 0 {
-            return Err("Tag not found".to_string());
-        }
-
-        Ok(())
-    }
-
-    pub fn get_article_note(&self, article_id: &str) -> Result<Option<ArticleNote>, String> {
-        self.connection
-            .query_row(
-                "SELECT article_id, content, created_at, updated_at
-                FROM article_notes
-                WHERE article_id = ?1",
-                params![article_id],
-                article_note_from_row,
-            )
-            .optional()
-            .map_err(|error| format!("Failed to get article note: {error}"))
-    }
-
-    pub fn save_article_note(
-        &self,
-        article_id: &str,
-        content: &str,
-    ) -> Result<ArticleNote, String> {
-        let now = now_marker();
-        self.connection
-            .execute(
-                "INSERT INTO article_notes (article_id, content, created_at, updated_at)
-                VALUES (?1, ?2, ?3, ?3)
-                ON CONFLICT(article_id) DO UPDATE SET
-                    content = excluded.content,
-                    updated_at = excluded.updated_at",
-                params![article_id, content, now],
-            )
-            .map_err(|error| format!("Failed to save article note: {error}"))?;
-
-        self.get_article_note(article_id)?
-            .ok_or_else(|| "Article note not found after save".to_string())
-    }
-
-    pub fn count_articles_for_feed(&self, feed_id: &str) -> Result<usize, String> {
-        count_for_feed(&self.connection, "COUNT(*)", feed_id)
-    }
-
-    pub fn count_unread_for_feed(&self, feed_id: &str) -> Result<usize, String> {
-        count_for_feed(&self.connection, "COUNT(*)", feed_id).and_then(|_| {
-            self.connection
-                .query_row(
-                    "SELECT COUNT(*) FROM articles WHERE feed_id = ?1 AND is_read = 0",
-                    params![feed_id],
-                    |row| row.get::<_, i64>(0),
-                )
-                .map(|count| count as usize)
-                .map_err(|error| format!("Failed to count unread articles: {error}"))
-        })
-    }
-
-    pub fn delete_feed(&self, feed_id: &str) -> Result<(), String> {
-        self.connection
-            .execute("DELETE FROM articles WHERE feed_id = ?1", params![feed_id])
-            .map_err(|error| format!("Failed to delete articles: {error}"))?;
-
-        let deleted = self
-            .connection
-            .execute("DELETE FROM feeds WHERE id = ?1", params![feed_id])
-            .map_err(|error| format!("Failed to delete feed: {error}"))?;
-
-        if deleted == 0 {
-            return Err("Feed not found".to_string());
-        }
-
-        Ok(())
-    }
-
-    fn tag_exists(&self, tag_id: &str) -> Result<bool, String> {
-        self.connection
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM tags WHERE id = ?1)",
-                params![tag_id],
-                |row| row.get::<_, i64>(0),
-            )
-            .map(|exists| exists != 0)
-            .map_err(|error| format!("Failed to check tag: {error}"))
-    }
-
-    fn refresh_tag_usage(&self, tag_id: &str) -> Result<(), String> {
-        self.connection
-            .execute(
-                "UPDATE tags
-                SET usage_count = (
-                    SELECT COUNT(*) FROM article_tags WHERE tag_id = ?1
-                )
-                WHERE id = ?1",
-                params![tag_id],
-            )
-            .map(|_| ())
-            .map_err(|error| format!("Failed to refresh tag usage: {error}"))
     }
 }
 
@@ -758,6 +150,28 @@ fn bool_to_i64(value: bool) -> i64 {
     }
 }
 
+fn normalized_search_query(value: &Option<String>) -> Option<String> {
+    value
+        .as_deref()
+        .map(str::trim)
+        .filter(|query| !query.is_empty())
+        .map(str::to_string)
+}
+
+fn escape_like(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '\\' | '%' | '_' => {
+                escaped.push('\\');
+                escaped.push(ch);
+            }
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
 fn now_marker() -> String {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -810,12 +224,12 @@ mod tests {
     fn save_feed_returns_custom_title_after_source_title_update() {
         let repository = FeedRepository::open_in_memory().expect("repository opens");
         repository
-            .save_feed(&sample_feed(Some("ai科技")))
+            .save_feed(&sample_feed(Some("ai绉戞妧")))
             .expect("custom feed saves");
 
-        let mut refreshed = sample_feed(Some("ai科技"));
+        let mut refreshed = sample_feed(Some("ai绉戞妧"));
         refreshed.source_title = Some("Bloomberg AI".to_string());
-        refreshed.title = "ai科技".to_string();
+        refreshed.title = "ai绉戞妧".to_string();
         repository
             .save_feed(&refreshed)
             .expect("refreshed feed saves");
@@ -825,8 +239,8 @@ mod tests {
             .expect("feed query succeeds")
             .expect("feed exists");
 
-        assert_eq!(feed.title, "ai科技");
-        assert_eq!(feed.custom_title.as_deref(), Some("ai科技"));
+        assert_eq!(feed.title, "ai绉戞妧");
+        assert_eq!(feed.custom_title.as_deref(), Some("ai绉戞妧"));
         assert_eq!(feed.source_title.as_deref(), Some("Bloomberg AI"));
     }
 }

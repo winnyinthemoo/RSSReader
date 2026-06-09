@@ -2,9 +2,9 @@ use super::{
     fetch_and_parse_feed, ArticleDetail, ArticleListFilter, ArticleListItem,
     ArticleMarkFavoriteRequest, ArticleMarkReadRequest, ArticleNote, ArticleNoteSaveRequest,
     ArticleTagDeleteRequest, ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest,
-    FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedRepository,
-    FeedStatus, FeedWithArticles, TagDeleteRequest, TagListResult, TagMergeRequest,
-    TagRenameRequest,
+    FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedRenameRequest,
+    FeedRepository, FeedStatus, FeedWithArticles, TagDeleteRequest, TagListResult,
+    TagMergeRequest, TagRenameRequest,
 };
 
 pub struct FeedService {
@@ -101,8 +101,6 @@ impl FeedService {
                 return Err(error);
             }
         };
-        let mut new_articles = Vec::new();
-
         feed.source_title = parsed.feed.source_title.or(Some(parsed.feed.title));
         feed.title = feed
             .custom_title
@@ -116,17 +114,13 @@ impl FeedService {
         feed.error_message = None;
         self.repository.save_feed(&feed)?;
 
-        for article in &parsed.articles {
-            if !self.repository.has_article(&article.id)? {
-                let mut item = article.list_item();
-                item.feed_title = feed.title.clone();
-                new_articles.push(item);
-                self.repository.save_article(article)?;
-            }
-        }
+        let new_articles = self
+            .repository
+            .save_articles_for_refresh(&feed.title, &parsed.articles)?;
 
-        feed.article_count = self.repository.count_articles_for_feed(&feed.id)?;
-        feed.unread_count = self.repository.count_unread_for_feed(&feed.id)?;
+        let (article_count, unread_count) = self.repository.feed_article_counts(&feed.id)?;
+        feed.article_count = article_count;
+        feed.unread_count = unread_count;
         self.repository.save_feed(&feed)?;
 
         Ok(FeedRefreshResult { feed, new_articles })
@@ -242,6 +236,16 @@ impl FeedService {
     pub fn delete_feed(&mut self, request: FeedDeleteRequest) -> Result<(), String> {
         self.repository.delete_feed(&request.feed_id)
     }
+
+    pub fn rename_feed(&mut self, request: FeedRenameRequest) -> Result<FeedListResult, String> {
+        let title = request.title.trim();
+        if title.is_empty() {
+            return Err("Feed name cannot be empty".to_string());
+        }
+
+        self.repository.rename_feed(&request.feed_id, title)?;
+        Ok(self.list_feeds())
+    }
 }
 
 fn normalize_feed_url(url: &str) -> Result<String, String> {
@@ -272,6 +276,7 @@ fn now_marker() -> String {
 mod tests {
     use super::*;
     use crate::feeds::parse_feed_bytes;
+    use crate::feeds::FeedSummary;
     use crate::feeds::TagMatchMode;
 
     fn service_with_sample_feed() -> FeedService {
@@ -343,6 +348,32 @@ mod tests {
 
         let feeds = service.list_feeds().feeds;
         assert_eq!(feeds[0].unread_count, 0);
+    }
+
+    #[test]
+    fn rename_feed_uses_custom_title_in_feeds_and_articles() {
+        let mut service = service_with_sample_feed();
+        let feed_id = service.list_feeds().feeds[0].id.clone();
+
+        let result = service
+            .rename_feed(FeedRenameRequest {
+                feed_id: feed_id.clone(),
+                title: "Daily Briefing".to_string(),
+            })
+            .expect("feed renames");
+        let feed = service
+            .repository
+            .get_feed(&feed_id)
+            .expect("feed query succeeds")
+            .expect("feed exists");
+        let articles = service.list_articles(ArticleListFilter {
+            feed_id: Some(feed_id),
+            ..Default::default()
+        });
+
+        assert_eq!(result.feeds[0].title, "Daily Briefing");
+        assert_eq!(feed.custom_title.as_deref(), Some("Daily Briefing"));
+        assert_eq!(articles[0].feed_title, "Daily Briefing");
     }
 
     #[test]
@@ -427,5 +458,76 @@ mod tests {
         assert_eq!(any_articles.len(), 2);
         assert_eq!(all_articles.len(), 1);
         assert_eq!(all_articles[0].title, "Rust Article");
+    }
+
+    #[test]
+    fn list_articles_filters_by_search_query_fields() {
+        let repository = FeedRepository::open_in_memory().expect("repository opens");
+        let feed = FeedSummary {
+            id: "feed-search".to_string(),
+            title: "Search Feed".to_string(),
+            source_title: Some("Search Feed".to_string()),
+            custom_title: None,
+            url: "https://example.com/search.xml".to_string(),
+            site_url: Some("https://example.com".to_string()),
+            description: None,
+            unread_count: 0,
+            article_count: 0,
+            last_fetched_at: Some("1".to_string()),
+            status: FeedStatus::Active,
+            error_message: None,
+        };
+        repository.save_feed(&feed).expect("feed saves");
+        repository
+            .save_article(&ArticleDetail {
+                id: "article-rust".to_string(),
+                feed_id: feed.id.clone(),
+                feed_title: feed.title.clone(),
+                title: "Rust release notes".to_string(),
+                url: "https://example.com/rust".to_string(),
+                author: Some("Ferris Author".to_string()),
+                published_at: Some("2026-06-09T00:00:00Z".to_string()),
+                excerpt: "Compiler highlights".to_string(),
+                is_read: false,
+                is_favorite: false,
+                sanitized_html: "<p>Borrow checker improvements</p>".to_string(),
+            })
+            .expect("rust article saves");
+        repository
+            .save_article(&ArticleDetail {
+                id: "article-ai".to_string(),
+                feed_id: feed.id.clone(),
+                feed_title: feed.title.clone(),
+                title: "AI market recap".to_string(),
+                url: "https://example.com/ai".to_string(),
+                author: Some("Market Desk".to_string()),
+                published_at: Some("2026-06-08T00:00:00Z".to_string()),
+                excerpt: "Daily summary".to_string(),
+                is_read: false,
+                is_favorite: false,
+                sanitized_html: "<p>Semiconductor demand and cloud capex</p>".to_string(),
+            })
+            .expect("ai article saves");
+
+        let service = FeedService::with_repository(repository);
+        let title_matches = service.list_articles(ArticleListFilter {
+            search_query: Some("rust".to_string()),
+            ..Default::default()
+        });
+        let author_matches = service.list_articles(ArticleListFilter {
+            search_query: Some("ferris".to_string()),
+            ..Default::default()
+        });
+        let content_matches = service.list_articles(ArticleListFilter {
+            search_query: Some("cloud capex".to_string()),
+            ..Default::default()
+        });
+
+        assert_eq!(title_matches.len(), 1);
+        assert_eq!(title_matches[0].id, "article-rust");
+        assert_eq!(author_matches.len(), 1);
+        assert_eq!(author_matches[0].id, "article-rust");
+        assert_eq!(content_matches.len(), 1);
+        assert_eq!(content_matches[0].id, "article-ai");
     }
 }

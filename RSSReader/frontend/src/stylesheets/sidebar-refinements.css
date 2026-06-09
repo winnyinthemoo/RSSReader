@@ -1,0 +1,129 @@
+﻿/* ========== 宸︿晶鏍忎紭鍖?========== */
+
+/* 鍒嗗壊绾?- 鍑忓皬涓婁笅杈硅窛 */
+.sidebar-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 0px 0 0px 0;  /* 鍘熸潵鏄?16px 0 */
+}
+
+/* FEEDS 鏍囬 - 鍑忓皯涓婅竟璺?*/
+.feeds-header {
+  margin: 0px 0 4px 0;  /* 鍘熸潵鏄?8px 0 12px 0锛屾敼灏忎簡 */
+}
+
+.feeds-header span {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #9ca3af;
+  letter-spacing: 0.5px;
+}
+
+/* 鑷畾涔?Feed 鍥炬爣 */
+.feed-icon-custom {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: white;
+  background: #3b82f6;
+  flex-shrink: 0;
+}
+
+/* 涓轰笉鍚岀殑 Feed 璁剧疆涓嶅悓棰滆壊锛堝彲浠ユ寜闇€璋冩暣锛?*/
+.feed-item-row:nth-child(1) .feed-icon-custom { background: #1f2937; }
+.feed-item-row:nth-child(2) .feed-icon-custom { background: #10b981; }
+.feed-item-row:nth-child(3) .feed-icon-custom { background: #8b5cf6; }
+.feed-item-row:nth-child(4) .feed-icon-custom { background: #f97316; }
+.feed-item-row:nth-child(4) .feed-icon-custom { 
+  background: #f97316;
+  font-size: 1rem;
+}
+.feed-item-row:nth-child(4) .feed-icon-custom::before {
+  content: "";
+  font-size: 1.2rem;
+}
+
+/* 搴曢儴鎶樺彔鎸夐挳 */
+.more-feeds-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 12px;
+  margin-top: 0px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.more-feeds-button:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+
+/* 涓棿鏍忓ご閮ㄥ竷灞€ */
+.header-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.header-title-row h2 {
+  margin: 0;
+  flex: 1;
+}
+
+/* 璁╂寜閽潬鍙筹紝骞舵帶鍒剁鍙宠竟妗嗙殑璺濈 */
+.article-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;     /* 鎺ㄥ埌鍙宠竟 */
+  margin-right: 8px;
+}
+
+.unread-count-badge {
+  background: #3b82f6;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.80rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.read-count-badge {
+  background: #e5e7eb;
+  color: #6b7280;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.80rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Unread 楂樹寒 */
+.unread-count-badge.active {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  background: #3b82f6 !important;
+  color: white !important;
+}
+
+/* Read 楂樹寒 */
+.read-count-badge.active {
+  outline: 2px solid #6b7280;
+  outline-offset: 2px;
+  background: #6b7280 !important;
+  color: white !important;
+}

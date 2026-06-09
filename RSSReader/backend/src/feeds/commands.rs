@@ -4,8 +4,8 @@ use super::{
     ArticleDetail, ArticleListFilter, ArticleListResult, ArticleMarkFavoriteRequest,
     ArticleMarkReadRequest, ArticleNote, ArticleNoteSaveRequest, ArticleTagDeleteRequest,
     ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest, FeedDeleteRequest, FeedListResult,
-    FeedRefreshRequest, FeedRefreshResult, FeedService, FeedWithArticles, TagDeleteRequest,
-    TagListResult, TagMergeRequest, TagRenameRequest,
+    FeedRefreshRequest, FeedRefreshResult, FeedRenameRequest, FeedService, FeedWithArticles,
+    TagDeleteRequest, TagListResult, TagMergeRequest, TagRenameRequest,
 };
 
 static FEED_SERVICE: OnceLock<Mutex<FeedService>> = OnceLock::new();
@@ -24,6 +24,10 @@ pub fn feed_refresh(feed_id: String) -> Result<FeedRefreshResult, String> {
 
 pub fn feed_delete(feed_id: String) -> Result<(), String> {
     with_service(|service| service.delete_feed(FeedDeleteRequest { feed_id }))
+}
+
+pub fn feed_rename(feed_id: String, title: String) -> Result<FeedListResult, String> {
+    with_service(|service| service.rename_feed(FeedRenameRequest { feed_id, title }))
 }
 
 pub fn article_list(filter: ArticleListFilter) -> ArticleListResult {

@@ -226,9 +226,6 @@ impl TranslationService {
         Ok(final_view)
     }
 
-    pub fn retry_segment(&self, _segment_id: &str) -> AiResult<TranslationView> {
-        Err(AiError::NotImplemented("translation segment retry"))
-    }
 }
 
 fn translate_selection(

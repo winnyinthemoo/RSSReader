@@ -14,6 +14,7 @@ import type {
   FeedAddRequest,
   FeedDeleteRequest,
   FeedListResult,
+  FeedRenameRequest,
   FeedRefreshRequest,
   FeedRefreshResult,
   FeedWithArticles,
@@ -158,6 +159,21 @@ export async function deleteFeed(request: FeedDeleteRequest): Promise<void> {
   });
 }
 
+export async function renameFeed(request: FeedRenameRequest): Promise<FeedListResult> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<FeedListResult>("feed_rename", {
+      feedId: request.feedId,
+      title: request.title,
+    });
+  }
+
+  return requestJson<FeedListResult>("/api/feeds/rename", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
 export async function listArticles(filter: ArticleListFilter = {}): Promise<ArticleListResult> {
   const invoke = getInvoke();
   if (invoke) {
@@ -184,6 +200,9 @@ export async function listArticles(filter: ArticleListFilter = {}): Promise<Arti
   }
   if (filter.tagMatch) {
     params.set("tagMatch", filter.tagMatch);
+  }
+  if (filter.searchQuery?.trim()) {
+    params.set("searchQuery", filter.searchQuery.trim());
   }
 
   const query = params.toString();

@@ -142,14 +142,6 @@ impl AiProviderService {
         client.ping(&model_name)
     }
 
-    pub fn openai_client_for_agent(
-        &self,
-        agent_type: AgentType,
-    ) -> AiResult<(OpenAiCompatClient, String, Option<String>)> {
-        let route = self.openai_agent_client(agent_type)?;
-        Ok((route.client, route.model_name, route.model_id))
-    }
-
     pub fn openai_agent_client(&self, agent_type: AgentType) -> AiResult<AgentClient> {
         let settings = self.get_agent_settings(agent_type)?;
         let model_id = settings

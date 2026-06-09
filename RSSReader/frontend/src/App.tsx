@@ -2,18 +2,31 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   ArticleDetail,
-  ArticleListFilter,
   ArticleListItem,
   FeedAddRequest,
   FeedSummary,
-  OpmlImportResult,
   TagMatchMode,
   TagSummary,
 } from "../../shared/feed";
 import { ArticleList } from "./features/articles/components/ArticleList";
-import { FeedSidebar, type FeedSyncMode } from "./features/feeds/components/FeedSidebar";
+import { FeedSidebar } from "./features/feeds/components/FeedSidebar";
 import { AiSettingsPage } from "./features/ai/components/AiSettingsPage";
 import { ReaderView } from "./features/reader/components/ReaderView";
+import { useFeedSyncSettings } from "./features/feeds/hooks/useFeedSyncSettings";
+import type { FeedSyncMode, SidebarMode, SidebarSelection } from "./features/feeds/types";
+import { buildArticleFilter } from "./features/feeds/utils/articleFilters";
+import { buildFeedsOpmlExport, formatOpmlImportResult } from "./features/feeds/utils/opml";
+import {
+  reconcileSelectionAfterTagMerge,
+  reconcileSelectionAfterTagRemoval,
+  upsertFeed,
+} from "./features/feeds/utils/selection";
+import {
+  formatClockTime,
+  formatFeedSyncStatus,
+  formatFeedSyncToast,
+  formatSyncInterval,
+} from "./features/feeds/utils/syncText";
 import {
   addFeed,
   deleteTag,
@@ -27,26 +40,11 @@ import {
   markArticleFavorite,
   markArticleRead,
   mergeTags,
+  renameFeed,
   renameTag,
   refreshFeed,
 } from "./services/feedService";
-
-type SidebarMode = "feeds" | "tags";
-type SidebarSelection =
-  | { type: "all" }
-  | { type: "feed"; feedId: string }
-  | { type: "starred" }
-  | { type: "tag"; tagIds: string[]; tagMatch: TagMatchMode };
-interface FeedSyncSettings {
-  mode: FeedSyncMode;
-  intervalMinutes: number;
-}
-
-const feedSyncSettingsKey = "vortex.feedSyncSettings";
-const defaultFeedSyncSettings: FeedSyncSettings = {
-  mode: "manual",
-  intervalMinutes: 30,
-};
+import { getErrorMessage } from "./utils/errors";
 
 export default function App() {
   const [feeds, setFeeds] = useState<FeedSummary[]>([]);
@@ -58,21 +56,23 @@ export default function App() {
   const [selectedArticle, setSelectedArticle] = useState<ArticleDetail | undefined>();
   const [selectedArticleId, setSelectedArticleId] = useState<string | undefined>();
   const [isArticleLoading, setIsArticleLoading] = useState(false);
+  const [articleSearchInput, setArticleSearchInput] = useState("");
+  const [articleSearchQuery, setArticleSearchQuery] = useState("");
+  const [isArticleSearchComposing, setIsArticleSearchComposing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [isAdding, setIsAdding] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
-  const [syncSettings, setSyncSettings] = useState<FeedSyncSettings>(() =>
-    readFeedSyncSettings(),
-  );
+  const [syncSettings, setSyncSettings] = useFeedSyncSettings();
   const [lastSyncAt, setLastSyncAt] = useState<Date | undefined>();
   const [syncStatusText, setSyncStatusText] = useState("Ready");
   const [showAiSettings, setShowAiSettings] = useState(false);
   const [readerTheme, setReaderTheme] = useState("white");
   const launchSyncStartedRef = useRef(false);
   const initialArticlesLoadedRef = useRef(false);
+  const articleListRequestTokenRef = useRef(0);
   const articleSelectionTokenRef = useRef(0);
 
   const activeFeeds = useMemo(
@@ -90,12 +90,20 @@ export default function App() {
       return;
     }
 
-    void loadArticles(selection);
-  }, [selection]);
+    void loadArticles(selection, articleSearchQuery);
+  }, [selection, articleSearchQuery]);
 
   useEffect(() => {
-    writeFeedSyncSettings(syncSettings);
-  }, [syncSettings]);
+    if (isArticleSearchComposing) {
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      setArticleSearchQuery(articleSearchInput);
+    }, 450);
+
+    return () => window.clearTimeout(timerId);
+  }, [articleSearchInput, isArticleSearchComposing]);
 
   useEffect(() => {
     if (
@@ -139,7 +147,7 @@ export default function App() {
 
   async function loadFeedsTagsAndArticles() {
     try {
-      const filter = filterFromSelection(selection);
+      const filter = buildArticleFilter(selection, articleSearchQuery);
       const [feedResult, tagResult, articleResult, starredResult] = await Promise.all([
         listFeeds(),
         listTags(),
@@ -161,9 +169,14 @@ export default function App() {
     }
   }
 
-  async function loadArticles(nextSelection: SidebarSelection) {
+  async function loadArticles(nextSelection: SidebarSelection, nextSearchQuery = articleSearchQuery) {
+    const requestToken = ++articleListRequestTokenRef.current;
     try {
-      const result = await listArticles(filterFromSelection(nextSelection));
+      const result = await listArticles(buildArticleFilter(nextSelection, nextSearchQuery));
+      if (articleListRequestTokenRef.current !== requestToken) {
+        return;
+      }
+
       setArticles(result.articles);
       setErrorMessage(undefined);
 
@@ -185,12 +198,17 @@ export default function App() {
     try {
       setIsAdding(true);
       const result = await addFeed(request);
+      const nextSelection: SidebarSelection = { type: "feed", feedId: result.feed.id };
       setFeeds((currentFeeds) => upsertFeed(currentFeeds, result.feed));
-      setSelection({ type: "feed", feedId: result.feed.id });
+      setSelection(nextSelection);
       setSidebarMode("feeds");
-      setArticles(result.articles);
-      if (result.articles[0]) {
-        await handleSelectArticle(result.articles[0].id);
+      if (articleSearchQuery.trim()) {
+        await loadArticles(nextSelection, articleSearchQuery);
+      } else {
+        setArticles(result.articles);
+        if (result.articles[0]) {
+          await handleSelectArticle(result.articles[0].id);
+        }
       }
       setErrorMessage(undefined);
     } catch (error) {
@@ -206,10 +224,17 @@ export default function App() {
       setIsRefreshing(true);
       const result = await refreshFeed({ feedId });
       setFeeds((currentFeeds) => upsertFeed(currentFeeds, result.feed));
-      const articleResult = await listArticles(filterFromSelection(selection));
+      const articleResult = await listArticles(buildArticleFilter(selection, articleSearchQuery));
       setArticles(articleResult.articles);
-      if (result.newArticles[0]) {
-        await handleSelectArticle(result.newArticles[0].id);
+      const nextArticle =
+        result.newArticles.find((article) =>
+          articleResult.articles.some((listedArticle) => listedArticle.id === article.id),
+        ) ??
+        (!articleResult.articles.some((article) => article.id === selectedArticleId)
+          ? articleResult.articles[0]
+          : undefined);
+      if (nextArticle) {
+        await handleSelectArticle(nextArticle.id);
       }
       setErrorMessage(undefined);
     } catch (error) {
@@ -222,7 +247,6 @@ export default function App() {
   async function handleSelectArticle(articleId: string) {
     const requestToken = ++articleSelectionTokenRef.current;
     setSelectedArticleId(articleId);
-    setSelectedArticle(undefined);
     setIsArticleLoading(true);
 
     try {
@@ -236,13 +260,6 @@ export default function App() {
       setArticles((currentArticles) =>
         currentArticles.map((item) =>
           item.id === article.id ? { ...item, isRead: true } : item,
-        ),
-      );
-      setFeeds((currentFeeds) =>
-        currentFeeds.map((feed) =>
-          feed.id === article.feedId && !article.isRead
-            ? { ...feed, unreadCount: Math.max(feed.unreadCount - 1, 0) }
-            : feed,
         ),
       );
       setErrorMessage(undefined);
@@ -291,11 +308,26 @@ export default function App() {
     try {
       setIsDeleting(true);
       await deleteFeed({ feedId });
-      setFeeds((currentFeeds) => currentFeeds.filter((feed) => feed.id !== feedId));
-      if (selection.type === "feed" && selection.feedId === feedId) {
-        setSelection({ type: "all" });
+      const nextSelection: SidebarSelection =
+        selection.type === "feed" && selection.feedId === feedId ? { type: "all" } : selection;
+      const [feedResult, tagResult, articleResult, starredResult] = await Promise.all([
+        listFeeds(),
+        listTags(),
+        listArticles(buildArticleFilter(nextSelection, articleSearchQuery)),
+        listArticles({ favoritesOnly: true }),
+      ]);
+
+      setFeeds(feedResult.feeds);
+      setTags(tagResult.tags);
+      setArticles(articleResult.articles);
+      setStarredCount(starredResult.articles.length);
+      setSelection(nextSelection);
+
+      if (articleResult.articles.length === 0) {
         setSelectedArticle(undefined);
         setSelectedArticleId(undefined);
+      } else if (!articleResult.articles.some((article) => article.id === selectedArticleId)) {
+        await handleSelectArticle(articleResult.articles[0].id);
       }
       setErrorMessage(undefined);
     } catch (error) {
@@ -311,7 +343,7 @@ export default function App() {
       setTags(tagResult.tags);
 
       if (selection.type === "tag") {
-        const articleResult = await listArticles(filterFromSelection(selection));
+        const articleResult = await listArticles(buildArticleFilter(selection, articleSearchQuery));
         setArticles(articleResult.articles);
       }
 
@@ -355,6 +387,32 @@ export default function App() {
     try {
       const tagResult = await renameTag({ tagId, name });
       setTags(tagResult.tags);
+      setErrorMessage(undefined);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+      throw error;
+    }
+  }
+
+  async function handleRenameFeed(feedId: string, title: string) {
+    try {
+      const result = await renameFeed({ feedId, title });
+      const renamedFeed = result.feeds.find((feed) => feed.id === feedId);
+      setFeeds(result.feeds);
+      if (renamedFeed) {
+        setArticles((currentArticles) =>
+          currentArticles.map((article) =>
+            article.feedId === feedId
+              ? { ...article, feedTitle: renamedFeed.title }
+              : article,
+          ),
+        );
+        setSelectedArticle((currentArticle) =>
+          currentArticle?.feedId === feedId
+            ? { ...currentArticle, feedTitle: renamedFeed.title }
+            : currentArticle,
+        );
+      }
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -465,6 +523,46 @@ export default function App() {
     setSyncSettings((currentSettings) => ({ ...currentSettings, intervalMinutes }));
   }
 
+  function handleArticleSearchQueryChange(value: string) {
+    setArticleSearchInput(value);
+    if (!value.trim()) {
+      setArticleSearchQuery("");
+    }
+  }
+
+  function handleArticleSearchCompositionChange(isComposing: boolean) {
+    setIsArticleSearchComposing(isComposing);
+  }
+
+  function handleArticleSearchStep(direction: 1 | -1) {
+    if (articleSearchInput.trim() !== articleSearchQuery.trim()) {
+      setArticleSearchQuery(articleSearchInput);
+      return;
+    }
+
+    if (!articleSearchQuery.trim() || articles.length === 0) {
+      return;
+    }
+
+    const currentIndex = articles.findIndex((article) => article.id === selectedArticleId);
+    const nextIndex =
+      currentIndex === -1
+        ? direction === 1
+          ? 0
+          : articles.length - 1
+        : (currentIndex + direction + articles.length) % articles.length;
+    void handleSelectArticle(articles[nextIndex].id);
+  }
+
+  const activeArticleSearchIndex = articleSearchQuery.trim()
+    ? Math.max(
+        articles.findIndex((article) => article.id === selectedArticleId),
+        0,
+      )
+    : 0;
+  const isArticleSearchPending =
+    isArticleSearchComposing || articleSearchInput.trim() !== articleSearchQuery.trim();
+
   return (
     <main className="app-shell" data-reader-theme={readerTheme}>
       <FeedSidebar
@@ -500,6 +598,7 @@ export default function App() {
         onSyncIntervalChange={handleSyncIntervalChange}
         onSyncAllFeeds={() => void syncAllFeeds("manual sync")}
         onRefreshFeed={handleRefreshFeed}
+        onRenameFeed={handleRenameFeed}
         onDeleteFeed={handleDeleteFeed}
       />
 
@@ -509,6 +608,7 @@ export default function App() {
         tags={tags}
         selectedArticleId={selectedArticleId}
         selection={selection}
+        searchQuery={articleSearchQuery}
         onSelectArticle={handleSelectArticle}
         onToggleFavorite={handleToggleFavorite}
       />
@@ -519,6 +619,15 @@ export default function App() {
         onTagsChanged={() => void handleTagsChanged()}
         onOpenAiSettings={() => setShowAiSettings(true)}
         onThemeChange={setReaderTheme}
+        articleSearchQuery={articleSearchInput}
+        articleSearchResultCount={
+          !isArticleSearchPending && articleSearchQuery.trim() ? articles.length : 0
+        }
+        activeArticleSearchIndex={activeArticleSearchIndex}
+        articleSearchPending={isArticleSearchPending}
+        onArticleSearchQueryChange={handleArticleSearchQueryChange}
+        onArticleSearchCompositionChange={handleArticleSearchCompositionChange}
+        onArticleSearchStep={handleArticleSearchStep}
       />
 
       {errorMessage ? <div className="toast" role="alert">{errorMessage}</div> : null}
@@ -530,196 +639,3 @@ export default function App() {
   );
 }
 
-function reconcileSelectionAfterTagRemoval(
-  selection: SidebarSelection,
-  removedTagId: string,
-): SidebarSelection {
-  if (selection.type !== "tag") {
-    return selection;
-  }
-
-  const nextTagIds = selection.tagIds.filter((tagId) => tagId !== removedTagId);
-  if (nextTagIds.length === 0) {
-    return { type: "all" };
-  }
-
-  return { ...selection, tagIds: nextTagIds };
-}
-
-function reconcileSelectionAfterTagMerge(
-  selection: SidebarSelection,
-  sourceTagId: string,
-  targetTagId: string,
-): SidebarSelection {
-  if (selection.type !== "tag") {
-    return selection;
-  }
-
-  if (!selection.tagIds.includes(sourceTagId) && !selection.tagIds.includes(targetTagId)) {
-    return selection;
-  }
-
-  const nextTagIds = Array.from(
-    new Set(selection.tagIds.map((tagId) => (tagId === sourceTagId ? targetTagId : tagId))),
-  );
-  if (nextTagIds.length === 0) {
-    return { type: "all" };
-  }
-
-  return { ...selection, tagIds: nextTagIds };
-}
-
-function filterFromSelection(selection: SidebarSelection): ArticleListFilter {
-  switch (selection.type) {
-    case "feed":
-      return { feedId: selection.feedId };
-    case "starred":
-      return { favoritesOnly: true };
-    case "tag":
-      return { tagIds: selection.tagIds, tagMatch: selection.tagMatch };
-    case "all":
-    default:
-      return {};
-  }
-}
-
-function upsertFeed(feeds: FeedSummary[], nextFeed: FeedSummary) {
-  const existingIndex = feeds.findIndex((feed) => feed.id === nextFeed.id);
-  if (existingIndex === -1) {
-    return [...feeds, nextFeed];
-  }
-
-  return feeds.map((feed) => (feed.id === nextFeed.id ? nextFeed : feed));
-}
-
-function buildFeedsOpmlExport(feeds: FeedSummary[]) {
-  if (feeds.length === 0) {
-    throw new Error("No feeds to export.");
-  }
-
-  const now = new Date().toUTCString();
-  const outlines = feeds
-    .map((feed) => {
-      const title = escapeXml(feed.title);
-      const xmlUrl = escapeXml(feed.url);
-      const htmlUrl = escapeXml(feed.siteUrl ?? feed.url);
-      return `    <outline text="${title}" title="${title}" type="rss" xmlUrl="${xmlUrl}" htmlUrl="${htmlUrl}" />`;
-    })
-    .join("\n");
-
-  const opml = `<?xml version="1.0" encoding="UTF-8"?>
-<opml version="2.0">
-  <head>
-    <title>Vortex subscriptions</title>
-    <dateCreated>${escapeXml(now)}</dateCreated>
-  </head>
-  <body>
-${outlines}
-  </body>
-</opml>
-`;
-
-  return {
-    content: opml,
-    defaultFileName: `vortex-subscriptions-${new Date().toISOString().slice(0, 10)}.opml`,
-  };
-}
-
-function formatOpmlImportResult(result: OpmlImportResult) {
-  if (result.total === 0) {
-    return "OPML import found no feed URLs.";
-  }
-
-  const parts = [`Imported ${result.imported}/${result.total} feeds`];
-  if (result.skipped > 0) {
-    parts.push(`${result.skipped} skipped`);
-  }
-  if (result.failed > 0) {
-    parts.push(`${result.failed} failed`);
-  }
-
-  return `${parts.join(", ")}.`;
-}
-
-function readFeedSyncSettings(): FeedSyncSettings {
-  try {
-    const rawSettings = window.localStorage.getItem(feedSyncSettingsKey);
-    if (!rawSettings) {
-      return defaultFeedSyncSettings;
-    }
-
-    const parsedSettings = JSON.parse(rawSettings) as Partial<FeedSyncSettings>;
-    const mode = isFeedSyncMode(parsedSettings.mode)
-      ? parsedSettings.mode
-      : defaultFeedSyncSettings.mode;
-    const intervalMinutes =
-      typeof parsedSettings.intervalMinutes === "number" &&
-      [15, 30, 60, 120].includes(parsedSettings.intervalMinutes)
-        ? parsedSettings.intervalMinutes
-        : defaultFeedSyncSettings.intervalMinutes;
-
-    return { mode, intervalMinutes };
-  } catch {
-    return defaultFeedSyncSettings;
-  }
-}
-
-function writeFeedSyncSettings(settings: FeedSyncSettings) {
-  window.localStorage.setItem(feedSyncSettingsKey, JSON.stringify(settings));
-}
-
-function isFeedSyncMode(value: unknown): value is FeedSyncMode {
-  return value === "manual" || value === "launch" || value === "timer";
-}
-
-function formatFeedSyncStatus(feedCount: number, failedCount: number, completedAt: Date) {
-  if (failedCount > 0) {
-    return `${feedCount - failedCount}/${feedCount} synced`;
-  }
-
-  return `Synced ${formatClockTime(completedAt)}`;
-}
-
-function formatFeedSyncToast(
-  feedCount: number,
-  failedCount: number,
-  newArticleCount: number,
-  reason: string,
-) {
-  const parts = [
-    `Synced ${feedCount - failedCount}/${feedCount} feeds`,
-    `${newArticleCount} new articles`,
-  ];
-  if (failedCount > 0) {
-    parts.push(`${failedCount} failed`);
-  }
-
-  return `${parts.join(", ")} (${reason}).`;
-}
-
-function formatSyncInterval(minutes: number) {
-  return minutes >= 60 ? `${minutes / 60}h` : `${minutes}m`;
-}
-
-function formatClockTime(date: Date) {
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function escapeXml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Something went wrong.";
-}

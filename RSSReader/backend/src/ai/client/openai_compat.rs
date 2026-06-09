@@ -64,10 +64,6 @@ impl OpenAiCompatClient {
         })
     }
 
-    pub fn chat_completion(&self, model: &str, messages: &[ChatMessage]) -> AiResult<String> {
-        Ok(self.chat_completion_with_usage(model, messages)?.content)
-    }
-
     pub fn chat_completion_with_usage(
         &self,
         model: &str,

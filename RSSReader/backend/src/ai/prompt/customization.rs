@@ -3,16 +3,14 @@ use std::path::PathBuf;
 
 use super::super::error::AiResult;
 use super::resolver::{ensure_custom_prompt_file, AgentPromptKind};
-use super::template_store::{AgentPromptTemplate, PromptRenderResult, PromptTemplateStore};
+use super::template_store::{PromptRenderResult, PromptTemplateStore};
 
 pub struct PromptCustomization;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedPrompt {
-    pub template: AgentPromptTemplate,
     pub rendered: PromptRenderResult,
     pub fallback_notice: Option<String>,
-    pub used_custom: bool,
 }
 
 impl PromptCustomization {
@@ -28,34 +26,28 @@ impl PromptCustomization {
                     if template.version != builtin.version {
                         let rendered = PromptTemplateStore::render(&builtin, &parameters)?;
                         return Ok(ResolvedPrompt {
-                            template: builtin,
                             rendered,
                             fallback_notice: Some(
                                 "Custom prompt version mismatch; using builtin template."
                                     .to_string(),
                             ),
-                            used_custom: false,
                         });
                     }
                     let rendered = PromptTemplateStore::render(&template, &parameters)?;
                     return Ok(ResolvedPrompt {
-                        template,
                         rendered,
                         fallback_notice: None,
-                        used_custom: true,
                     });
                 }
                 Err(error) => {
                     let template = PromptTemplateStore::load_builtin(kind)?;
                     let rendered = PromptTemplateStore::render(&template, &parameters)?;
                     return Ok(ResolvedPrompt {
-                        template,
                         rendered,
                         fallback_notice: Some(format!(
                             "Invalid custom prompt ({}); using builtin template.",
                             error
                         )),
-                        used_custom: false,
                     });
                 }
             }
@@ -64,10 +56,8 @@ impl PromptCustomization {
         let template = PromptTemplateStore::load_builtin(kind)?;
         let rendered = PromptTemplateStore::render(&template, &parameters)?;
         Ok(ResolvedPrompt {
-            template,
             rendered,
             fallback_notice: None,
-            used_custom: false,
         })
     }
 
