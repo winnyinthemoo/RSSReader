@@ -1,4 +1,5 @@
 import { Circle, Star } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import type {
   ArticleListItem,
@@ -6,8 +7,6 @@ import type {
   TagMatchMode,
   TagSummary,
 } from "../../../../../shared/feed";
-
-import { useState, useMemo, useEffect } from "react";
 
 type SidebarSelection =
   | { type: "all" }
@@ -25,6 +24,11 @@ interface ArticleListProps {
   onToggleFavorite: (articleId: string, isFavorite: boolean) => void;
 }
 
+const compactDateFormatter = new Intl.DateTimeFormat("en", {
+  month: "short",
+  day: "numeric",
+});
+
 export function ArticleList({
   articles,
   feeds,
@@ -34,30 +38,35 @@ export function ArticleList({
   onSelectArticle,
   onToggleFavorite,
 }: ArticleListProps) {
-  
-  // 筛选模式：null 表示显示全部，'unread' 表示只显示未读，'read' 表示只显示已读
-  const [filterType, setFilterType] = useState<'unread' | 'read' | null>(null);
+  const [filterType, setFilterType] = useState<"unread" | "read" | null>(null);
 
-  // 当切换 Feed 时，重置筛选状态
   useEffect(() => {
     setFilterType(null);
   }, [selection]);
 
   const title = getArticleListTitle(selection, feeds, tags);
+  const { filteredArticles, readCount, unreadCount } = useMemo(() => {
+    let readCount = 0;
+    let unreadCount = 0;
+    const filteredArticles: ArticleListItem[] = [];
 
-  // 计算已读和未读数量
-  const readCount = articles.filter(a => a.isRead).length;
-  const unreadCount = articles.filter(a => !a.isRead).length;
+    for (const article of articles) {
+      if (article.isRead) {
+        readCount += 1;
+      } else {
+        unreadCount += 1;
+      }
 
-  // 根据筛选模式过滤文章
-  const filteredArticles = useMemo(() => {
-    if (filterType === 'unread') {
-      return articles.filter(a => !a.isRead);
+      if (
+        filterType === null ||
+        (filterType === "read" && article.isRead) ||
+        (filterType === "unread" && !article.isRead)
+      ) {
+        filteredArticles.push(article);
+      }
     }
-    if (filterType === 'read') {
-      return articles.filter(a => a.isRead);
-    }
-    return articles;
+
+    return { filteredArticles, readCount, unreadCount };
   }, [articles, filterType]);
 
   return (
@@ -67,24 +76,22 @@ export function ArticleList({
           <p className="eyebrow">{selection.type === "starred" ? "Saved" : "Inbox"}</p>
           <div className="header-title-row">
             <h2>{title}</h2>
-            {/* {selection.type !== "starred" && ( */}
-              <div className="article-stats">
-                <span 
-                  className={`unread-count-badge ${filterType === 'unread' ? 'active' : ''}`}
-                  onClick={() => setFilterType(filterType === 'unread' ? null : 'unread')}
-                  style={{ cursor: 'pointer' }}
-                >
-                  Unread {unreadCount}
-                </span>
-                <span 
-                  className={`read-count-badge ${filterType === 'read' ? 'active' : ''}`}
-                  onClick={() => setFilterType(filterType === 'read' ? null : 'read')}
-                  style={{ cursor: 'pointer' }}
-                >
-                  Read {readCount}
-                </span>
-              </div>
-            {/* )} */}
+            <div className="article-stats">
+              <span
+                className={`unread-count-badge ${filterType === "unread" ? "active" : ""}`}
+                onClick={() => setFilterType(filterType === "unread" ? null : "unread")}
+                style={{ cursor: "pointer" }}
+              >
+                Unread {unreadCount}
+              </span>
+              <span
+                className={`read-count-badge ${filterType === "read" ? "active" : ""}`}
+                onClick={() => setFilterType(filterType === "read" ? null : "read")}
+                style={{ cursor: "pointer" }}
+              >
+                Read {readCount}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -173,8 +180,5 @@ function formatDate(value?: string) {
     return "No date";
   }
 
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-  }).format(new Date(value));
+  return compactDateFormatter.format(new Date(value));
 }

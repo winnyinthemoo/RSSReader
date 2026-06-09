@@ -10,6 +10,8 @@ pub const MIGRATION_0005: &str = include_str!("../../../db/migrations/0005_artic
 pub const MIGRATION_0006: &str =
     include_str!("../../../db/migrations/0006_feed_display_titles.sql");
 pub const MIGRATION_0007: &str = include_str!("../../../db/migrations/0007_translation_title.sql");
+pub const MIGRATION_0008: &str =
+    include_str!("../../../db/migrations/0008_article_list_performance_indexes.sql");
 
 /// Legacy alias used by feed repository.
 pub const INITIAL_MIGRATION: &str = MIGRATION_0001;
@@ -22,6 +24,7 @@ const ALL_MIGRATIONS: &[&str] = &[
     MIGRATION_0005,
     MIGRATION_0006,
     MIGRATION_0007,
+    MIGRATION_0008,
 ];
 
 pub fn run_migrations(connection: &Connection) -> Result<(), String> {
@@ -84,5 +87,24 @@ mod tests {
             .expect("collect columns");
 
         assert!(columns.iter().any(|column| column == "translated_title"));
+    }
+
+    #[test]
+    fn migrations_create_article_list_performance_indexes() {
+        let connection = Connection::open_in_memory().expect("open in-memory database");
+        run_migrations(&connection).expect("migrations run");
+
+        let mut stmt = connection
+            .prepare("PRAGMA index_list(articles)")
+            .expect("read article indexes");
+        let indexes = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("map indexes")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect indexes");
+
+        assert!(indexes.iter().any(|index| index == "idx_articles_feed_read_published"));
+        assert!(indexes.iter().any(|index| index == "idx_articles_favorite_published"));
+        assert!(indexes.iter().any(|index| index == "idx_articles_read_published"));
     }
 }

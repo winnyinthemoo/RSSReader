@@ -57,6 +57,7 @@ export default function App() {
   const [selection, setSelection] = useState<SidebarSelection>({ type: "all" });
   const [selectedArticle, setSelectedArticle] = useState<ArticleDetail | undefined>();
   const [selectedArticleId, setSelectedArticleId] = useState<string | undefined>();
+  const [isArticleLoading, setIsArticleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [isAdding, setIsAdding] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -71,6 +72,8 @@ export default function App() {
   const [showAiSettings, setShowAiSettings] = useState(false);
   const [readerTheme, setReaderTheme] = useState("white");
   const launchSyncStartedRef = useRef(false);
+  const initialArticlesLoadedRef = useRef(false);
+  const articleSelectionTokenRef = useRef(0);
 
   const activeFeeds = useMemo(
     () => feeds.filter((feed) => feed.status === "active"),
@@ -82,6 +85,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!initialArticlesLoadedRef.current) {
+      initialArticlesLoadedRef.current = true;
+      return;
+    }
+
     void loadArticles(selection);
   }, [selection]);
 
@@ -212,11 +220,17 @@ export default function App() {
   }
 
   async function handleSelectArticle(articleId: string) {
+    const requestToken = ++articleSelectionTokenRef.current;
+    setSelectedArticleId(articleId);
+    setSelectedArticle(undefined);
+    setIsArticleLoading(true);
+
     try {
       const article = await getArticle(articleId);
-      if (!article.isRead) {
-        await markArticleRead({ articleId: article.id, isRead: true });
+      if (articleSelectionTokenRef.current !== requestToken) {
+        return;
       }
+
       setSelectedArticle({ ...article, isRead: true });
       setSelectedArticleId(article.id);
       setArticles((currentArticles) =>
@@ -232,8 +246,24 @@ export default function App() {
         ),
       );
       setErrorMessage(undefined);
+
+      if (!article.isRead) {
+        try {
+          await markArticleRead({ articleId: article.id, isRead: true });
+        } catch (error) {
+          if (articleSelectionTokenRef.current === requestToken) {
+            setErrorMessage(getErrorMessage(error));
+          }
+        }
+      }
     } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+      if (articleSelectionTokenRef.current === requestToken) {
+        setErrorMessage(getErrorMessage(error));
+      }
+    } finally {
+      if (articleSelectionTokenRef.current === requestToken) {
+        setIsArticleLoading(false);
+      }
     }
   }
 
@@ -485,6 +515,7 @@ export default function App() {
 
       <ReaderView
         article={selectedArticle}
+        isLoading={isArticleLoading}
         onTagsChanged={() => void handleTagsChanged()}
         onOpenAiSettings={() => setShowAiSettings(true)}
         onThemeChange={setReaderTheme}

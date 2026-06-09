@@ -47,6 +47,7 @@ import {
 
 interface ReaderViewProps {
   article?: ArticleDetail;
+  isLoading?: boolean;
   onTagsChanged?: () => void;
   onOpenAiSettings?: () => void;
   onThemeChange?: (theme: ThemeBg) => void;
@@ -264,6 +265,7 @@ const markdownComponents: Components = {
 
 export function ReaderView({
   article,
+  isLoading = false,
   onTagsChanged,
   onOpenAiSettings,
   onThemeChange,
@@ -888,8 +890,12 @@ export function ReaderView({
         />
         <div className="reader-empty">
           <p className="eyebrow">Reader</p>
-          <h2>Select an article</h2>
-          <p>Choose a feed item from the middle column to open the reading view.</p>
+          <h2>{isLoading ? "Loading article" : "Select an article"}</h2>
+          <p>
+            {isLoading
+              ? "Opening the selected article."
+              : "Choose a feed item from the middle column to open the reading view."}
+          </p>
         </div>
       </section>
     );

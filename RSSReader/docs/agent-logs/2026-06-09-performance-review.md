@@ -1,0 +1,28 @@
+# 2026-06-09 Agent 工作记录：性能检查与重构建议
+
+- 日期：2026-06-09
+- 负责人：Codex
+- 使用工具：Codex、PowerShell、apply_patch、npm.cmd、cargo
+- 对应 Issue / PR：未指定
+- 任务目标：检查项目卡顿风险，落地低风险优化，并判断后续需要重构的部分。
+- 关键 Prompt 摘要：用户反馈软件容易卡顿，要求检查整个项目并优化，判断哪些部分需要重构。
+- Agent 修改内容摘要：
+  - 修复首屏重复加载文章列表：`App.tsx` 跳过首次 `selection` effect，避免启动时重复调用 `article_list`。
+  - 优化 `ArticleList` 渲染：将已读/未读计数和筛选合并为一次遍历，复用 `Intl.DateTimeFormat`，并清理损坏注释。
+  - 新增数据库迁移 `0008_article_list_performance_indexes.sql`，为文章列表常用筛选/排序增加组合索引。
+  - 在 migration 测试中断言新增索引存在。
+- 人工检查结果：待人工在真实订阅数据量较大时验证列表切换、已读/未读筛选和启动首屏响应。
+- 是否运行测试：
+  - 已运行 `npm.cmd run build`，通过；仍有既有 Vite chunk size warning。
+  - 已运行 `cargo check --locked`，通过；仍有既有 dead_code warnings。
+  - 已运行 `cargo test --locked`，通过。首次普通权限运行因 backend target 写入被拒绝，提升权限后通过。
+  - 已运行 `git diff --check`，通过；仅有 LF/CRLF 换行提示。
+- 未解决问题 / 重构建议：
+  - `frontend/src/features/reader/components/ReaderView.tsx` 超过 56KB，包含阅读器、搜索、翻译、笔记、分享、分栏拖拽、弹层等多类逻辑，应拆成 toolbar、markdown renderer、translation、note/tag side panel、compare view 等子组件。
+  - `frontend/src/styles.css` 约 99KB，主题、AI、阅读器、列表和侧栏样式混在一起，建议按 feature 拆分 CSS 或引入模块化样式边界。
+  - `frontend/src/features/feeds/components/FeedSidebar.tsx` 已超过 26KB，包含 Feed、Tag 管理、OPML、同步、统计、删除确认等逻辑，建议拆分为 FeedList、TagWorkspace、SyncPanel、FeedStatsPanel。
+  - `frontend/src/App.tsx` 承担全局数据加载、同步策略、OPML、标签管理和文章状态更新，建议抽出 `useFeedsData`、`useArticleSelection`、`useFeedSync` 等 hooks。
+  - `backend/src/feeds/repository.rs` 约 30KB，SQL 和 repository 方法集中度过高，建议按 feeds/articles/tags/notes 分 repository。
+  - `backend/src/feeds/service.rs` 的 `refresh_feed` 对每篇文章逐个 `has_article` + `save_article`，并在末尾重新 count，文章多时写入开销会放大。建议改为事务内批量 upsert，并用 SQL 一次返回新增文章或先批量查询已有 id。
+  - `article_get` 会按需执行正文 enrichment，虽然在 Tauri 中部分命令已后台化，但读取文章时仍可能触发网络和 readability 计算，建议改成显式后台任务或缓存队列，避免点击文章时卡顿。
+  - AI 相关模块已有多处 dead_code warning，建议单独清理未接入的 runtime/router/task_queue，避免后续维护成本继续上升。

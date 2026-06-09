@@ -1,0 +1,26 @@
+# 2026-06-09 Agent 工作记录：文章列表点击无反应修复
+
+- 日期：2026-06-09
+- 负责人：Codex
+- 使用工具：Codex、PowerShell、apply_patch、npm.cmd、cargo
+- 对应 Issue / PR：未指定
+- 任务目标：排查并修复文章列表点击后右侧阅读器没有及时响应的问题。
+- 关键 Prompt 摘要：用户反馈“为什么列表点击没有反应”，需要定位列表点击链路并修复。
+- Agent 修改内容摘要：
+  - 调整 `App.tsx` 的文章选择流程：点击列表项后立即更新 `selectedArticleId`、清空旧文章并显示阅读器加载态。
+  - 为文章详情请求增加 token 防护，避免快速连续点击时旧请求覆盖新选中的文章。
+  - 将标记已读改为文章详情显示后的后续操作，避免 `markArticleRead` 阻塞阅读器显示。
+  - 为 `ReaderView` 增加 `isLoading` 属性，在文章详情请求期间显示加载反馈。
+  - 移除 `article_get` 中同步执行的按需全文抓取，避免点击文章时等待外部网页请求和 readability 解析。
+- 人工检查结果：
+  - 代码检查确认 `ArticleList` 的列表项 `onClick` 仍正常绑定到 `handleSelectArticle`。
+  - 本地后端启动后，接口级验证 `GET /api/articles/{id}` 返回约 33.58ms，已不再等待外部全文抓取。
+  - Browser 插件连接受本地沙箱限制失败，未能完成可视化点击验证。
+- 是否运行测试：
+  - 已运行 `npm.cmd run build`，通过；仍有既有 Vite chunk size warning。
+  - 已运行 `cargo check --locked`，通过；仍有既有 dead_code warnings。
+  - 已运行 `cargo test --locked`，通过。
+  - 已运行 `git diff --check`，通过；仅有 LF/CRLF 换行提示。
+- 未解决问题：
+  - 全文增强能力后续应改为后台任务、显式“获取全文”动作或缓存队列，而不是放在文章点击路径。
+  - Browser 插件当前在本机报 sandbox 初始化错误，无法完成自动化 UI 截图验证。
