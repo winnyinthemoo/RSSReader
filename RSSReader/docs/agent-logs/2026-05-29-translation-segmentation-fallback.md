@@ -1,0 +1,23 @@
+# 2026-05-29 Translation Segmentation Fallback
+
+- 日期：2026-05-29
+- 负责人：Codex
+- 使用工具：终端、rg、apply_patch
+- 对应 Issue / PR：未指定
+- 任务目标：修复文章翻译时报错 `Article has no translatable p/ul/ol segments` 的问题。
+- 关键 Prompt 摘要：用户反馈双语翻译失败，提示文章没有可翻译的 `p/ul/ol` 段落。
+- Agent 修改内容摘要：
+  - 后端翻译分段保留 `p/ul/ol` 优先策略。
+  - 当文章没有 `p/ul/ol` 时，fallback 到标题、引用、代码块、`article/section/div/li` 等常见正文块。
+  - 当文章是纯文本时，将全文作为一个可翻译段落。
+  - 当时前端双语 HTML 插入逻辑同步后端 fallback 规则，避免翻译结果无法对齐。
+  - 将空段落错误提示改为更通用的 `Article has no translatable text segments`。
+- 人工检查结果：已检查后端分段逻辑和前端双语插入逻辑保持一致。
+- 是否运行测试：
+  - 已运行 `cargo test segmentation`，4 个相关测试全部通过。
+  - 当时已尝试运行 `npm --prefix RSSReader/frontend run build`，但 Codex 命令环境 Node v12.22.9 无法解析 TypeScript/Vite 依赖中的现代语法，构建未能执行到项目代码检查阶段。
+- 未解决问题：
+  - 当前机器需要升级到 Node 20.19+ 或 Node 22.12+ 后，才能正常运行前端构建和 Vite 开发服务器。
+  - 后续补充：已使用 Node v22.22.3 运行前端 `npm run build`，通过，存在 Vite chunk size warning。
+  - 后续补充：翻译对齐逻辑已收回后端生成 `bilingualHtml`，前端保留本地拼接逻辑仅作为旧响应兜底。
+  - 后续补充：后端分段器已支持 fallback 块内的 `<br>` / `<br />` 和纯文本换行拆段；已运行 `cargo test ai::translation::segmentation`，6 个相关测试通过。

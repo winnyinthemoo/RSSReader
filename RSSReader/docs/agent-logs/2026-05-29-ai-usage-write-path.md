@@ -1,0 +1,26 @@
+# Agent Log: AI Usage 写入路径
+
+- 日期：2026-05-29
+- 负责人：Codex
+- 使用工具：Codex CLI、rg、sed、cargo fmt、cargo check、cargo test、npm run build
+- 对应 Issue / PR：未指定
+- 任务目标：完善 AI usage，使 summary、translation、tagging 的 LLM 调用写入 `llm_usage_events`，让前端 Requests / Tokens / Active 报表有真实数据来源。
+- 关键 Prompt 摘要：用户指出 AI usage 前端 Requests、Tokens、Active 均为 0，要求完善。
+- Agent 修改内容摘要：
+  - OpenAI-compatible client 新增 `chat_completion_with_usage`，解析响应中的 `usage` token 字段。
+  - 新增 `UsageEventRecord` 和 `AiRepository::insert_usage_event`。
+  - 新增统一的 `record_llm_usage` 辅助函数。
+  - Summary、Translation、Tagging 的模型请求成功/失败后都会写 usage event。
+  - 翻译按每次模型调用记录，包括标题和各段落请求。
+  - 后续补充：Agents 页的 usage 卡片已按当前选中的 Summary / Translation / Tag 过滤显示，不再三个 Agent 共用同一组数字。
+- 人工检查结果：尚未人工触发真实模型调用验证 UI 数字变化。
+- 是否运行测试：
+  - 已运行 `cargo fmt`
+  - 已运行 `cargo check`，通过，存在既有未使用代码 warning。
+  - 已运行 `cargo test`，20 个测试通过。
+  - 已用 Node v22.22.3 运行 `npm run build`，通过，存在 Vite chunk size warning。
+- 未解决问题：
+  - `Provider Test` 暂未写入 usage。
+  - 部分 OpenAI-compatible 服务可能不返回 token usage，此时 token 数会显示为 0，但 Requests 会增加。
+  - Usage 页面中的 Active 当前表示有记录的分组数量，不是运行中任务数量。
+  - 按单个 Agent 过滤时，日线图暂未按 Agent 维度拆分；当前主要保证 Requests / Tokens / Active 和列表按 Agent 单独显示。

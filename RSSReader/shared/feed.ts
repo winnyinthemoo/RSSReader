@@ -41,7 +41,11 @@ export interface ArticleListFilter {
   unreadOnly?: boolean;
   favoritesOnly?: boolean;
   tagId?: string;
+  tagIds?: string[];
+  tagMatch?: TagMatchMode;
 }
+
+export type TagMatchMode = "any" | "all";
 
 export interface TagSummary {
   id: string;
@@ -67,6 +71,20 @@ export interface ArticleTagsSaveRequest {
 
 export interface ArticleTagDeleteRequest {
   articleId: string;
+  tagId: string;
+}
+
+export interface TagRenameRequest {
+  tagId: string;
+  name: string;
+}
+
+export interface TagMergeRequest {
+  sourceTagId: string;
+  targetTagId: string;
+}
+
+export interface TagDeleteRequest {
   tagId: string;
 }
 

@@ -22,10 +22,21 @@ import type {
   OpmlImportItemResult,
   OpmlImportRequest,
   OpmlImportResult,
+  TagDeleteRequest,
   TagListResult,
+  TagMergeRequest,
+  TagRenameRequest,
 } from "../../../shared/feed";
 
 type TauriInvoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+type TauriUnlisten = () => void;
+type TauriEvent<T> = {
+  payload: T;
+};
+type TauriListen = <T>(
+  event: string,
+  handler: (event: TauriEvent<T>) => void,
+) => Promise<TauriUnlisten>;
 
 declare global {
   interface Window {
@@ -35,6 +46,9 @@ declare global {
       };
       tauri?: {
         invoke?: TauriInvoke;
+      };
+      event?: {
+        listen?: TauriListen;
       };
     };
   }
@@ -62,6 +76,50 @@ export async function listTags(): Promise<TagListResult> {
   }
 
   return requestJson<TagListResult>("/api/tags");
+}
+
+export async function renameTag(request: TagRenameRequest): Promise<TagListResult> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<TagListResult>("tag_rename", {
+      tagId: request.tagId,
+      name: request.name,
+    });
+  }
+
+  return requestJson<TagListResult>("/api/tags/rename", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export async function mergeTags(request: TagMergeRequest): Promise<TagListResult> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<TagListResult>("tag_merge", {
+      sourceTagId: request.sourceTagId,
+      targetTagId: request.targetTagId,
+    });
+  }
+
+  return requestJson<TagListResult>("/api/tags/merge", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export async function deleteTag(request: TagDeleteRequest): Promise<TagListResult> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<TagListResult>("tag_delete", {
+      tagId: request.tagId,
+    });
+  }
+
+  return requestJson<TagListResult>("/api/tags/delete", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
 }
 
 export async function addFeed(request: FeedAddRequest): Promise<FeedWithArticles> {
@@ -118,6 +176,14 @@ export async function listArticles(filter: ArticleListFilter = {}): Promise<Arti
   }
   if (filter.tagId) {
     params.set("tagId", filter.tagId);
+  }
+  if (filter.tagIds && filter.tagIds.length > 0) {
+    for (const tagId of filter.tagIds) {
+      params.append("tagIds", tagId);
+    }
+  }
+  if (filter.tagMatch) {
+    params.set("tagMatch", filter.tagMatch);
   }
 
   const query = params.toString();

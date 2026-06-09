@@ -1,0 +1,23 @@
+# Agent Log: 后端生成双语对照 HTML
+
+- 日期：2026-05-29
+- 负责人：Codex
+- 使用工具：Codex CLI、rg、sed、cargo fmt、cargo check、cargo test、npm run build
+- 对应 Issue / PR：未指定
+- 任务目标：将翻译模块中的原文/译文对齐逻辑收回后端，减少前端重复分段和对齐规则。
+- 关键 Prompt 摘要：用户询问逐段对照方案中前后端重复内容，并确认执行“后端负责分段、编号、对齐和存储；前端负责展示”。
+- Agent 修改内容摘要：
+  - 为 `TranslationView` 增加 `bilingualHtml`、`bilingualAligned`、`bilingualPlaced`、`bilingualExpected` 字段。
+  - 后端分段结果增加原文 HTML 字节范围，用于生成权威双语 HTML。
+  - 翻译服务在新建翻译和读取缓存翻译时生成双语 HTML。
+  - 前端双语组件优先使用后端返回的 `bilingualHtml`，保留旧本地拼接逻辑作为兼容兜底。
+  - 后续补充：对齐警告改为只在 `placed < expected` 时显示，避免 `(1/1 placed)` 这种已放置成功的情况误报。
+- 人工检查结果：尚未人工 UI 验收。
+- 是否运行测试：
+  - 已运行 `cargo fmt`
+  - 已运行 `cargo check`，通过，存在既有未使用代码 warning。
+  - 已运行 `cargo test`，20 个测试通过。
+- 未解决问题：
+  - 前端仍保留旧的 `buildBilingualArticleHtml` 兜底逻辑，可在确认后端字段稳定后单独清理。
+  - `retry_segment` 仍未实现。
+  - HTML 分段仍基于字符串查找，已补充 `<br>` / 文本换行分段支持；后续仍可考虑迁移到 HTML parser。

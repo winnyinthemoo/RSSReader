@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, Copy, Sparkles } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -21,8 +21,10 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
   const [status, setStatus] = useState<SummaryStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [copyStatus, setCopyStatus] = useState<string | undefined>();
+  const requestTokenRef = useRef(0);
 
   const loadCachedSummary = useCallback(async () => {
+    const requestToken = ++requestTokenRef.current;
     if (!articleId) {
       setContent("");
       setStatus("idle");
@@ -38,6 +40,9 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
         targetLanguage,
         detailLevel,
       });
+      if (requestTokenRef.current !== requestToken) {
+        return;
+      }
       if (cached?.content) {
         setContent(cached.content);
         setStatus("ready");
@@ -46,6 +51,9 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
         setStatus("idle");
       }
     } catch (error) {
+      if (requestTokenRef.current !== requestToken) {
+        return;
+      }
       setContent("");
       setStatus("error");
       setErrorMessage(getErrorMessage(error));
@@ -53,6 +61,7 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
   }, [articleId, targetLanguage, detailLevel]);
 
   useEffect(() => {
+    requestTokenRef.current += 1;
     setIsOpen(false);
     setContent("");
     setStatus("idle");
@@ -71,6 +80,7 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
       return;
     }
 
+    const requestToken = ++requestTokenRef.current;
     try {
       setStatus("generating");
       setErrorMessage(undefined);
@@ -80,10 +90,16 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
         targetLanguage,
         detailLevel,
       });
+      if (requestTokenRef.current !== requestToken) {
+        return;
+      }
       setContent(chunk.delta);
       setStatus("ready");
       setCopyStatus(undefined);
     } catch (error) {
+      if (requestTokenRef.current !== requestToken) {
+        return;
+      }
       setStatus("error");
       setErrorMessage(getErrorMessage(error));
     }

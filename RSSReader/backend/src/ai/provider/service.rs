@@ -1,18 +1,27 @@
 use uuid::Uuid;
 
-use super::repository::AiRepository;
 use super::super::client::openai_compat::OpenAiCompatClient;
 use super::super::error::{AiError, AiResult};
 use super::super::model::{
     AgentSettingsRecord, AgentType, AiAgentSettings, AiModel, AiModelListResult, AiProvider,
     AiProviderListResult, CreateAiModelRequest, CreateAiProviderRequest, ProviderTestRequest,
     ProviderTestResult, SummaryAgentConfig, SummaryDetailLevel, TaggingAgentConfig,
-    TranslationAgentConfig, TranslationPromptStrategy, UpdateAiModelRequest, UpdateAiProviderRequest,
+    TranslationAgentConfig, TranslationPromptStrategy, UpdateAiModelRequest,
+    UpdateAiProviderRequest,
 };
 use super::super::secrets::SecretStore;
+use super::repository::AiRepository;
 
 pub struct AiProviderService {
     repository: AiRepository,
+}
+
+pub struct AgentClient {
+    pub client: OpenAiCompatClient,
+    pub model_name: String,
+    pub model_id: Option<String>,
+    pub provider_id: Option<String>,
+    pub base_url: String,
 }
 
 impl AiProviderService {
@@ -83,7 +92,11 @@ impl AiProviderService {
     }
 
     pub fn create_model(&self, request: CreateAiModelRequest) -> AiResult<AiModel> {
-        if self.repository.get_provider(&request.provider_id)?.is_none() {
+        if self
+            .repository
+            .get_provider(&request.provider_id)?
+            .is_none()
+        {
             return Err(AiError::NotFound(format!(
                 "Provider not found: {}",
                 request.provider_id
@@ -133,6 +146,11 @@ impl AiProviderService {
         &self,
         agent_type: AgentType,
     ) -> AiResult<(OpenAiCompatClient, String, Option<String>)> {
+        let route = self.openai_agent_client(agent_type)?;
+        Ok((route.client, route.model_name, route.model_id))
+    }
+
+    pub fn openai_agent_client(&self, agent_type: AgentType) -> AiResult<AgentClient> {
         let settings = self.get_agent_settings(agent_type)?;
         let model_id = settings
             .primary_model_id
@@ -142,7 +160,9 @@ impl AiProviderService {
             .get_model(&model_id)?
             .ok_or_else(|| AiError::NotFound(format!("Model not found: {model_id}")))?;
         if !model.is_enabled {
-            return Err(AiError::Configuration("Primary model is disabled".to_string()));
+            return Err(AiError::Configuration(
+                "Primary model is disabled".to_string(),
+            ));
         }
         let provider = self
             .repository
@@ -156,11 +176,13 @@ impl AiProviderService {
         let api_key = SecretStore::load_provider_key(&provider.id)?.ok_or_else(|| {
             AiError::Configuration("API key not configured for provider".to_string())
         })?;
-        Ok((
-            OpenAiCompatClient::new(provider.base_url, api_key),
-            model.model_name,
-            Some(model.id),
-        ))
+        Ok(AgentClient {
+            client: OpenAiCompatClient::new(provider.base_url.clone(), api_key),
+            model_name: model.model_name,
+            model_id: Some(model.id),
+            provider_id: Some(provider.id),
+            base_url: provider.base_url,
+        })
     }
 
     pub fn get_agent_settings(&self, agent_type: AgentType) -> AiResult<AiAgentSettings> {
@@ -177,15 +199,18 @@ impl AiProviderService {
 }
 
 fn record_to_agent_settings(agent_type: AgentType, record: AgentSettingsRecord) -> AiAgentSettings {
-    let summary = record.config.get("summary").and_then(|value| {
-        serde_json::from_value::<SummaryAgentConfig>(value.clone()).ok()
-    });
-    let translation = record.config.get("translation").and_then(|value| {
-        serde_json::from_value::<TranslationAgentConfig>(value.clone()).ok()
-    });
-    let tagging = record.config.get("tagging").and_then(|value| {
-        serde_json::from_value::<TaggingAgentConfig>(value.clone()).ok()
-    });
+    let summary = record
+        .config
+        .get("summary")
+        .and_then(|value| serde_json::from_value::<SummaryAgentConfig>(value.clone()).ok());
+    let translation = record
+        .config
+        .get("translation")
+        .and_then(|value| serde_json::from_value::<TranslationAgentConfig>(value.clone()).ok());
+    let tagging = record
+        .config
+        .get("tagging")
+        .and_then(|value| serde_json::from_value::<TaggingAgentConfig>(value.clone()).ok());
 
     AiAgentSettings {
         agent_type,
@@ -218,7 +243,10 @@ fn record_to_agent_settings(agent_type: AgentType, record: AgentSettingsRecord) 
 fn agent_settings_to_record(settings: &AiAgentSettings) -> AgentSettingsRecord {
     let mut config = serde_json::Map::new();
     if let Some(summary) = &settings.summary {
-        config.insert("summary".to_string(), serde_json::to_value(summary).unwrap());
+        config.insert(
+            "summary".to_string(),
+            serde_json::to_value(summary).unwrap(),
+        );
     }
     if let Some(translation) = &settings.translation {
         config.insert(
@@ -227,7 +255,10 @@ fn agent_settings_to_record(settings: &AiAgentSettings) -> AgentSettingsRecord {
         );
     }
     if let Some(tagging) = &settings.tagging {
-        config.insert("tagging".to_string(), serde_json::to_value(tagging).unwrap());
+        config.insert(
+            "tagging".to_string(),
+            serde_json::to_value(tagging).unwrap(),
+        );
     }
 
     AgentSettingsRecord {
@@ -283,7 +314,9 @@ fn resolve_test_credentials(
 fn normalize_base_url(base_url: &str) -> AiResult<String> {
     let trimmed = base_url.trim().trim_end_matches('/');
     if trimmed.is_empty() {
-        return Err(AiError::InvalidInput("base_url cannot be empty".to_string()));
+        return Err(AiError::InvalidInput(
+            "base_url cannot be empty".to_string(),
+        ));
     }
     Ok(trimmed.to_string())
 }

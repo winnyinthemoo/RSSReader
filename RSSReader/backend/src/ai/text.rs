@@ -74,10 +74,8 @@ mod tests {
 
     #[test]
     fn sanitize_translation_strips_html_and_urls() {
-        let raw = "<p>深耕<a href=\"https://bloomberg.com/x\">美国市场</a> https://bloomberg.com/y</p>";
-        assert_eq!(
-            sanitize_translation_output(raw),
-            "深耕美国市场"
-        );
+        let raw =
+            "<p>深耕<a href=\"https://bloomberg.com/x\">美国市场</a> https://bloomberg.com/y</p>";
+        assert_eq!(sanitize_translation_output(raw), "深耕美国市场");
     }
 }

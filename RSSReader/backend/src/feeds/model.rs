@@ -68,6 +68,18 @@ pub struct ArticleListFilter {
     pub favorites_only: bool,
     #[serde(default)]
     pub tag_id: Option<String>,
+    #[serde(default)]
+    pub tag_ids: Vec<String>,
+    #[serde(default)]
+    pub tag_match: TagMatchMode,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TagMatchMode {
+    #[default]
+    Any,
+    All,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -104,6 +116,26 @@ pub struct ArticleTagsSaveRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ArticleTagDeleteRequest {
     pub article_id: String,
+    pub tag_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagRenameRequest {
+    pub tag_id: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagMergeRequest {
+    pub source_tag_id: String,
+    pub target_tag_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagDeleteRequest {
     pub tag_id: String,
 }
 

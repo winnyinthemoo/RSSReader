@@ -12,15 +12,15 @@ use rssreader_backend::ai::{
     ArticleSummaryRecord, AssignTagsRequest, CreateAiModelRequest, CreateAiProviderRequest,
     GetSummaryRequest, PromptRevealResult, ProviderTestRequest, ProviderTestResult,
     StartSummaryRequest, StartTranslationRequest, SummaryStreamChunk, TaggingSuggestRequest,
-    TaggingSuggestResult, TranslationView, UpdateAiModelRequest, UpdateAiProviderRequest,
-    UsageReportResult,
+    TaggingSuggestResult, TranslationStreamChunk, TranslationView, UpdateAiModelRequest,
+    UpdateAiProviderRequest, UsageReportResult,
 };
 use rssreader_backend::{
     ArticleDetail, ArticleListFilter, ArticleListResult, ArticleNote, ArticleTagsResult,
     FeedListResult, FeedRefreshResult, FeedWithArticles, TagListResult,
 };
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 async fn run_blocking<T>(
     operation: impl FnOnce() -> Result<T, String> + Send + 'static,
@@ -41,6 +41,21 @@ fn feed_list() -> FeedListResult {
 #[tauri::command]
 fn tag_list() -> TagListResult {
     backend::feeds::tag_list()
+}
+
+#[tauri::command]
+fn tag_rename(tag_id: String, name: String) -> Result<TagListResult, String> {
+    backend::feeds::tag_rename(tag_id, name)
+}
+
+#[tauri::command]
+fn tag_merge(source_tag_id: String, target_tag_id: String) -> Result<TagListResult, String> {
+    backend::feeds::tag_merge(source_tag_id, target_tag_id)
+}
+
+#[tauri::command]
+fn tag_delete(tag_id: String) -> Result<TagListResult, String> {
+    backend::feeds::tag_delete(tag_id)
 }
 
 #[tauri::command]
@@ -349,8 +364,41 @@ fn ai_get_translation(
 }
 
 #[tauri::command]
-async fn ai_start_translation(request: StartTranslationRequest) -> Result<TranslationView, String> {
-    run_blocking(move || backend::ai::ai_start_translation(request)).await
+async fn ai_start_translation(
+    app_handle: tauri::AppHandle,
+    request: StartTranslationRequest,
+    event_id: Option<String>,
+) -> Result<TranslationView, String> {
+    run_blocking(move || {
+        let Some(event_id) = event_id else {
+            return backend::ai::ai_start_translation(request);
+        };
+
+        let event_name = translation_stream_event_name(&event_id);
+        let emit_handle = app_handle.clone();
+        let result = backend::ai::ai_start_translation_stream(request, |view| {
+            let chunk = TranslationStreamChunk {
+                translation: Some(view.clone()),
+                done: view.status != "running",
+                error_message: None,
+            };
+            if let Err(error) = emit_handle.emit(&event_name, chunk) {
+                eprintln!("translation stream emit failed: {error}");
+            }
+        });
+
+        if let Err(message) = &result {
+            let chunk = TranslationStreamChunk {
+                translation: None,
+                done: true,
+                error_message: Some(message.clone()),
+            };
+            let _ = app_handle.emit(&event_name, chunk);
+        }
+
+        result
+    })
+    .await
 }
 
 #[tauri::command]
@@ -359,13 +407,17 @@ async fn ai_suggest_tags(request: TaggingSuggestRequest) -> Result<TaggingSugges
 }
 
 #[tauri::command]
-fn ai_assign_tags(request: AssignTagsRequest) -> Result<(), String> {
+fn ai_assign_tags(request: AssignTagsRequest) -> Result<ArticleTagsResult, String> {
     backend::ai::ai_assign_tags(request)
 }
 
 #[tauri::command]
-fn ai_usage_report(dimension: String, window_days: u32) -> Result<UsageReportResult, String> {
-    backend::ai::ai_usage_report(dimension, window_days)
+fn ai_usage_report(
+    dimension: String,
+    window_days: u32,
+    key: Option<String>,
+) -> Result<UsageReportResult, String> {
+    backend::ai::ai_usage_report(dimension, window_days, key)
 }
 
 fn configure_data_dir(app: &mut tauri::App) -> Result<(), Box<dyn Error>> {
@@ -379,6 +431,10 @@ fn configure_data_dir(app: &mut tauri::App) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn translation_stream_event_name(event_id: &str) -> String {
+    format!("ai-translation-stream-{event_id}")
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
@@ -388,6 +444,9 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             feed_list,
             tag_list,
+            tag_rename,
+            tag_merge,
+            tag_delete,
             feed_add,
             feed_refresh,
             feed_delete,

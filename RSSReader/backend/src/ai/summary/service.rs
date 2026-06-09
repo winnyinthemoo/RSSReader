@@ -11,6 +11,7 @@ use super::super::prompt::{
 };
 use super::super::provider::{AiProviderService, AiRepository};
 use super::super::text::article_body_for_agents;
+use super::super::usage::{record_llm_usage, UsageRecordInput};
 
 const MAX_SOURCE_CHARS: usize = 12_000;
 
@@ -25,7 +26,10 @@ impl SummaryService {
         })
     }
 
-    pub fn get_summary(&self, request: GetSummaryRequest) -> AiResult<Option<ArticleSummaryRecord>> {
+    pub fn get_summary(
+        &self,
+        request: GetSummaryRequest,
+    ) -> AiResult<Option<ArticleSummaryRecord>> {
         self.repository.get_summary(
             &request.article_id,
             &request.target_language,
@@ -35,9 +39,9 @@ impl SummaryService {
 
     pub fn start_summary(&self, request: StartSummaryRequest) -> AiResult<SummaryStreamChunk> {
         let feeds = FeedRepository::open_default().map_err(|error| AiError::Database(error))?;
-        let article = feeds
-            .get_article(&request.article_id)?
-            .ok_or_else(|| AiError::NotFound(format!("Article not found: {}", request.article_id)))?;
+        let article = feeds.get_article(&request.article_id)?.ok_or_else(|| {
+            AiError::NotFound(format!("Article not found: {}", request.article_id))
+        })?;
 
         let source_text = truncate_for_llm(&article_body_for_agents(&article));
         if source_text.trim().is_empty() {
@@ -46,17 +50,51 @@ impl SummaryService {
             ));
         }
 
-        let parameters = summary_parameters(
-            &request.target_language,
-            request.detail_level,
-            &source_text,
-        );
+        let parameters =
+            summary_parameters(&request.target_language, request.detail_level, &source_text);
         let resolved = PromptCustomization::resolve(AgentPromptKind::Summary, parameters)?;
         let messages = chat_messages_from_rendered(&resolved.rendered);
 
         let provider = AiProviderService::new()?;
-        let (client, model_name, model_id) = provider.openai_client_for_agent(AgentType::Summary)?;
-        let content = client.chat_completion(&model_name, &messages)?;
+        let route = provider.openai_agent_client(AgentType::Summary)?;
+        let started_at = now_marker();
+        let completion = route
+            .client
+            .chat_completion_with_usage(&route.model_name, &messages);
+        let finished_at = now_marker();
+        let completion = match completion {
+            Ok(completion) => {
+                record_llm_usage(UsageRecordInput {
+                    agent_type: AgentType::Summary,
+                    article_id: Some(&request.article_id),
+                    provider_id: route.provider_id.as_deref(),
+                    model_id: route.model_id.as_deref(),
+                    model_name: &route.model_name,
+                    base_url: &route.base_url,
+                    request_status: "succeeded",
+                    usage: completion.usage.as_ref(),
+                    started_at: &started_at,
+                    finished_at: &finished_at,
+                });
+                completion
+            }
+            Err(error) => {
+                record_llm_usage(UsageRecordInput {
+                    agent_type: AgentType::Summary,
+                    article_id: Some(&request.article_id),
+                    provider_id: route.provider_id.as_deref(),
+                    model_id: route.model_id.as_deref(),
+                    model_name: &route.model_name,
+                    base_url: &route.base_url,
+                    request_status: "failed",
+                    usage: None,
+                    started_at: &started_at,
+                    finished_at: &finished_at,
+                });
+                return Err(error);
+            }
+        };
+        let content = completion.content;
 
         let now = now_marker();
         let record = ArticleSummaryRecord {
@@ -65,7 +103,7 @@ impl SummaryService {
             target_language: request.target_language,
             detail_level: request.detail_level,
             content: content.clone(),
-            model_id,
+            model_id: route.model_id,
             created_at: now.clone(),
             updated_at: now,
         };

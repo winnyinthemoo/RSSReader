@@ -45,8 +45,29 @@ function findTagBlock(
 }
 
 function findNextBlock(lower: string, from: number): { start: number; end: number } | null {
+  return findNextTaggedBlock(lower, from, ["p", "ul", "ol"]);
+}
+
+function findNextFallbackBlock(lower: string, from: number): { start: number; end: number } | null {
+  return findNextTaggedBlock(lower, from, [
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "blockquote",
+    "pre",
+    "article",
+    "section",
+    "div",
+    "li",
+  ]);
+}
+
+function findNextTaggedBlock(lower: string, from: number, tags: readonly string[]): { start: number; end: number } | null {
   let best: { start: number; end: number } | null = null;
-  for (const tag of ["p", "ul", "ol"] as const) {
+  for (const tag of tags) {
     const block = findTagBlock(lower, tag, from);
     if (!block) {
       continue;
@@ -58,12 +79,35 @@ function findNextBlock(lower: string, from: number): { start: number; end: numbe
   return best;
 }
 
+function hasVisibleText(html: string): boolean {
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html;
+  return Boolean((wrapper.textContent ?? html).trim());
+}
+
 function countTranslatableBlocks(html: string): number {
+  if (!hasVisibleText(html)) {
+    return 0;
+  }
+
   const lower = html.toLowerCase();
+  const primary = countBlocks(lower, findNextBlock);
+  if (primary > 0) {
+    return primary;
+  }
+
+  const fallback = countBlocks(lower, findNextFallbackBlock);
+  return fallback > 0 ? fallback : 1;
+}
+
+function countBlocks(
+  lower: string,
+  finder: (lower: string, from: number) => { start: number; end: number } | null,
+): number {
   let cursor = 0;
   let count = 0;
   while (true) {
-    const block = findNextBlock(lower, cursor);
+    const block = finder(lower, cursor);
     if (!block) {
       break;
     }
@@ -80,7 +124,7 @@ export type BilingualArticleBuild = {
   placed: number;
 };
 
-/** Mirrors backend `Segmenter` — insert translation after each p/ul/ol block. */
+/** Mirrors backend `Segmenter` — prefer p/ul/ol, with a fallback for sparse RSS HTML. */
 export function buildBilingualArticleHtml(
   articleHtml: string,
   segments: TranslationSegmentView[],
@@ -91,13 +135,15 @@ export function buildBilingualArticleHtml(
   }
 
   const lower = articleHtml.toLowerCase();
+  const blockCount = countTranslatableBlocks(articleHtml);
+  const finder = countBlocks(lower, findNextBlock) > 0 ? findNextBlock : findNextFallbackBlock;
   let cursor = 0;
   let segmentIndex = 0;
   let result = "";
   let placed = 0;
 
   while (segmentIndex < ordered.length) {
-    const block = findNextBlock(lower, cursor);
+    const block = finder(lower, cursor);
     if (!block) {
       break;
     }
@@ -116,7 +162,16 @@ export function buildBilingualArticleHtml(
 
   result += articleHtml.slice(cursor);
 
-  const blockCount = countTranslatableBlocks(articleHtml);
+  if (segmentIndex === 0 && blockCount === 1 && hasVisibleText(articleHtml)) {
+    const segment = ordered[0];
+    const displayText = displayTranslationText(readTranslatedText(segment));
+    if (displayText) {
+      result += `<div class="translation-block" data-segment-index="${segment.segmentIndex}">${escapeHtml(displayText)}</div>`;
+      placed = 1;
+    }
+    segmentIndex = 1;
+  }
+
   return {
     html: result,
     aligned: blockCount === ordered.length && segmentIndex === ordered.length,

@@ -1,12 +1,19 @@
 import { Circle, Star } from "lucide-react";
 
-import type { ArticleListItem, FeedSummary, TagSummary } from "../../../../../shared/feed";
+import type {
+  ArticleListItem,
+  FeedSummary,
+  TagMatchMode,
+  TagSummary,
+} from "../../../../../shared/feed";
+
+import { useState, useMemo, useEffect } from "react";
 
 type SidebarSelection =
   | { type: "all" }
   | { type: "feed"; feedId: string }
   | { type: "starred" }
-  | { type: "tag"; tagId: string };
+  | { type: "tag"; tagIds: string[]; tagMatch: TagMatchMode };
 
 interface ArticleListProps {
   articles: ArticleListItem[];
@@ -27,16 +34,59 @@ export function ArticleList({
   onSelectArticle,
   onToggleFavorite,
 }: ArticleListProps) {
+  
+  // 筛选模式：null 表示显示全部，'unread' 表示只显示未读，'read' 表示只显示已读
+  const [filterType, setFilterType] = useState<'unread' | 'read' | null>(null);
+
+  // 当切换 Feed 时，重置筛选状态
+  useEffect(() => {
+    setFilterType(null);
+  }, [selection]);
+
   const title = getArticleListTitle(selection, feeds, tags);
+
+  // 计算已读和未读数量
+  const readCount = articles.filter(a => a.isRead).length;
+  const unreadCount = articles.filter(a => !a.isRead).length;
+
+  // 根据筛选模式过滤文章
+  const filteredArticles = useMemo(() => {
+    if (filterType === 'unread') {
+      return articles.filter(a => !a.isRead);
+    }
+    if (filterType === 'read') {
+      return articles.filter(a => a.isRead);
+    }
+    return articles;
+  }, [articles, filterType]);
 
   return (
     <section className="article-list-pane">
       <div className="pane-header article-header">
         <div>
           <p className="eyebrow">{selection.type === "starred" ? "Saved" : "Inbox"}</p>
-          <h2>{title}</h2>
+          <div className="header-title-row">
+            <h2>{title}</h2>
+            {/* {selection.type !== "starred" && ( */}
+              <div className="article-stats">
+                <span 
+                  className={`unread-count-badge ${filterType === 'unread' ? 'active' : ''}`}
+                  onClick={() => setFilterType(filterType === 'unread' ? null : 'unread')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  Unread {unreadCount}
+                </span>
+                <span 
+                  className={`read-count-badge ${filterType === 'read' ? 'active' : ''}`}
+                  onClick={() => setFilterType(filterType === 'read' ? null : 'read')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  Read {readCount}
+                </span>
+              </div>
+            {/* )} */}
+          </div>
         </div>
-        <span className="article-count">{articles.length}</span>
       </div>
 
       <div className="article-list">
@@ -45,7 +95,7 @@ export function ArticleList({
             <p>No articles yet.</p>
           </div>
         ) : (
-          articles.map((article) => (
+          filteredArticles.map((article) => (
             <button
               className={`article-item ${selectedArticleId === article.id ? "selected" : ""} ${
                 article.isRead ? "read" : "unread"
@@ -103,8 +153,15 @@ function getArticleListTitle(
       return feeds.find((feed) => feed.id === selection.feedId)?.title ?? "Feed";
     case "starred":
       return "Starred";
-    case "tag":
-      return tags.find((tag) => tag.id === selection.tagId)?.name ?? "Tag";
+    case "tag": {
+      const selectedNames = selection.tagIds
+        .map((tagId) => tags.find((tag) => tag.id === tagId)?.name)
+        .filter((name): name is string => Boolean(name));
+      if (selectedNames.length <= 1) {
+        return selectedNames[0] ?? "Tag";
+      }
+      return `${selectedNames[0]} +${selectedNames.length - 1} (${selection.tagMatch})`;
+    }
     case "all":
     default:
       return "All articles";

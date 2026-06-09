@@ -8,6 +8,8 @@ interface BilingualTranslationViewProps {
   translation?: TranslationView;
   isLoading?: boolean;
   errorMessage?: string;
+  showEmptyMessage?: boolean;
+  isSelection?: boolean;
 }
 
 export function BilingualTranslationView({
@@ -15,8 +17,19 @@ export function BilingualTranslationView({
   translation,
   isLoading,
   errorMessage,
+  showEmptyMessage = true,
+  isSelection = false,
 }: BilingualTranslationViewProps) {
   const built = useMemo(() => {
+    if (translation?.bilingualHtml) {
+      return {
+        html: translation.bilingualHtml,
+        aligned: translation.bilingualAligned,
+        expected: translation.bilingualExpected,
+        placed: translation.bilingualPlaced,
+      };
+    }
+
     if (!translation?.segments.length) {
       return {
         html: articleHtml,
@@ -30,6 +43,11 @@ export function BilingualTranslationView({
 
   return (
     <div className="bilingual-translation">
+      {translation?.translatedTitle ? (
+        <header className="bilingual-title">
+          <p>{translation.translatedTitle}</p>
+        </header>
+      ) : null}
       {errorMessage ? (
         <p className="summary-error" role="status">
           {formatTranslationError(errorMessage)}
@@ -37,17 +55,15 @@ export function BilingualTranslationView({
       ) : null}
       {isLoading ? (
         <p className="bilingual-status muted">
-          Translating article by segment (may take a few minutes)…
+          {isSelection
+            ? "Translating selected text..."
+            : "Translating article by segment (may take a few minutes)..."}
         </p>
       ) : null}
-      {translation ? (
-        <p className="bilingual-status">
-          Target: {translation.targetLanguage} · Status: {translation.status}
-        </p>
-      ) : !isLoading ? (
+      {!translation && !isLoading && showEmptyMessage ? (
         <p className="bilingual-status muted">No translation yet.</p>
       ) : null}
-      {!built.aligned && built.expected > 0 ? (
+      {built.placed < built.expected ? (
         <p className="bilingual-align-warning" role="status">
           Some segments could not be aligned with the article layout (
           {built.placed}/{built.expected} placed).

@@ -167,13 +167,21 @@ fn extract_img_tags(html: &str) -> String {
 
 fn narrow_to_content(html: &str) -> &str {
     for marker in [
-        "<article", "class=\"article\"", "class=\"article ",
-        "class=\"article-content\"", "class=\"article-content ",
-        "class=\"post-content\"", "class=\"post-content ",
-        "class=\"entry-content\"", "class=\"entry-content ",
-        "class=\"post-body\"", "class=\"post-body ",
-        "class=\"content\"", "class=\"content ",
-        "class=\"main\"", "class=\"main ",
+        "<article",
+        "class=\"article\"",
+        "class=\"article ",
+        "class=\"article-content\"",
+        "class=\"article-content ",
+        "class=\"post-content\"",
+        "class=\"post-content ",
+        "class=\"entry-content\"",
+        "class=\"entry-content ",
+        "class=\"post-body\"",
+        "class=\"post-body ",
+        "class=\"content\"",
+        "class=\"content ",
+        "class=\"main\"",
+        "class=\"main ",
     ] {
         if let Some(start) = html.find(marker) {
             let after_open = &html[start..];
@@ -193,8 +201,20 @@ fn narrow_to_content(html: &str) -> &str {
 fn is_void_element(tag: &str) -> bool {
     matches!(
         tag,
-        "area" | "base" | "br" | "col" | "embed" | "hr" | "img"
-            | "input" | "link" | "meta" | "param" | "source" | "track" | "wbr"
+        "area"
+            | "base"
+            | "br"
+            | "col"
+            | "embed"
+            | "hr"
+            | "img"
+            | "input"
+            | "link"
+            | "meta"
+            | "param"
+            | "source"
+            | "track"
+            | "wbr"
     )
 }
 
@@ -311,8 +331,14 @@ pub fn try_fetch_full_content(article_url: &str) -> Option<String> {
     // 1. Strip the base64 placeholder src (common lazyload pattern) so
     //    browsers don't pick it over the real data-src.
     // 2. Rewrite data-src -> src so the real URL becomes visible.
-    content = content.replace("src=\"data:image/gif;base64", "old_src=\"data:image/gif;base64");
-    content = content.replace("src=\"data:image/png;base64", "old_src=\"data:image/png;base64");
+    content = content.replace(
+        "src=\"data:image/gif;base64",
+        "old_src=\"data:image/gif;base64",
+    );
+    content = content.replace(
+        "src=\"data:image/png;base64",
+        "old_src=\"data:image/png;base64",
+    );
     content = content.replace("data-src", "src");
     Some(content)
 }
@@ -374,7 +400,12 @@ fn entry_to_article(
         .content
         .as_ref()
         .and_then(|content| content.body.clone())
-        .or_else(|| entry.summary.as_ref().map(|summary| summary.content.clone()))
+        .or_else(|| {
+            entry
+                .summary
+                .as_ref()
+                .map(|summary| summary.content.clone())
+        })
         .unwrap_or_else(|| title.clone());
 
     // Feed-add: store only RSS raw content — no readability fetch.
@@ -471,7 +502,11 @@ fn extract_hero_banner_img(raw_html: &str, article_url: &str) -> Option<String> 
     // Find a hero/banner container
     let lower = raw_html.to_lowercase();
     let hero_start = lower.find("hero").or_else(|| lower.find("banner"))?;
-    let window_start = if hero_start > 2000 { hero_start - 2000 } else { 0 };
+    let window_start = if hero_start > 2000 {
+        hero_start - 2000
+    } else {
+        0
+    };
     let window = &raw_html[window_start..hero_start + 500];
 
     // Check for <img> inside the window first
@@ -536,9 +571,9 @@ fn resolve_url(url: &str, article_url: &str) -> String {
 }
 
 pub fn stable_id(prefix: &str, value: &str) -> String {
-    let hash = value
-        .bytes()
-        .fold(5381_u64, |acc, byte| acc.wrapping_mul(33).wrapping_add(byte as u64));
+    let hash = value.bytes().fold(5381_u64, |acc, byte| {
+        acc.wrapping_mul(33).wrapping_add(byte as u64)
+    });
     format!("{prefix}-{hash:x}")
 }
 
@@ -616,5 +651,4 @@ mod tests {
         assert_eq!(parsed.articles.len(), 2);
         assert_ne!(parsed.articles[0].url, parsed.articles[1].url);
     }
-
 }

@@ -23,9 +23,10 @@ impl TaskQueue {
     }
 
     pub fn try_acquire(&self, agent_type: AgentType, article_id: &str) -> AiResult<()> {
-        let mut guard = self.active.lock().map_err(|_| {
-            AiError::Configuration("Task queue lock poisoned".to_string())
-        })?;
+        let mut guard = self
+            .active
+            .lock()
+            .map_err(|_| AiError::Configuration("Task queue lock poisoned".to_string()))?;
         if let Some(task) = guard.as_ref() {
             if task.agent_type == agent_type && task.article_id != article_id {
                 return Err(AiError::Configuration(
@@ -41,9 +42,10 @@ impl TaskQueue {
     }
 
     pub fn release(&self, agent_type: AgentType, article_id: &str) -> AiResult<()> {
-        let mut guard = self.active.lock().map_err(|_| {
-            AiError::Configuration("Task queue lock poisoned".to_string())
-        })?;
+        let mut guard = self
+            .active
+            .lock()
+            .map_err(|_| AiError::Configuration("Task queue lock poisoned".to_string()))?;
         if guard
             .as_ref()
             .is_some_and(|task| task.agent_type == agent_type && task.article_id == article_id)

@@ -65,6 +65,14 @@ impl OpenAiCompatClient {
     }
 
     pub fn chat_completion(&self, model: &str, messages: &[ChatMessage]) -> AiResult<String> {
+        Ok(self.chat_completion_with_usage(model, messages)?.content)
+    }
+
+    pub fn chat_completion_with_usage(
+        &self,
+        model: &str,
+        messages: &[ChatMessage],
+    ) -> AiResult<ChatCompletionResult> {
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
         let body = ChatRequest {
             model: model.to_string(),
@@ -112,9 +120,23 @@ pub struct ChatMessage {
     pub content: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct ChatCompletionResult {
+    pub content: String,
+    pub usage: Option<ChatUsage>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ChatUsage {
+    pub prompt_tokens: Option<u64>,
+    pub completion_tokens: Option<u64>,
+    pub total_tokens: Option<u64>,
+}
+
 #[derive(Debug, Deserialize)]
 struct ChatResponse {
     choices: Vec<ChatChoice>,
+    usage: Option<ChatUsage>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -122,10 +144,14 @@ struct ChatChoice {
     message: ChatMessage,
 }
 
-fn parse_chat_response(payload: ChatResponse) -> AiResult<String> {
-    payload
+fn parse_chat_response(payload: ChatResponse) -> AiResult<ChatCompletionResult> {
+    let content = payload
         .choices
         .first()
         .map(|choice| choice.message.content.clone())
-        .ok_or_else(|| AiError::LlmRequest("Empty LLM response".to_string()))
+        .ok_or_else(|| AiError::LlmRequest("Empty LLM response".to_string()))?;
+    Ok(ChatCompletionResult {
+        content,
+        usage: payload.usage,
+    })
 }

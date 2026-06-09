@@ -1,0 +1,25 @@
+# 2026-05-29 Translation Title
+
+- 日期：2026-05-29
+- 负责人：Codex
+- 使用工具：终端、rg、apply_patch
+- 对应 Issue / PR：未指定
+- 任务目标：为文章双语翻译添加标题翻译。
+- 关键 Prompt 摘要：用户要求“添加翻译标题”。
+- Agent 修改内容摘要：
+  - 在 `TranslationView` 前后端共享契约中新增 `translatedTitle`。
+  - 新增 `0007_translation_title.sql` migration，为 `article_translation_runs` 添加 `translated_title` 字段。
+  - 后端开始翻译时先翻译文章标题，并将标题译文写入翻译 run。
+  - 读取历史翻译缓存时返回标题译文。
+  - 当时前端双语视图显示原始标题和标题译文。
+  - 后续补充：前端双语视图已改为只显示标题译文，不再重复显示原始标题，也不显示 `Target / Status` 状态行。
+  - 增加 migration 单元测试，确认新字段会被创建。
+- 人工检查结果：已确认标题译文随翻译结果返回，并在双语阅读视图顶部展示。
+- 是否运行测试：
+  - 已运行 `cargo check`，通过，保留既有 unused warning。
+  - 已运行 `cargo test migrations_create_translation_title_column`，通过。
+  - 已运行 `cargo test segmentation`，通过。
+  - 当时已尝试运行 `npm --prefix RSSReader/frontend run build`，但 Codex 命令环境 Node v12.22.9 无法解析 TypeScript/Vite 依赖中的现代语法。
+  - 后续补充：已使用 Node v22.22.3 运行前端 `npm run build`，通过，存在 Vite chunk size warning。
+- 未解决问题：
+  - 需要通过 nvm/正确 PATH 使用 Node 20.19+ 或 Node 22.12+；在 Node v22.22.3 环境下前端构建已验证通过。

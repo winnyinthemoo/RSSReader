@@ -4,8 +4,8 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use super::resolver::AgentPromptKind;
 use super::super::error::{AiError, AiResult};
+use super::resolver::AgentPromptKind;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AgentPromptTemplate {
@@ -139,7 +139,10 @@ mod tests {
 
     #[test]
     fn parses_mercury_default_parameters() {
-        let map = parse_default_parameter_entries(&["shortWordMin=80".to_string(), "maxTagCount=5".to_string()]);
+        let map = parse_default_parameter_entries(&[
+            "shortWordMin=80".to_string(),
+            "maxTagCount=5".to_string(),
+        ]);
         assert_eq!(map.get("shortWordMin").map(String::as_str), Some("80"));
         assert_eq!(map.get("maxTagCount").map(String::as_str), Some("5"));
     }
@@ -150,7 +153,9 @@ mod tests {
             id: None,
             version: 5,
             system_template: None,
-            user_template: "A {{#previousSourceText}}ctx{{previousSourceText}} end{{/previousSourceText}} B".to_string(),
+            user_template:
+                "A {{#previousSourceText}}ctx{{previousSourceText}} end{{/previousSourceText}} B"
+                    .to_string(),
             default_parameters: Vec::new(),
         };
         let mut params = HashMap::new();
@@ -181,7 +186,10 @@ mod tests {
     fn builtin_summary_prompt_loads() {
         let template = PromptTemplateStore::load_builtin(AgentPromptKind::Summary).unwrap();
         assert_eq!(template.version, 2);
-        assert!(template.system_template.as_ref().is_some_and(|s| s.contains("DetailLevelContract")));
+        assert!(template
+            .system_template
+            .as_ref()
+            .is_some_and(|s| s.contains("DetailLevelContract")));
         assert!(!template.default_parameters.is_empty());
     }
 }
