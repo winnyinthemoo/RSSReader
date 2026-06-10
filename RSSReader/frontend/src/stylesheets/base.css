@@ -32,7 +32,14 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(12rem, 16%) minmax(16rem, 24%) minmax(0, 1fr);
+  --sidebar-width: 330px;
+  --article-list-width: 490px;
+  grid-template-columns:
+    minmax(220px, var(--sidebar-width))
+    8px
+    minmax(320px, var(--article-list-width))
+    8px
+    minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
 }

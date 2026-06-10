@@ -53,10 +53,63 @@ button:active:not(:disabled) {
 }
 
 .app-shell {
-  grid-template-columns: minmax(224px, 16vw) minmax(340px, 24vw) minmax(0, 1fr);
+  grid-template-columns:
+    minmax(220px, var(--sidebar-width))
+    8px
+    minmax(320px, var(--article-list-width))
+    8px
+    minmax(0, 1fr);
   gap: 5px;
   padding: 8px;
   background: transparent;
+}
+
+.pane-resizer {
+  align-self: stretch;
+  width: 8px;
+  min-width: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: col-resize;
+  position: relative;
+  z-index: 12;
+  padding: 0;
+  touch-action: none;
+}
+
+.pane-resizer::before {
+  content: "";
+  position: absolute;
+  inset: 12px 3px;
+  border-radius: 999px;
+  background: rgba(60, 60, 67, 0.12);
+  opacity: 0;
+  transform: scaleY(0.72);
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.pane-resizer:hover::before,
+.pane-resizer:focus-visible::before,
+.pane-resizing .pane-resizer::before {
+  background: rgba(0, 122, 255, 0.5);
+  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.12);
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+.pane-resizer:focus-visible {
+  outline: none;
+}
+
+.pane-resizing,
+.pane-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .app-shell[data-reader-theme="sepia"] {
@@ -947,6 +1000,10 @@ h2 {
 @media (max-width: 980px) {
   .app-shell {
     grid-template-columns: minmax(220px, 30vw) minmax(0, 1fr);
+  }
+
+  .pane-resizer {
+    display: none;
   }
 }
 

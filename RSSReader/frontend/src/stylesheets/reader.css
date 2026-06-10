@@ -677,7 +677,21 @@
 .reader-compare.dragging .compare-pane-content { pointer-events: none; }
 .reader-compare.dragging .reader-iframe { pointer-events: none; }
 .compare-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: none; position: relative; }
-.compare-pane-label { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 8px 16px; color: #657066; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; background: #f0f3ef; border-bottom: 1px solid #dce2dc; }
+.compare-pane-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 8px 18px;
+  color: rgba(60, 60, 67, 0.72);
+  font-size: 0.72rem;
+  font-weight: 740;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(247, 248, 250, 0.76));
+  border-bottom: 1px solid rgba(60, 60, 67, 0.1);
+  backdrop-filter: blur(18px);
+}
 .compare-pane-content { flex: 1; overflow-y: auto; padding: 20px 28px; color: #2f312d; font-size: 0.95rem; line-height: 1.7; }
 .compare-markdown-content { max-width: none; padding: 0; }
 .compare-pane-content p { margin: 0 0 1em; }
@@ -693,8 +707,8 @@
 .compare-pane-content th,
 .compare-pane-content td { border: 1px solid #dce2dc; padding: 6px 10px; text-align: left; }
 .compare-pane-content th { background: #f0f3ef; font-weight: 600; }
-.compare-divider { display: flex; align-items: center; justify-content: center; width: 12px; flex: 0 0 auto; cursor: col-resize; background: transparent; position: relative; z-index: 1; margin: 0 -4px; }
-.compare-divider-handle { width: 3px; height: 48px; border-radius: 2px; background: #b7cfc4; transition: background 0.15s, height 0.15s; }
+.compare-divider { display: flex; align-items: center; justify-content: center; width: 12px; flex: 0 0 auto; cursor: col-resize; background: rgba(255, 255, 255, 0.62); border-inline: 1px solid rgba(60, 60, 67, 0.08); position: relative; z-index: 1; margin: 0 -4px; backdrop-filter: blur(16px); }
+.compare-divider-handle { width: 3px; height: 48px; border-radius: 999px; background: rgba(0, 122, 255, 0.34); transition: background 0.15s, height 0.15s; }
 .compare-divider:hover .compare-divider-handle,
-.reader-compare.dragging .compare-divider-handle { height: 80px; background: #2f6f7c; }
+.reader-compare.dragging .compare-divider-handle { height: 80px; background: var(--accent-blue); }
 

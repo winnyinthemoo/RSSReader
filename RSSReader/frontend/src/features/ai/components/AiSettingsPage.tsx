@@ -76,6 +76,7 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
   const [statusMessage, setStatusMessage] = useState<string | undefined>();
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(false);
+  const [isUsagePopoverOpen, setIsUsagePopoverOpen] = useState(false);
   
   const [deleteProviderId, setDeleteProviderId] = useState<string | null>(null);
   const [deleteModelId, setDeleteModelId] = useState<string | null>(null);
@@ -84,6 +85,12 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
   const selectedProvider = providers.find((provider) => provider.id === selectedProviderId);
   const selectedModel = models.find((model) => model.id === selectedModelId);
   const usageDimension = tabUsageDimension(activeTab);
+  const usageRowKey =
+    usageDimension === "agent"
+      ? activeAgent
+      : usageDimension === "model"
+        ? selectedModelId || undefined
+        : selectedProviderId || undefined;
 
   const modelsByProvider = useMemo(() => {
     const groups = new Map<string, AiModel[]>();
@@ -98,14 +105,8 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
   }, []);
 
   useEffect(() => {
-    const key =
-      usageDimension === "agent"
-        ? activeAgent
-        : usageDimension === "model"
-          ? selectedModelId || undefined
-          : selectedProviderId || undefined;
-    void loadUsage(usageDimension, key);
-  }, [activeAgent, selectedModelId, selectedProviderId, usageDimension]);
+    void loadUsage(usageDimension, usageRowKey);
+  }, [usageDimension, usageRowKey]);
 
   useEffect(() => {
     if (selectedProvider) {
@@ -426,9 +427,21 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
           <div>
             <h2>Model Settings</h2>
           </div>
-          <button className="secondary-button" type="button" onClick={onClose}>
-            Close
-          </button>
+          <div className="ai-header-actions">
+            <button
+              className={`usage-launch-button ${isUsagePopoverOpen ? "active" : ""}`}
+              type="button"
+              aria-expanded={isUsagePopoverOpen}
+              aria-haspopup="dialog"
+              onClick={() => setIsUsagePopoverOpen((isOpen) => !isOpen)}
+            >
+              <LineChart size={17} />
+              <span>Usage</span>
+            </button>
+            <button className="secondary-button" type="button" onClick={onClose}>
+              Close
+            </button>
+          </div>
         </header>
 
         <nav className="ai-settings-tabs" aria-label="AI settings sections">
@@ -456,7 +469,6 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
               providerEnabled={providerEnabled}
               testModelName={testModelName}
               testResult={testResult}
-              usageReport={usageReport}
               isLoading={isLoading}
               onSelectProvider={(providerId) => {
                 setSelectedProviderId(providerId);
@@ -482,7 +494,6 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
               modelProviderId={modelProviderId}
               modelName={modelName}
               modelEnabled={modelEnabled}
-              usageReport={usageReport}
               isLoading={isLoading}
               onSelectModel={setSelectedModelId}
               onAddModel={resetModelForm}
@@ -506,7 +517,6 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
               translationConcurrency={translationConcurrency}
               translationStrategy={translationStrategy}
               taggingModelId={taggingModelId}
-              usageReport={usageReport}
               isLoading={isLoading}
               onActiveAgentChange={setActiveAgent}
               onSummaryModelChange={setSummaryModelId}
@@ -529,6 +539,35 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
             {errorMessage ? <span className="ai-status-error">{errorMessage}</span> : null}
           </div>
         </footer>
+
+        {isUsagePopoverOpen ? (
+          <div
+            className="usage-popover-layer"
+            role="presentation"
+            onMouseDown={() => setIsUsagePopoverOpen(false)}
+          >
+            <aside
+              className="usage-popover"
+              role="dialog"
+              aria-label={`${dimensionLabel(usageDimension)} usage`}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                className="usage-popover-close"
+                type="button"
+                aria-label="Close usage panel"
+                onClick={() => setIsUsagePopoverOpen(false)}
+              >
+                <X size={16} />
+              </button>
+              <UsageSummary
+                dimension={usageDimension}
+                report={usageReport}
+                rowKey={usageRowKey}
+              />
+            </aside>
+          </div>
+        ) : null}
         
         {/* 删除 Provider 确认弹窗 */}
         {deleteProviderId && (
@@ -597,7 +636,6 @@ interface ProvidersTabProps {
   providerEnabled: boolean;
   testModelName: string;
   testResult?: ProviderTestResult;
-  usageReport?: UsageReportResult;
   isLoading: boolean;
   onSelectProvider: (providerId: string) => void;
   onAddProvider: () => void;
@@ -621,7 +659,6 @@ function ProvidersTab({
   providerEnabled,
   testModelName,
   testResult,
-  usageReport,
   isLoading,
   onSelectProvider,
   onAddProvider,
@@ -643,30 +680,27 @@ function ProvidersTab({
             Add
           </button>
         </div>
-        {providers.length === 0 ? (
-          <p className="muted">No providers yet.</p>
-        ) : (
-          providers.map((provider) => (
-            <button
-              key={provider.id}
-              className={`ai-list-item ${selectedProviderId === provider.id ? "selected" : ""}`}
-              type="button"
-              onClick={() => onSelectProvider(provider.id)}
-            >
-              <strong>{provider.displayName}</strong>
-              <span>{provider.baseUrl}</span>
-              <small>{modelsByProvider.get(provider.id)?.length ?? 0} models</small>
-            </button>
-          ))
-        )}
+        <div className="ai-list-scroll">
+          {providers.length === 0 ? (
+            <p className="muted ai-list-empty">No providers yet.</p>
+          ) : (
+            providers.map((provider) => (
+              <button
+                key={provider.id}
+                className={`ai-list-item ${selectedProviderId === provider.id ? "selected" : ""}`}
+                type="button"
+                onClick={() => onSelectProvider(provider.id)}
+              >
+                <strong>{provider.displayName}</strong>
+                <span>{provider.baseUrl}</span>
+                <small>{modelsByProvider.get(provider.id)?.length ?? 0} models</small>
+              </button>
+            ))
+          )}
+        </div>
       </aside>
 
       <section className="ai-properties">
-        <UsageSummary
-          dimension="provider"
-          report={usageReport}
-          rowKey={selectedProviderId || undefined}
-        />
         <PanelTitle title="Properties" subtitle="Provider connection and local secret settings." />
         <div className="ai-form-grid">
           <label className="ai-field">
@@ -745,7 +779,6 @@ interface ModelsTabProps {
   modelProviderId: string;
   modelName: string;
   modelEnabled: boolean;
-  usageReport?: UsageReportResult;
   isLoading: boolean;
   onSelectModel: (modelId: string) => void;
   onAddModel: () => void;
@@ -763,7 +796,6 @@ function ModelsTab({
   modelProviderId,
   modelName,
   modelEnabled,
-  usageReport,
   isLoading,
   onSelectModel,
   onAddModel,
@@ -801,7 +833,6 @@ function ModelsTab({
       </aside>
 
       <section className="ai-properties">
-        <UsageSummary dimension="model" report={usageReport} rowKey={selectedModelId || undefined} />
         <PanelTitle title="Properties" subtitle="Model name and provider binding." />
         <div className="ai-form-grid">
           <label className="ai-field">
@@ -873,7 +904,6 @@ interface AgentsTabProps {
   translationConcurrency: number;
   translationStrategy: TranslationPromptStrategy;
   taggingModelId: string;
-  usageReport?: UsageReportResult;
   isLoading: boolean;
   onActiveAgentChange: (agent: AgentPanelType) => void;
   onSummaryModelChange: (modelId: string) => void;
@@ -898,7 +928,6 @@ function AgentsTab({
   translationConcurrency,
   translationStrategy,
   taggingModelId,
-  usageReport,
   isLoading,
   onActiveAgentChange,
   onSummaryModelChange,
@@ -928,7 +957,6 @@ function AgentsTab({
       </aside>
 
       <section className="ai-properties">
-        <UsageSummary dimension="agent" report={usageReport} rowKey={activeAgent} />
         <PanelTitle title={`${agentLabel(activeAgent)} Properties`} subtitle="Choose the model and defaults used by this agent." />
         {activeAgent === "summary" ? (
           <div className="ai-form-grid">

@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type {
   ArticleDetail,
@@ -46,6 +53,17 @@ import {
 } from "./services/feedService";
 import { getErrorMessage } from "./utils/errors";
 
+interface PaneLayout {
+  sidebarWidth: number;
+  articleWidth: number;
+}
+
+const paneLayoutKey = "vortex.paneLayout";
+const defaultPaneLayout: PaneLayout = {
+  sidebarWidth: 330,
+  articleWidth: 490,
+};
+
 export default function App() {
   const [feeds, setFeeds] = useState<FeedSummary[]>([]);
   const [tags, setTags] = useState<TagSummary[]>([]);
@@ -66,6 +84,7 @@ export default function App() {
   const [isImporting, setIsImporting] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [syncSettings, setSyncSettings] = useFeedSyncSettings();
+  const [paneLayout, setPaneLayout] = useState<PaneLayout>(() => readPaneLayout());
   const [lastSyncAt, setLastSyncAt] = useState<Date | undefined>();
   const [syncStatusText, setSyncStatusText] = useState("Ready");
   const [showAiSettings, setShowAiSettings] = useState(false);
@@ -74,6 +93,7 @@ export default function App() {
   const initialArticlesLoadedRef = useRef(false);
   const articleListRequestTokenRef = useRef(0);
   const articleSelectionTokenRef = useRef(0);
+  const appShellRef = useRef<HTMLElement>(null);
 
   const activeFeeds = useMemo(
     () => feeds.filter((feed) => feed.status === "active"),
@@ -104,6 +124,10 @@ export default function App() {
 
     return () => window.clearTimeout(timerId);
   }, [articleSearchInput, isArticleSearchComposing]);
+
+  useEffect(() => {
+    writePaneLayout(paneLayout);
+  }, [paneLayout]);
 
   useEffect(() => {
     if (
@@ -563,8 +587,76 @@ export default function App() {
   const isArticleSearchPending =
     isArticleSearchComposing || articleSearchInput.trim() !== articleSearchQuery.trim();
 
+  function handlePaneResizeStart(
+    divider: "sidebar" | "article",
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) {
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startLayout = paneLayout;
+    const shellWidth = appShellRef.current?.getBoundingClientRect().width ?? window.innerWidth;
+    const minSidebarWidth = 240;
+    const minArticleWidth = 320;
+    const minReaderWidth = 520;
+    const reservedSpace = 44;
+
+    document.body.classList.add("pane-resizing");
+
+    function handlePointerMove(moveEvent: PointerEvent) {
+      const deltaX = moveEvent.clientX - startX;
+
+      setPaneLayout(() => {
+        if (divider === "sidebar") {
+          const maxSidebarWidth =
+            shellWidth - startLayout.articleWidth - minReaderWidth - reservedSpace;
+          return {
+            ...startLayout,
+            sidebarWidth: clamp(
+              startLayout.sidebarWidth + deltaX,
+              minSidebarWidth,
+              Math.max(minSidebarWidth, maxSidebarWidth),
+            ),
+          };
+        }
+
+        const maxArticleWidth =
+          shellWidth - startLayout.sidebarWidth - minReaderWidth - reservedSpace;
+        return {
+          ...startLayout,
+          articleWidth: clamp(
+            startLayout.articleWidth + deltaX,
+            minArticleWidth,
+            Math.max(minArticleWidth, maxArticleWidth),
+          ),
+        };
+      });
+    }
+
+    function handlePointerUp() {
+      document.body.classList.remove("pane-resizing");
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+  }
+
+  const appShellStyle = {
+    "--sidebar-width": `${paneLayout.sidebarWidth}px`,
+    "--article-list-width": `${paneLayout.articleWidth}px`,
+  } as CSSProperties;
+
   return (
-    <main className="app-shell" data-reader-theme={readerTheme}>
+    <main
+      className="app-shell"
+      data-reader-theme={readerTheme}
+      ref={appShellRef}
+      style={appShellStyle}
+    >
       <FeedSidebar
         feeds={activeFeeds}
         tags={tags}
@@ -602,6 +694,13 @@ export default function App() {
         onDeleteFeed={handleDeleteFeed}
       />
 
+      <button
+        className="pane-resizer pane-resizer-sidebar"
+        type="button"
+        aria-label="Resize feed sidebar"
+        onPointerDown={(event) => handlePaneResizeStart("sidebar", event)}
+      />
+
       <ArticleList
         articles={articles}
         feeds={feeds}
@@ -611,6 +710,13 @@ export default function App() {
         searchQuery={articleSearchQuery}
         onSelectArticle={handleSelectArticle}
         onToggleFavorite={handleToggleFavorite}
+      />
+
+      <button
+        className="pane-resizer pane-resizer-articles"
+        type="button"
+        aria-label="Resize article list"
+        onPointerDown={(event) => handlePaneResizeStart("article", event)}
       />
 
       <ReaderView
@@ -639,3 +745,33 @@ export default function App() {
   );
 }
 
+function readPaneLayout(): PaneLayout {
+  try {
+    const rawLayout = window.localStorage.getItem(paneLayoutKey);
+    if (!rawLayout) {
+      return defaultPaneLayout;
+    }
+
+    const parsedLayout = JSON.parse(rawLayout) as Partial<PaneLayout>;
+    return {
+      sidebarWidth: sanitizePaneWidth(parsedLayout.sidebarWidth, defaultPaneLayout.sidebarWidth),
+      articleWidth: sanitizePaneWidth(parsedLayout.articleWidth, defaultPaneLayout.articleWidth),
+    };
+  } catch {
+    return defaultPaneLayout;
+  }
+}
+
+function writePaneLayout(layout: PaneLayout) {
+  window.localStorage.setItem(paneLayoutKey, JSON.stringify(layout));
+}
+
+function sanitizePaneWidth(width: unknown, fallback: number) {
+  return typeof width === "number" && Number.isFinite(width)
+    ? clamp(width, 220, 760)
+    : fallback;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
