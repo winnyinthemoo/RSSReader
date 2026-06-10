@@ -1,0 +1,28 @@
+# 2026-06-10 Agent 工作记录：macOS ad-hoc 签名内测包
+
+- 日期：2026-06-10
+- 负责人：Codex
+- 使用工具：Codex、zsh、npm、cargo、Tauri CLI、codesign、spctl、hdiutil、apply_patch
+- 对应 Issue / PR：未指定
+- 任务目标：拉取最新 main 后验证当前 macOS 打包，并修复 GitHub Release 下载后其他成员打开提示“Vortex 已损坏，无法打开”的内测分发问题。
+- 关键 Prompt 摘要：用户反馈本机打开安装包正常，但其他组员从 GitHub 下载后 macOS 提示应用已损坏；用户没有 Apple Developer Program 账号和证书，希望确认课堂验收场景是否可以用内测包解决。
+- Agent 修改内容摘要：
+  - 将 `RSSReader/package.json` 中 `tauri:build:mac` 的 `--no-sign` 移除。
+  - 在 `RSSReader/src-tauri/tauri.conf.json` 中新增 `bundle.macOS.signingIdentity = "-"`，启用 Tauri 原生 ad-hoc 签名。
+  - 更新 `RSSReader/build/macos-packaging.md`，说明当前 macOS 包为 ad-hoc 签名、未 notarize 的课堂内测包，并补充下载后解除 quarantine 的说明。
+- 人工检查结果：已重新生成 ad-hoc 签名 `.dmg`，待负责人上传到 GitHub Release，并请老师或组员在其他 Mac 上验收。
+- 是否运行测试：
+  - 已运行 `git pull --ff-only origin main`，拉取到 `38b4e45 chore: release v0.2.0`。
+  - 已运行 `npm run tauri:build:mac`，生成 `Vortex_0.2.0_aarch64.dmg`。
+  - 旧 `--no-sign` 产物经 `codesign --verify --deep --strict` 检查会提示 `code has no resources but signature indicates they must be present`。
+  - 已临时验证 Tauri config `bundle.macOS.signingIdentity = "-"` 可触发 ad-hoc 签名并通过 `codesign --verify`。
+  - 已运行更新后的 `npm run tauri:build:mac`，生成 ad-hoc 签名 `Vortex_0.2.0_aarch64.dmg`。
+  - 已运行 `codesign --verify --deep --strict --verbose=2`，通过。
+  - 已运行 `spctl -a -vv`，结果为 `rejected`，符合未 notarize 内测包预期。
+  - 已运行 `hdiutil verify`，DMG 校验通过。
+  - 新 DMG SHA256：`c87f92025aac5ef2f377a6ee79d916bee566a9dab1264e7b3b91f003d320c620`。
+  - 已运行 `backend/cargo test`，28 个测试通过。
+- 未解决问题：
+  - ad-hoc 签名不等于 Apple Developer ID 签名，不能完成 notarization。
+  - 其他 Mac 从 GitHub 下载后仍可能被 Gatekeeper 拦截，需要右键打开、系统设置放行，或使用 `xattr -dr com.apple.quarantine /Applications/Vortex.app`。
+  - 当前 macOS 产物为 Apple Silicon arm64，不覆盖 Intel Mac。

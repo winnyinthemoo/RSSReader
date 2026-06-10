@@ -39,6 +39,9 @@
         "installMode": "perMachine",
         "displayLanguageSelector": false
       }
+    },
+    "macOS": {
+      "signingIdentity": "-"
     }
   }
 }

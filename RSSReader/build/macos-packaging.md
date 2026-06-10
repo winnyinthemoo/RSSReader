@@ -69,10 +69,10 @@ npm run tauri:dev
 npm run tauri:build:mac
 ```
 
-当前脚本会生成未签名的 `.app` 和 `.dmg` 内测包：
+当前脚本会生成 ad-hoc 签名的 `.app` 和 `.dmg` 内测包：
 
 ```bash
-tauri build --bundles app,dmg --no-sign
+tauri build --bundles app,dmg
 ```
 
 产物位置通常为：
@@ -100,7 +100,13 @@ vortex.sqlite3
 
 ## 说明
 
-- 当前阶段是内部测试包，暂未做代码签名和 notarization。
-- 未签名 `.app` / `.dmg` 在其他 Mac 上打开时可能出现 Gatekeeper 安全提示，这是正常现象。
+- 当前阶段是内部测试包，使用 ad-hoc 签名，暂未做 Apple Developer ID 签名和 notarization。
+- ad-hoc 签名可以避免 app bundle 签名结构异常，但不能消除 Gatekeeper 对互联网下载应用的安全提示。
+- 其他 Mac 从 GitHub 下载后如果提示无法打开，可以先把 `Vortex.app` 拖到“应用程序”，再在终端运行：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Vortex.app
+```
+
 - `.dmg` 生成依赖 macOS `hdiutil` 创建和挂载临时磁盘镜像。如果在受限沙箱中失败，可以在本机终端或非沙箱权限下重新运行 `npm run tauri:build:mac`。
 - 如需分发给更多测试者，后续应补充 Apple Developer ID 签名、notarization 和 stapling 流程。
