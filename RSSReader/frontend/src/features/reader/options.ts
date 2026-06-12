@@ -14,26 +14,7 @@ export const fontSizeOptions: { key: FontSize; label: string; value: string }[] 
   { key: "xl", label: "XL", value: "1.35rem" },
 ];
 
-export const translationLanguageOptions = [
-  { value: "zh-Hans", label: "Simplified Chinese" },
-  { value: "zh-Hant", label: "Traditional Chinese" },
-  { value: "en", label: "English" },
-  { value: "ja", label: "Japanese" },
-  { value: "ko", label: "Korean" },
-  { value: "fr", label: "French" },
-  { value: "de", label: "German" },
-  { value: "es", label: "Spanish" },
-  { value: "it", label: "Italian" },
-  { value: "pt", label: "Portuguese" },
-  { value: "ru", label: "Russian" },
-  { value: "ar", label: "Arabic" },
-  { value: "hi", label: "Hindi" },
-  { value: "id", label: "Indonesian" },
-  { value: "vi", label: "Vietnamese" },
-  { value: "th", label: "Thai" },
-  { value: "tr", label: "Turkish" },
-];
-
-export function translationLanguageLabel(value: string) {
-  return translationLanguageOptions.find((language) => language.value === value)?.label ?? value;
-}
+export {
+  targetLanguageLabel as translationLanguageLabel,
+  targetLanguageOptions as translationLanguageOptions,
+} from "../../constants/targetLanguages";

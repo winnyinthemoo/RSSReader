@@ -1,0 +1,22 @@
+# 2026-06-12 Agent 工作记录：合并 AI keyring / languages / retry 分支
+
+- 日期：2026-06-12
+- 负责人：Codex
+- 使用工具：Codex shell、apply_patch、npm build、cargo check/test
+- 对应 Issue / PR：未关联；合并分支 `origin/feature/ai-keyring-languages-retry`
+- 任务目标：将 AI Keyring 存储、17 种目标语言、摘要/翻译 Try again 能力合并到 `main`。
+- 关键 Prompt 摘要：用户说明新分支 `feature/ai-keyring-languages-retry` 已支持翻译和摘要重试，要求阅读 `ai-progress.md` 后合并到 `main`。
+- Agent 修改内容摘要：
+  - 拉取远端 `feature/ai-keyring-languages-retry` 并合并到当前 `main`。
+  - 解决 `SummaryPanel.tsx` 冲突：保留本地折叠箭头方向修复，同时合入 17 种目标语言和 `Try again` 文案。
+  - 保留目标分支的 keyring、语言常量、翻译重试工具栏入口和 AI 文档更新。
+- 人工检查结果：
+  - 已检查无冲突标记残留。
+  - 确认本地 main 上已有的侧栏/阅读器 UI 精简记录文件仍存在。
+- 是否运行测试：
+  - `npm.cmd run build`：通过；仍有既有 Vite chunk size 警告。
+  - `cargo check`（`RSSReader/backend/`）：通过。
+  - `cargo test`（`RSSReader/backend/`）：通过，31 个 lib 测试、2 个 dev_server 测试通过。
+  - `cargo check`（`RSSReader/src-tauri/`）：通过。
+- 未解决问题：
+  - `README.md` 存在未暂存的待办列表改动，不属于本次 merge，未纳入合并提交。

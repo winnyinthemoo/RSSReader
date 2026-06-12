@@ -4,6 +4,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import type { SummaryDetailLevel } from "../../../../../shared/ai";
+import { targetLanguageOptions } from "../../../constants/targetLanguages";
 import { getArticleSummary, startArticleSummary } from "../../../services/aiService";
 
 interface SummaryPanelProps {
@@ -120,6 +121,9 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
 
   const isBusy = status === "loading-cache" || status === "generating";
   const SummaryCaret = isOpen ? ChevronDown : ChevronUp;
+  const canTryAgain = Boolean(content.trim() || errorMessage);
+  const generateLabel =
+    status === "generating" ? "Generating..." : canTryAgain ? "Try again" : "Generate";
 
   return (
     <aside
@@ -154,8 +158,11 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
                   onChange={(event) => setTargetLanguage(event.target.value)}
                   disabled={disabled || isBusy}
                 >
-                  <option value="zh-Hans">简体中文</option>
-                  <option value="en">English</option>
+                  {targetLanguageOptions.map((language) => (
+                    <option key={language.value} value={language.value}>
+                      {language.label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -177,9 +184,14 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
               className="secondary-button summary-generate-btn"
               type="button"
               disabled={disabled || !articleId || isBusy}
+              title={
+                canTryAgain
+                  ? "Regenerate summary and replace the saved result"
+                  : "Generate a new summary"
+              }
               onClick={() => void handleGenerate()}
             >
-              {status === "generating" ? "Generating..." : "Generate"}
+              {generateLabel}
             </button>
           </header>
           <div className="summary-content">

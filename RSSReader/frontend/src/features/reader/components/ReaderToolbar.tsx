@@ -9,6 +9,7 @@ import {
   Globe2,
   Languages,
   NotebookPen,
+  RotateCw,
   Palette,
   Search,
   Settings,
@@ -35,6 +36,7 @@ interface ReaderToolbarProps {
   targetLanguage?: string;
   onTargetLanguageChange?: (value: string) => void;
   onTranslate: () => void;
+  onRetryTranslation?: () => void;
   translateDisabled?: boolean;
   activePanel?: ReaderPanel;
   searchQuery?: string;
@@ -65,6 +67,7 @@ export function ReaderToolbar({
   targetLanguage = "zh-Hans",
   onTargetLanguageChange,
   onTranslate,
+  onRetryTranslation,
   translateDisabled,
   activePanel,
   searchQuery = "",
@@ -181,6 +184,17 @@ export function ReaderToolbar({
         >
           <Languages size={17} />
         </button>
+        {bilingualOpen && onRetryTranslation ? (
+          <button
+            className="tool-button"
+            type="button"
+            title="Try again (regenerate translation)"
+            disabled={translateDisabled}
+            onClick={onRetryTranslation}
+          >
+            <RotateCw size={17} />
+          </button>
+        ) : null}
         <button
           className={`tool-button${activePanel === "tag" ? " active" : ""}`}
           type="button"

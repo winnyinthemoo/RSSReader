@@ -14,6 +14,7 @@
 | `docs/features/translate-agent.md` 分段 | `translation/segmentation.rs` | p/ul/ol 提取 |
 | `translation.hy-mt` 策略 | `translation.hy-mt.yaml` + `PromptResolver` | `hy_mt_optimized` 设置项 |
 | OpenAI-compatible | `client/openai_compat.rs` | `ping` + `chat_completion` |
+| Keychain / Secrets | `backend/src/ai/secrets.rs` | `keyring` 存 OS 凭据；自动迁移遗留 `.key` 明文 |
 
 ## 规格文档 → Issue
 
@@ -30,7 +31,6 @@
 - 自动摘要（拉取时）
 - NLTagger / 批量打标签
 - 费用估算
-- Keychain（暂用文件 secrets）
 
 ## Prompt 字段映射
 

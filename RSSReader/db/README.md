@@ -15,5 +15,5 @@ Migrations run in order on application startup via `backend/src/database/mod.rs`
 
 ## Notes
 
-- API keys are **not** stored in SQLite. See `backend/src/ai/secrets.rs`.
+- API keys are **not** stored in SQLite. They are saved in the OS credential store via `keyring` (`backend/src/ai/secrets.rs`, service `com.rssreader.vortex`). Legacy plaintext `secrets/*.key` files are migrated on first access.
 - AI persisted outputs live in `article_summaries`, `article_translation_*`, and `llm_usage_events`.
