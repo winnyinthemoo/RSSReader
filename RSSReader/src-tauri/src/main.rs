@@ -13,7 +13,7 @@ use rssreader_backend::ai::{
     GetSummaryRequest, PromptRevealResult, ProviderTestRequest, ProviderTestResult,
     StartSummaryRequest, StartTranslationRequest, SummaryStreamChunk, TaggingSuggestRequest,
     TaggingSuggestResult, TranslationStreamChunk, TranslationView, UpdateAiModelRequest,
-    UpdateAiProviderRequest, UsageReportResult,
+    UpdateAiProviderRequest, UsageCleanupResult, UsageReportResult,
 };
 use rssreader_backend::{
     ArticleDetail, ArticleListFilter, ArticleListResult, ArticleNote, ArticleTagsResult,
@@ -428,6 +428,16 @@ fn ai_usage_report(
     backend::ai::ai_usage_report(dimension, window_days, key)
 }
 
+#[tauri::command]
+fn ai_clear_expired_usage(retention_days: u32) -> Result<UsageCleanupResult, String> {
+    backend::ai::ai_clear_expired_usage(retention_days)
+}
+
+#[tauri::command]
+fn ai_clear_all_usage() -> Result<UsageCleanupResult, String> {
+    backend::ai::ai_clear_all_usage()
+}
+
 fn configure_data_dir(app: &mut tauri::App) -> Result<(), Box<dyn Error>> {
     let app_data_dir = app.path().app_data_dir()?;
     std::fs::create_dir_all(&app_data_dir)?;
@@ -489,7 +499,9 @@ fn main() {
             ai_start_translation,
             ai_suggest_tags,
             ai_assign_tags,
-            ai_usage_report
+            ai_usage_report,
+            ai_clear_expired_usage,
+            ai_clear_all_usage
         ])
         .run(tauri::generate_context!())
         .expect("error while running Vortex");

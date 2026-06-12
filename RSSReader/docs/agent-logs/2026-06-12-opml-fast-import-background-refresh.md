@@ -17,6 +17,11 @@
   - 调整文章列表已读/未读视觉：Read / Unread 筛选默认灰色，仅选中时蓝色；已读文章灰化，未读标题保持加粗。
   - 缩小 Markdown 阅读视图文章标题字号，降低标题在正文阅读中的视觉占比。
   - 修正 Summary 底部面板展开/收起箭头方向，收起时向上提示展开，展开时向下提示收起。
+  - 将原智能体设计入口重构为“设置”页，一级分区包含“通用 / 阅读预览 / 智能体”。
+  - 通用设置新增应用语言、同步模式/间隔、同步全部/当前源，以及 AI 用量数据保留期和清理操作。
+  - 阅读预览设置迁移阅读主题、正文字号和正文布局宽度，并将阅读设置持久化到本地。
+  - 智能体设置保留原 Providers / Models / Agents 功能，并将用量弹窗保留在智能体分区内。
+  - 新增 AI 用量清理 Tauri Command 与开发 HTTP 路由，支持清除过期用量记录和清除全部用量记录。
   - Tauri 后台刷新通过 `opml-import-refresh` 事件通知前端刷新列表。
   - 前端监听后台刷新事件，自动更新 Feed / 文章 / 标签统计；Feed 列表改为显示所有源，不再隐藏错误状态源。
   - OPML 导入提示补充“articles syncing in background”状态。
@@ -25,7 +30,11 @@
   - `RSSReader/frontend`: `npm.cmd run build`，通过；仍有既有 chunk size warning。
   - `RSSReader/src-tauri`: `cargo test`，通过。
   - `RSSReader/backend`: `cargo check`，通过。
-  - `RSSReader/backend`: `cargo test --target-dir target-codex`，通过；默认 target 曾因 Windows 文件锁在 `rustls` fingerprint 写入时报拒绝访问。
+  - `RSSReader/src-tauri`: `cargo check`，通过。
+  - `RSSReader/backend`: `cargo test --target-dir target-codex-test`，通过；默认 target 曾因 Windows 文件锁在 `rustls` fingerprint 写入时报拒绝访问。
+  - 前端 dev server 已在 `http://127.0.0.1:5173` 启动并确认 HTTP 200；内置浏览器插件初始化失败，未完成可视点击验证。
 - 未解决问题：
   - 浏览器开发模式的 OPML 降级路径仍复用逐条 `addFeed`，主要优化已落在 Tauri 桌面导入路径。
   - 后台刷新只通过事件更新当前窗口；若应用退出，未完成的刷新不会继续。
+  - 本次设置页尚未接入真实多语言切换逻辑，只持久化语言选择。
+  - 内置浏览器插件在本机报“系统找不到指定的路径”，设置页视觉交互仍需人工打开本地页面确认。

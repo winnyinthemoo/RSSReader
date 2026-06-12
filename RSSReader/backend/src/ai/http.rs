@@ -149,6 +149,15 @@ pub fn try_handle(method: &str, path: &str, body: &str, stream: &mut TcpStream) 
             let key = query_param(path_with_query, "key");
             respond(stream, ai_usage_report(dimension, window_days, key));
         }
+        ("POST", "/api/ai/usage/clear-expired") => {
+            let retention_days = query_param(path_with_query, "retentionDays")
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(30);
+            respond(stream, ai_clear_expired_usage(retention_days));
+        }
+        ("POST", "/api/ai/usage/clear-all") => {
+            respond(stream, ai_clear_all_usage());
+        }
         _ => {
             write_json(
                 stream,

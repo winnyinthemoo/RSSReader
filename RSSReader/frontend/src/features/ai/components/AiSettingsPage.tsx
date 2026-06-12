@@ -13,6 +13,8 @@ import type {
   UsageReportResult,
 } from "../../../../../shared/ai";
 import {
+  clearAllUsage,
+  clearExpiredUsage,
   createAiModel,
   createAiProvider,
   deleteAiModel,
@@ -26,23 +28,82 @@ import {
   updateAiModel,
   updateAiProvider,
 } from "../../../services/aiService";
+import { syncIntervalOptions, syncModes } from "../../feeds/components/SyncPanel";
+import type { FeedSyncMode } from "../../feeds/types";
+import { fontSizeOptions, themeBgOptions } from "../../reader/options";
+import type { FontSize, ThemeBg } from "../../reader/types";
 
 interface AiSettingsPageProps {
   onClose: () => void;
+  appLanguage: string;
+  syncMode: FeedSyncMode;
+  syncIntervalMinutes: number;
+  syncStatusText: string;
+  nextSyncText?: string;
+  syncFeedCount: number;
+  selectedFeedId?: string;
+  selectedFeedTitle?: string;
+  isSyncingAll: boolean;
+  isRefreshing: boolean;
+  readerTheme: ThemeBg;
+  readerFontSize: FontSize;
+  readerLayoutWidth: number;
+  onAppLanguageChange: (language: string) => void;
+  onSyncModeChange: (mode: FeedSyncMode) => void;
+  onSyncIntervalChange: (minutes: number) => void;
+  onSyncAllFeeds: () => void;
+  onRefreshSelectedFeed: (feedId: string) => void;
+  onReaderThemeChange: (theme: ThemeBg) => void;
+  onReaderFontSizeChange: (fontSize: FontSize) => void;
+  onReaderLayoutWidthChange: (width: number) => void;
 }
 
+type SettingsTab = "general" | "reading" | "agents";
 type AiSettingsTab = "providers" | "models" | "agents";
 type AgentPanelType = Extract<AgentType, "summary" | "translation" | "tagging">;
 type UsageDimension = "provider" | "model" | "agent";
 type UsageMetric = "tokens" | "requests";
 
-const tabs: { id: AiSettingsTab; label: string }[] = [
+const settingsTabs: { id: SettingsTab; label: string }[] = [
+  { id: "general", label: "通用" },
+  { id: "reading", label: "阅读预览" },
+  { id: "agents", label: "智能体" },
+];
+
+const agentTabs: { id: AiSettingsTab; label: string }[] = [
   { id: "providers", label: "Providers" },
   { id: "models", label: "Models" },
   { id: "agents", label: "Agents" },
 ];
 
-export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
+const usageRetentionOptions = [7, 30, 90, 180, 365];
+const readerWidthOptions = [680, 760, 820, 900, 1040];
+
+export function AiSettingsPage({
+  onClose,
+  appLanguage,
+  syncMode,
+  syncIntervalMinutes,
+  syncStatusText,
+  nextSyncText,
+  syncFeedCount,
+  selectedFeedId,
+  selectedFeedTitle,
+  isSyncingAll,
+  isRefreshing,
+  readerTheme,
+  readerFontSize,
+  readerLayoutWidth,
+  onAppLanguageChange,
+  onSyncModeChange,
+  onSyncIntervalChange,
+  onSyncAllFeeds,
+  onRefreshSelectedFeed,
+  onReaderThemeChange,
+  onReaderFontSizeChange,
+  onReaderLayoutWidthChange,
+}: AiSettingsPageProps) {
+  const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>("general");
   const [activeTab, setActiveTab] = useState<AiSettingsTab>("providers");
   const [providers, setProviders] = useState<AiProvider[]>([]);
   const [models, setModels] = useState<AiModel[]>([]);
@@ -77,6 +138,7 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(false);
   const [isUsagePopoverOpen, setIsUsagePopoverOpen] = useState(false);
+  const [usageRetentionDays, setUsageRetentionDays] = useState(30);
   
   const [deleteProviderId, setDeleteProviderId] = useState<string | null>(null);
   const [deleteModelId, setDeleteModelId] = useState<string | null>(null);
@@ -105,8 +167,11 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
   }, []);
 
   useEffect(() => {
+    if (activeSettingsTab !== "agents") {
+      return;
+    }
     void loadUsage(usageDimension, usageRowKey);
-  }, [usageDimension, usageRowKey]);
+  }, [activeSettingsTab, usageDimension, usageRowKey]);
 
   useEffect(() => {
     if (selectedProvider) {
@@ -206,6 +271,38 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  async function handleClearExpiredUsage() {
+    try {
+      setIsLoading(true);
+      const result = await clearExpiredUsage(usageRetentionDays);
+      await loadUsage(usageDimension, usageRowKey);
+      setStatusMessage(`已清除 ${result.deletedCount} 条过期用量记录。`);
+      setErrorMessage(undefined);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleClearAllUsage() {
+    if (!window.confirm("确认清除全部本地 AI 用量记录？")) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const result = await clearAllUsage();
+      await loadUsage(usageDimension, usageRowKey);
+      setStatusMessage(`已清除 ${result.deletedCount} 条用量记录。`);
+      setErrorMessage(undefined);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -421,36 +518,26 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
   }
 
   return (
-    <div className="ai-settings-overlay" role="dialog" aria-label="AI settings">
+    <div className="ai-settings-overlay" role="dialog" aria-label="设置">
       <section className="ai-settings-panel ai-manager-panel">
         <header className="ai-settings-header ai-manager-header">
           <div>
-            <h2>Model Settings</h2>
+            <h2>设置</h2>
           </div>
           <div className="ai-header-actions">
-            <button
-              className={`usage-launch-button ${isUsagePopoverOpen ? "active" : ""}`}
-              type="button"
-              aria-expanded={isUsagePopoverOpen}
-              aria-haspopup="dialog"
-              onClick={() => setIsUsagePopoverOpen((isOpen) => !isOpen)}
-            >
-              <LineChart size={17} />
-              <span>Usage</span>
-            </button>
             <button className="secondary-button" type="button" onClick={onClose}>
-              Close
+              关闭
             </button>
           </div>
         </header>
 
-        <nav className="ai-settings-tabs" aria-label="AI settings sections">
-          {tabs.map((tab) => (
+        <nav className="ai-settings-tabs" aria-label="设置分区">
+          {settingsTabs.map((tab) => (
             <button
               key={tab.id}
-              className={activeTab === tab.id ? "active" : ""}
+              className={activeSettingsTab === tab.id ? "active" : ""}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => setActiveSettingsTab(tab.id)}
             >
               {tab.label}
             </button>
@@ -458,79 +545,143 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
         </nav>
 
         <div className="ai-manager-body">
-          {activeTab === "providers" ? (
-            <ProvidersTab
-              providers={providers}
-              modelsByProvider={modelsByProvider}
-              selectedProviderId={selectedProviderId}
-              providerName={providerName}
-              providerBaseUrl={providerBaseUrl}
-              providerApiKey={providerApiKey}
-              providerEnabled={providerEnabled}
-              testModelName={testModelName}
-              testResult={testResult}
+          {activeSettingsTab === "general" ? (
+            <GeneralSettingsTab
+              appLanguage={appLanguage}
+              syncMode={syncMode}
+              syncIntervalMinutes={syncIntervalMinutes}
+              syncStatusText={syncStatusText}
+              nextSyncText={nextSyncText}
+              syncFeedCount={syncFeedCount}
+              selectedFeedId={selectedFeedId}
+              selectedFeedTitle={selectedFeedTitle}
+              isSyncingAll={isSyncingAll}
+              isRefreshing={isRefreshing}
+              usageRetentionDays={usageRetentionDays}
               isLoading={isLoading}
-              onSelectProvider={(providerId) => {
-                setSelectedProviderId(providerId);
-                setTestResult(undefined);
-              }}
-              onAddProvider={resetProviderForm}
-              onProviderNameChange={setProviderName}
-              onProviderBaseUrlChange={setProviderBaseUrl}
-              onProviderApiKeyChange={setProviderApiKey}
-              onProviderEnabledChange={setProviderEnabled}
-              onTestModelNameChange={setTestModelName}
-              onSaveProvider={() => void handleSaveProvider()}
-              onDeleteProvider={() => void handleDeleteProvider()}
-              onTestProvider={() => void handleTestProvider()}
+              onAppLanguageChange={onAppLanguageChange}
+              onSyncModeChange={onSyncModeChange}
+              onSyncIntervalChange={onSyncIntervalChange}
+              onSyncAllFeeds={onSyncAllFeeds}
+              onRefreshSelectedFeed={onRefreshSelectedFeed}
+              onUsageRetentionDaysChange={setUsageRetentionDays}
+              onClearExpiredUsage={() => void handleClearExpiredUsage()}
+              onClearAllUsage={() => void handleClearAllUsage()}
             />
           ) : null}
 
-          {activeTab === "models" ? (
-            <ModelsTab
-              providers={providers}
-              models={models}
-              selectedModelId={selectedModelId}
-              modelProviderId={modelProviderId}
-              modelName={modelName}
-              modelEnabled={modelEnabled}
-              isLoading={isLoading}
-              onSelectModel={setSelectedModelId}
-              onAddModel={resetModelForm}
-              onModelProviderChange={setModelProviderId}
-              onModelNameChange={setModelName}
-              onModelEnabledChange={setModelEnabled}
-              onSaveModel={() => void handleSaveModel()}
-              onDeleteModel={() => void handleDeleteModel()}
+          {activeSettingsTab === "reading" ? (
+            <ReadingSettingsTab
+              readerTheme={readerTheme}
+              readerFontSize={readerFontSize}
+              readerLayoutWidth={readerLayoutWidth}
+              onReaderThemeChange={onReaderThemeChange}
+              onReaderFontSizeChange={onReaderFontSizeChange}
+              onReaderLayoutWidthChange={onReaderLayoutWidthChange}
             />
           ) : null}
 
-          {activeTab === "agents" ? (
-            <AgentsTab
-              models={models}
-              activeAgent={activeAgent}
-              summaryModelId={summaryModelId}
-              summaryLanguage={summaryLanguage}
-              summaryDetailLevel={summaryDetailLevel}
-              translationModelId={translationModelId}
-              translationLanguage={translationLanguage}
-              translationConcurrency={translationConcurrency}
-              translationStrategy={translationStrategy}
-              taggingModelId={taggingModelId}
-              isLoading={isLoading}
-              onActiveAgentChange={setActiveAgent}
-              onSummaryModelChange={setSummaryModelId}
-              onSummaryLanguageChange={setSummaryLanguage}
-              onSummaryDetailLevelChange={setSummaryDetailLevel}
-              onTranslationModelChange={setTranslationModelId}
-              onTranslationLanguageChange={setTranslationLanguage}
-              onTranslationConcurrencyChange={setTranslationConcurrency}
-              onTranslationStrategyChange={setTranslationStrategy}
-              onTaggingModelChange={setTaggingModelId}
-              onSaveAgent={(agent) => void handleSaveAgent(agent)}
-            />
-          ) : null}
+          {activeSettingsTab === "agents" ? (
+            <>
+              <div className="settings-agent-header">
+                <nav className="ai-settings-tabs" aria-label="智能体设置分区">
+                  {agentTabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      className={activeTab === tab.id ? "active" : ""}
+                      type="button"
+                      onClick={() => setActiveTab(tab.id)}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </nav>
+                <button
+                  className={`usage-launch-button ${isUsagePopoverOpen ? "active" : ""}`}
+                  type="button"
+                  aria-expanded={isUsagePopoverOpen}
+                  aria-haspopup="dialog"
+                  onClick={() => setIsUsagePopoverOpen((isOpen) => !isOpen)}
+                >
+                  <LineChart size={17} />
+                  <span>用量</span>
+                </button>
+              </div>
 
+              {activeTab === "providers" ? (
+                <ProvidersTab
+                  providers={providers}
+                  modelsByProvider={modelsByProvider}
+                  selectedProviderId={selectedProviderId}
+                  providerName={providerName}
+                  providerBaseUrl={providerBaseUrl}
+                  providerApiKey={providerApiKey}
+                  providerEnabled={providerEnabled}
+                  testModelName={testModelName}
+                  testResult={testResult}
+                  isLoading={isLoading}
+                  onSelectProvider={(providerId) => {
+                    setSelectedProviderId(providerId);
+                    setTestResult(undefined);
+                  }}
+                  onAddProvider={resetProviderForm}
+                  onProviderNameChange={setProviderName}
+                  onProviderBaseUrlChange={setProviderBaseUrl}
+                  onProviderApiKeyChange={setProviderApiKey}
+                  onProviderEnabledChange={setProviderEnabled}
+                  onTestModelNameChange={setTestModelName}
+                  onSaveProvider={() => void handleSaveProvider()}
+                  onDeleteProvider={() => void handleDeleteProvider()}
+                  onTestProvider={() => void handleTestProvider()}
+                />
+              ) : null}
+
+              {activeTab === "models" ? (
+                <ModelsTab
+                  providers={providers}
+                  models={models}
+                  selectedModelId={selectedModelId}
+                  modelProviderId={modelProviderId}
+                  modelName={modelName}
+                  modelEnabled={modelEnabled}
+                  isLoading={isLoading}
+                  onSelectModel={setSelectedModelId}
+                  onAddModel={resetModelForm}
+                  onModelProviderChange={setModelProviderId}
+                  onModelNameChange={setModelName}
+                  onModelEnabledChange={setModelEnabled}
+                  onSaveModel={() => void handleSaveModel()}
+                  onDeleteModel={() => void handleDeleteModel()}
+                />
+              ) : null}
+
+              {activeTab === "agents" ? (
+                <AgentsTab
+                  models={models}
+                  activeAgent={activeAgent}
+                  summaryModelId={summaryModelId}
+                  summaryLanguage={summaryLanguage}
+                  summaryDetailLevel={summaryDetailLevel}
+                  translationModelId={translationModelId}
+                  translationLanguage={translationLanguage}
+                  translationConcurrency={translationConcurrency}
+                  translationStrategy={translationStrategy}
+                  taggingModelId={taggingModelId}
+                  isLoading={isLoading}
+                  onActiveAgentChange={setActiveAgent}
+                  onSummaryModelChange={setSummaryModelId}
+                  onSummaryLanguageChange={setSummaryLanguage}
+                  onSummaryDetailLevelChange={setSummaryDetailLevel}
+                  onTranslationModelChange={setTranslationModelId}
+                  onTranslationLanguageChange={setTranslationLanguage}
+                  onTranslationConcurrencyChange={setTranslationConcurrency}
+                  onTranslationStrategyChange={setTranslationStrategy}
+                  onTaggingModelChange={setTaggingModelId}
+                  onSaveAgent={(agent) => void handleSaveAgent(agent)}
+                />
+              ) : null}
+            </>
+          ) : null}
         </div>
 
         <footer className="ai-manager-footer">
@@ -540,7 +691,7 @@ export function AiSettingsPage({ onClose }: AiSettingsPageProps) {
           </div>
         </footer>
 
-        {isUsagePopoverOpen ? (
+        {isUsagePopoverOpen && activeSettingsTab === "agents" ? (
           <div
             className="usage-popover-layer"
             role="presentation"
@@ -888,6 +1039,240 @@ function ModelsTab({
               : "Create a model after adding a provider."}
           </p>
         </section>
+      </section>
+    </div>
+  );
+}
+
+interface GeneralSettingsTabProps {
+  appLanguage: string;
+  syncMode: FeedSyncMode;
+  syncIntervalMinutes: number;
+  syncStatusText: string;
+  nextSyncText?: string;
+  syncFeedCount: number;
+  selectedFeedId?: string;
+  selectedFeedTitle?: string;
+  isSyncingAll: boolean;
+  isRefreshing: boolean;
+  usageRetentionDays: number;
+  isLoading: boolean;
+  onAppLanguageChange: (language: string) => void;
+  onSyncModeChange: (mode: FeedSyncMode) => void;
+  onSyncIntervalChange: (minutes: number) => void;
+  onSyncAllFeeds: () => void;
+  onRefreshSelectedFeed: (feedId: string) => void;
+  onUsageRetentionDaysChange: (days: number) => void;
+  onClearExpiredUsage: () => void;
+  onClearAllUsage: () => void;
+}
+
+function GeneralSettingsTab({
+  appLanguage,
+  syncMode,
+  syncIntervalMinutes,
+  syncStatusText,
+  nextSyncText,
+  syncFeedCount,
+  selectedFeedId,
+  selectedFeedTitle,
+  isSyncingAll,
+  isRefreshing,
+  usageRetentionDays,
+  isLoading,
+  onAppLanguageChange,
+  onSyncModeChange,
+  onSyncIntervalChange,
+  onSyncAllFeeds,
+  onRefreshSelectedFeed,
+  onUsageRetentionDaysChange,
+  onClearExpiredUsage,
+  onClearAllUsage,
+}: GeneralSettingsTabProps) {
+  return (
+    <div className="settings-section-grid">
+      <section className="ai-properties settings-card">
+        <PanelTitle title="语言" subtitle="选择应用界面的默认语言。" />
+        <div className="ai-form-grid">
+          <label className="ai-field">
+            <span>应用语言</span>
+            <select value={appLanguage} onChange={(event) => onAppLanguageChange(event.target.value)}>
+              <option value="zh-Hans">简体中文</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section className="ai-properties settings-card">
+        <PanelTitle title="同步设置" subtitle="控制订阅源自动同步方式，也可以手动同步全部源。" />
+        <div className="settings-sync-status">
+          <strong>{syncStatusText}</strong>
+          {nextSyncText ? <span>{nextSyncText}</span> : null}
+        </div>
+        <div className="feed-sync-mode settings-sync-mode" role="tablist" aria-label="RSS 同步模式">
+          {syncModes.map((item) => (
+            <button
+              className={syncMode === item.mode ? "active" : ""}
+              type="button"
+              role="tab"
+              aria-selected={syncMode === item.mode}
+              title={item.title}
+              key={item.mode}
+              onClick={() => onSyncModeChange(item.mode)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        {syncMode === "timer" ? (
+          <label className="ai-field">
+            <span>同步间隔</span>
+            <select
+              value={syncIntervalMinutes}
+              onChange={(event) => onSyncIntervalChange(Number(event.target.value))}
+            >
+              {syncIntervalOptions.map((minutes) => (
+                <option value={minutes} key={minutes}>
+                  {minutes >= 60 ? `${minutes / 60}h` : `${minutes}m`}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <div className="ai-settings-actions">
+          <button
+            className="primary-button"
+            type="button"
+            disabled={syncFeedCount === 0 || isSyncingAll || isRefreshing}
+            onClick={onSyncAllFeeds}
+          >
+            {isSyncingAll ? "同步全部中" : "同步全部"}
+          </button>
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={!selectedFeedId || isRefreshing || isSyncingAll}
+            title={selectedFeedTitle ? `同步 ${selectedFeedTitle}` : "选择一个订阅源后同步"}
+            onClick={() => selectedFeedId && onRefreshSelectedFeed(selectedFeedId)}
+          >
+            {isRefreshing ? "同步当前中" : "同步当前"}
+          </button>
+        </div>
+      </section>
+
+      <section className="ai-properties settings-card">
+        <PanelTitle title="用量数据" subtitle="设置本地 AI 用量数据的保留期，并清理不再需要的记录。" />
+        <div className="ai-form-grid">
+          <label className="ai-field">
+            <span>保留期</span>
+            <select
+              value={usageRetentionDays}
+              onChange={(event) => onUsageRetentionDaysChange(Number(event.target.value))}
+            >
+              {usageRetentionOptions.map((days) => (
+                <option key={days} value={days}>
+                  {days} 天
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="ai-settings-actions">
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={isLoading}
+            onClick={onClearExpiredUsage}
+          >
+            清除过期数据
+          </button>
+          <button
+            className="secondary-button danger-button"
+            type="button"
+            disabled={isLoading}
+            onClick={onClearAllUsage}
+          >
+            清除全部数据
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+interface ReadingSettingsTabProps {
+  readerTheme: ThemeBg;
+  readerFontSize: FontSize;
+  readerLayoutWidth: number;
+  onReaderThemeChange: (theme: ThemeBg) => void;
+  onReaderFontSizeChange: (fontSize: FontSize) => void;
+  onReaderLayoutWidthChange: (width: number) => void;
+}
+
+function ReadingSettingsTab({
+  readerTheme,
+  readerFontSize,
+  readerLayoutWidth,
+  onReaderThemeChange,
+  onReaderFontSizeChange,
+  onReaderLayoutWidthChange,
+}: ReadingSettingsTabProps) {
+  return (
+    <div className="settings-section-grid">
+      <section className="ai-properties settings-card">
+        <PanelTitle title="主题预设" subtitle="设置阅读器 Markdown 和双语阅读背景。" />
+        <div className="settings-theme-grid">
+          {themeBgOptions.map((option) => (
+            <button
+              key={option.key}
+              className={`settings-theme-option${readerTheme === option.key ? " active" : ""}`}
+              type="button"
+              onClick={() => onReaderThemeChange(option.key)}
+            >
+              <span
+                className="settings-theme-swatch"
+                style={{ background: option.color, color: option.text }}
+              >
+                Aa
+              </span>
+              <span>{option.label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="ai-properties settings-card">
+        <PanelTitle title="排版" subtitle="选择阅读正文的默认字号。" />
+        <div className="theme-font-options settings-font-options">
+          {fontSizeOptions.map((option) => (
+            <button
+              key={option.key}
+              className={`theme-font-button${readerFontSize === option.key ? " active" : ""}`}
+              type="button"
+              onClick={() => onReaderFontSizeChange(option.key)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="ai-properties settings-card">
+        <PanelTitle title="阅读布局宽度" subtitle="调整正文列宽，适配不同显示器和阅读距离。" />
+        <label className="ai-field">
+          <span>正文宽度</span>
+          <select
+            value={readerLayoutWidth}
+            onChange={(event) => onReaderLayoutWidthChange(Number(event.target.value))}
+          >
+            {readerWidthOptions.map((width) => (
+              <option key={width} value={width}>
+                {width}px
+              </option>
+            ))}
+          </select>
+        </label>
       </section>
     </div>
   );

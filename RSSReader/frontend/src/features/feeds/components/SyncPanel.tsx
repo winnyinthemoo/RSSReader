@@ -2,13 +2,13 @@ import { Clock, RefreshCw } from "lucide-react";
 
 import type { FeedSyncMode } from "../types";
 
-const syncModes: Array<{ mode: FeedSyncMode; label: string; title: string }> = [
-  { mode: "manual", label: "Manual", title: "Sync only when you choose" },
-  { mode: "launch", label: "On open", title: "Sync once after opening the app" },
-  { mode: "timer", label: "Timer", title: "Sync repeatedly on a timer" },
+export const syncModes: Array<{ mode: FeedSyncMode; label: string; title: string }> = [
+  { mode: "manual", label: "手动", title: "只在手动触发时同步" },
+  { mode: "launch", label: "启动时", title: "打开应用后同步一次" },
+  { mode: "timer", label: "定时", title: "按固定时间间隔同步" },
 ];
 
-const syncIntervalOptions = [15, 30, 60, 120];
+export const syncIntervalOptions = [15, 30, 60, 120];
 
 interface SyncPanelProps {
   selectedFeedId?: string;

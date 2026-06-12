@@ -10,7 +10,6 @@ import { DeleteFeedDialog } from "./DeleteFeedDialog";
 import { FeedList } from "./FeedList";
 import { FeedStatsPanel } from "./FeedStatsPanel";
 import { MergeTagDialog } from "./MergeTagDialog";
-import { SyncPanel } from "./SyncPanel";
 import { TagWorkspace } from "./TagWorkspace";
 
 const feedsToShow = 4;
@@ -22,15 +21,8 @@ export function FeedSidebar({
   selection,
   mode,
   isAdding,
-  isRefreshing,
   isDeleting,
   isImporting,
-  isSyncingAll,
-  syncFeedCount,
-  syncMode,
-  syncIntervalMinutes,
-  syncStatusText,
-  nextSyncText,
   onHideSidebar,
   onModeChange,
   onSelectAll,
@@ -45,10 +37,6 @@ export function FeedSidebar({
   onAddFeed,
   onImportOpml,
   onExportOpml,
-  onSyncModeChange,
-  onSyncIntervalChange,
-  onSyncAllFeeds,
-  onRefreshFeed,
   onRenameFeed,
   onDeleteFeed,
 }: FeedSidebarProps) {
@@ -290,21 +278,6 @@ export function FeedSidebar({
           onDeleteTag={(tag) => void handleDeleteTag(tag)}
         />
       )}
-
-      <SyncPanel
-        selectedFeedId={selectedFeedId}
-        syncFeedCount={syncFeedCount}
-        syncMode={syncMode}
-        syncIntervalMinutes={syncIntervalMinutes}
-        syncStatusText={syncStatusText}
-        nextSyncText={nextSyncText}
-        isSyncingAll={isSyncingAll}
-        isRefreshing={isRefreshing}
-        onSyncModeChange={onSyncModeChange}
-        onSyncIntervalChange={onSyncIntervalChange}
-        onSyncAllFeeds={onSyncAllFeeds}
-        onRefreshFeed={onRefreshFeed}
-      />
 
       <FeedStatsPanel feeds={feeds} selectedFeed={selectedFeed} />
 

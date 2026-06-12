@@ -22,6 +22,7 @@ import type {
   TranslationStreamChunk,
   UpdateAiModelRequest,
   UpdateAiProviderRequest,
+  UsageCleanupResult,
   UsageReportResult,
 } from "../../../shared/ai";
 
@@ -364,6 +365,28 @@ export async function getUsageReport(
     params.set("key", key);
   }
   return requestJson<UsageReportResult>(`/api/ai/usage/report?${params.toString()}`);
+}
+
+export async function clearExpiredUsage(retentionDays: number): Promise<UsageCleanupResult> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<UsageCleanupResult>("ai_clear_expired_usage", { retentionDays });
+  }
+
+  const params = new URLSearchParams({ retentionDays: String(retentionDays) });
+  return requestJson<UsageCleanupResult>(
+    `/api/ai/usage/clear-expired?${params.toString()}`,
+    { method: "POST" },
+  );
+}
+
+export async function clearAllUsage(): Promise<UsageCleanupResult> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<UsageCleanupResult>("ai_clear_all_usage");
+  }
+
+  return requestJson<UsageCleanupResult>("/api/ai/usage/clear-all", { method: "POST" });
 }
 
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {

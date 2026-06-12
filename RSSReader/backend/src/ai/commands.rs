@@ -144,6 +144,18 @@ pub fn ai_usage_report(
     })
 }
 
+pub fn ai_clear_expired_usage(retention_days: u32) -> Result<UsageCleanupResult, String> {
+    with_service(|service| {
+        service
+            .clear_expired_usage(retention_days)
+            .map_err(|e| e.into_message())
+    })
+}
+
+pub fn ai_clear_all_usage() -> Result<UsageCleanupResult, String> {
+    with_service(|service| service.clear_all_usage().map_err(|e| e.into_message()))
+}
+
 fn with_service<T>(handler: impl FnOnce(&AiService) -> Result<T, String>) -> Result<T, String> {
     let service = AiService::new().map_err(|error| error.into_message())?;
     handler(&service)

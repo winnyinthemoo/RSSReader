@@ -3,6 +3,7 @@ import type { ArticleTag } from "../../../../shared/feed";
 export type ViewMode = "markdown" | "source" | "compare";
 export type ThemeBg = "white" | "sepia" | "dark" | "green";
 export type FontSize = "sm" | "md" | "lg" | "xl";
+export const defaultReaderLayoutWidth = 820;
 export type ReaderPanel = "tag" | "note";
 export type DetectedContentLanguage = "zh" | "en" | "unknown";
 export type SelectionTranslationStatus =

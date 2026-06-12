@@ -335,6 +335,12 @@ pub struct UsageReportResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageCleanupResult {
+    pub deleted_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptRevealResult {
     pub path: String,
     pub created: bool,

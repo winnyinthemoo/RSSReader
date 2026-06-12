@@ -20,15 +20,8 @@ export interface FeedSidebarProps {
   selection: SidebarSelection;
   mode: SidebarMode;
   isAdding: boolean;
-  isRefreshing: boolean;
   isDeleting: boolean;
   isImporting: boolean;
-  isSyncingAll: boolean;
-  syncFeedCount: number;
-  syncMode: FeedSyncMode;
-  syncIntervalMinutes: number;
-  syncStatusText: string;
-  nextSyncText?: string;
   onHideSidebar: () => void;
   onModeChange: (mode: SidebarMode) => void;
   onSelectAll: () => void;
@@ -43,10 +36,6 @@ export interface FeedSidebarProps {
   onAddFeed: (request: FeedAddRequest) => Promise<void>;
   onImportOpml: () => void;
   onExportOpml: () => void;
-  onSyncModeChange: (mode: FeedSyncMode) => void;
-  onSyncIntervalChange: (minutes: number) => void;
-  onSyncAllFeeds: () => void;
-  onRefreshFeed: (feedId: string) => Promise<void>;
   onRenameFeed: (feedId: string, title: string) => Promise<void>;
   onDeleteFeed: (feedId: string) => Promise<void>;
 }

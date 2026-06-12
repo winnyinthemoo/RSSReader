@@ -981,7 +981,7 @@ h2 {
 }
 
 .reader-header {
-  max-width: 900px;
+  max-width: var(--reader-layout-width, 900px);
   margin: 0 auto;
   width: 100%;
   padding: 36px 44px 18px;
@@ -1013,7 +1013,7 @@ h2 {
 }
 
 .reader-content {
-  max-width: 900px;
+  max-width: var(--reader-layout-width, 900px);
   margin: 0 auto;
   width: 100%;
   padding: 12px 44px 64px;

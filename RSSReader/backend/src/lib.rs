@@ -6,7 +6,7 @@ pub mod feeds;
 pub use ai::{
     ai_list_providers, AiAgentSettings, AiModel, AiModelListResult, AiProvider,
     AiProviderListResult, ArticleSummaryRecord, ProviderTestRequest, ProviderTestResult,
-    UsageReportResult,
+    UsageCleanupResult, UsageReportResult,
 };
 pub use feeds::{
     ArticleDetail, ArticleListFilter, ArticleListItem, ArticleListResult,

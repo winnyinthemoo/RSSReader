@@ -1,6 +1,8 @@
 use super::super::client::openai_compat::ChatUsage;
 use super::super::error::AiResult;
-use super::super::model::{AgentType, UsageEventRecord, UsageReportResult};
+use super::super::model::{
+    AgentType, UsageCleanupResult, UsageEventRecord, UsageReportResult,
+};
 use super::super::provider::AiRepository;
 
 pub struct UsageService {
@@ -72,5 +74,17 @@ impl UsageService {
             total_requests,
             total_tokens,
         })
+    }
+
+    pub fn clear_expired(&self, retention_days: u32) -> AiResult<UsageCleanupResult> {
+        let deleted_count = self
+            .repository
+            .delete_usage_older_than_days(retention_days.max(1))?;
+        Ok(UsageCleanupResult { deleted_count })
+    }
+
+    pub fn clear_all(&self) -> AiResult<UsageCleanupResult> {
+        let deleted_count = self.repository.delete_all_usage_events()?;
+        Ok(UsageCleanupResult { deleted_count })
     }
 }

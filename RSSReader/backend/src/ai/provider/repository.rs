@@ -355,6 +355,23 @@ impl AiRepository {
         Ok(())
     }
 
+    pub fn delete_usage_older_than_days(&self, retention_days: u32) -> AiResult<u64> {
+        let window = format!("-{} days", retention_days.saturating_sub(1));
+        let deleted = self.connection.execute(
+            "DELETE FROM llm_usage_events
+             WHERE CAST(created_at AS INTEGER) < CAST(strftime('%s', 'now', ?1) AS INTEGER)",
+            params![window],
+        )?;
+        Ok(deleted as u64)
+    }
+
+    pub fn delete_all_usage_events(&self) -> AiResult<u64> {
+        let deleted = self
+            .connection
+            .execute("DELETE FROM llm_usage_events", [])?;
+        Ok(deleted as u64)
+    }
+
     pub fn list_tag_names(&self) -> AiResult<Vec<String>> {
         let mut stmt = self
             .connection

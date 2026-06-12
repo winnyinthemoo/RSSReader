@@ -146,6 +146,14 @@ impl AiService {
     ) -> AiResult<UsageReportResult> {
         self.usage.report(dimension, window_days, key)
     }
+
+    pub fn clear_expired_usage(&self, retention_days: u32) -> AiResult<UsageCleanupResult> {
+        self.usage.clear_expired(retention_days)
+    }
+
+    pub fn clear_all_usage(&self) -> AiResult<UsageCleanupResult> {
+        self.usage.clear_all()
+    }
 }
 
 pub fn agent_type_from_str(value: &str) -> AiResult<AgentType> {

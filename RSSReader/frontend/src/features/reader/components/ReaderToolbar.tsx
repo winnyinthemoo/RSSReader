@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Bot,
   Check,
   ChevronDown,
   ChevronUp,
@@ -12,6 +11,7 @@ import {
   NotebookPen,
   Palette,
   Search,
+  Settings,
   Share2,
   Tags,
   X,
@@ -341,11 +341,11 @@ export function ReaderToolbar({
         <button
           className="tool-button ai-toolbar-button"
           type="button"
-          title="AI settings"
-          aria-label="AI settings"
+          title="Settings"
+          aria-label="Settings"
           onClick={onOpenAiSettings}
         >
-          <Bot size={17} />
+          <Settings size={17} />
         </button>
       </div>
     </div>

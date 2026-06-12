@@ -22,6 +22,8 @@ import { AiSettingsPage } from "./features/ai/components/AiSettingsPage";
 import { ReaderView } from "./features/reader/components/ReaderView";
 import { useFeedSyncSettings } from "./features/feeds/hooks/useFeedSyncSettings";
 import type { FeedSyncMode, SidebarMode, SidebarSelection } from "./features/feeds/types";
+import type { FontSize, ThemeBg } from "./features/reader/types";
+import { defaultReaderLayoutWidth } from "./features/reader/types";
 import { buildArticleFilter } from "./features/feeds/utils/articleFilters";
 import { buildFeedsOpmlExport, formatOpmlImportResult } from "./features/feeds/utils/opml";
 import {
@@ -61,9 +63,23 @@ interface PaneLayout {
 }
 
 const paneLayoutKey = "vortex.paneLayout";
+const readerSettingsKey = "vortex.readerSettings";
+const appLanguageKey = "vortex.appLanguage";
 const defaultPaneLayout: PaneLayout = {
   sidebarWidth: 330,
   articleWidth: 490,
+};
+
+interface ReaderSettings {
+  themeBg: ThemeBg;
+  fontSize: FontSize;
+  layoutWidth: number;
+}
+
+const defaultReaderSettings: ReaderSettings = {
+  themeBg: "white",
+  fontSize: "md",
+  layoutWidth: defaultReaderLayoutWidth,
 };
 
 export default function App() {
@@ -91,7 +107,8 @@ export default function App() {
   const [lastSyncAt, setLastSyncAt] = useState<Date | undefined>();
   const [syncStatusText, setSyncStatusText] = useState("Ready");
   const [showAiSettings, setShowAiSettings] = useState(false);
-  const [readerTheme, setReaderTheme] = useState("white");
+  const [readerSettings, setReaderSettings] = useState<ReaderSettings>(() => readReaderSettings());
+  const [appLanguage, setAppLanguage] = useState(() => readAppLanguage());
   const launchSyncStartedRef = useRef(false);
   const initialArticlesLoadedRef = useRef(false);
   const articleListRequestTokenRef = useRef(0);
@@ -170,6 +187,14 @@ export default function App() {
   useEffect(() => {
     writePaneLayout(paneLayout);
   }, [paneLayout]);
+
+  useEffect(() => {
+    window.localStorage.setItem(readerSettingsKey, JSON.stringify(readerSettings));
+  }, [readerSettings]);
+
+  useEffect(() => {
+    window.localStorage.setItem(appLanguageKey, appLanguage);
+  }, [appLanguage]);
 
   useEffect(() => {
     if (
@@ -670,6 +695,10 @@ export default function App() {
     : 0;
   const isArticleSearchPending =
     isArticleSearchComposing || articleSearchInput.trim() !== articleSearchQuery.trim();
+  const selectedFeedIdForSync = selection.type === "feed" ? selection.feedId : undefined;
+  const selectedFeedForSync = selectedFeedIdForSync
+    ? feeds.find((feed) => feed.id === selectedFeedIdForSync)
+    : undefined;
 
   function handlePaneResizeStart(
     divider: "sidebar" | "article",
@@ -738,7 +767,7 @@ export default function App() {
     <main
       className="app-shell"
       data-sidebar-hidden={isSidebarHidden ? "true" : "false"}
-      data-reader-theme={readerTheme}
+      data-reader-theme={readerSettings.themeBg}
       ref={appShellRef}
       style={appShellStyle}
     >
@@ -761,15 +790,8 @@ export default function App() {
             selection={selection}
             mode={sidebarMode}
             isAdding={isAdding}
-            isRefreshing={isRefreshing}
             isDeleting={isDeleting}
             isImporting={isImporting}
-            isSyncingAll={isSyncingAll}
-            syncFeedCount={feeds.length}
-            syncMode={syncSettings.mode}
-            syncIntervalMinutes={syncSettings.intervalMinutes}
-            syncStatusText={syncStatusText}
-            nextSyncText={nextSyncText}
             onHideSidebar={() => setIsSidebarHidden(true)}
             onModeChange={setSidebarMode}
             onSelectAll={() => setSelection({ type: "all" })}
@@ -784,10 +806,6 @@ export default function App() {
             onAddFeed={handleAddFeed}
             onImportOpml={handleImportOpml}
             onExportOpml={handleExportOpml}
-            onSyncModeChange={handleSyncModeChange}
-            onSyncIntervalChange={handleSyncIntervalChange}
-            onSyncAllFeeds={() => void syncAllFeeds("manual sync")}
-            onRefreshFeed={handleRefreshFeed}
             onRenameFeed={handleRenameFeed}
             onDeleteFeed={handleDeleteFeed}
           />
@@ -824,7 +842,18 @@ export default function App() {
         isLoading={isArticleLoading}
         onTagsChanged={() => void handleTagsChanged()}
         onOpenAiSettings={() => setShowAiSettings(true)}
-        onThemeChange={setReaderTheme}
+        onThemeChange={(theme) =>
+          setReaderSettings((currentSettings) => ({ ...currentSettings, themeBg: theme }))
+        }
+        themeBg={readerSettings.themeBg}
+        fontSize={readerSettings.fontSize}
+        layoutWidth={readerSettings.layoutWidth}
+        onThemeBgChange={(themeBg) =>
+          setReaderSettings((currentSettings) => ({ ...currentSettings, themeBg }))
+        }
+        onFontSizeChange={(fontSize) =>
+          setReaderSettings((currentSettings) => ({ ...currentSettings, fontSize }))
+        }
         articleSearchQuery={articleSearchInput}
         articleSearchResultCount={
           !isArticleSearchPending && articleSearchQuery.trim() ? articles.length : 0
@@ -839,7 +868,36 @@ export default function App() {
       {errorMessage ? <div className="toast" role="alert">{errorMessage}</div> : null}
 
       {showAiSettings ? (
-        <AiSettingsPage onClose={() => setShowAiSettings(false)} />
+        <AiSettingsPage
+          onClose={() => setShowAiSettings(false)}
+          appLanguage={appLanguage}
+          syncMode={syncSettings.mode}
+          syncIntervalMinutes={syncSettings.intervalMinutes}
+          syncStatusText={syncStatusText}
+          nextSyncText={nextSyncText}
+          syncFeedCount={feeds.length}
+          selectedFeedId={selectedFeedIdForSync}
+          selectedFeedTitle={selectedFeedForSync?.title}
+          isSyncingAll={isSyncingAll}
+          isRefreshing={isRefreshing}
+          readerTheme={readerSettings.themeBg}
+          readerFontSize={readerSettings.fontSize}
+          readerLayoutWidth={readerSettings.layoutWidth}
+          onAppLanguageChange={setAppLanguage}
+          onSyncModeChange={handleSyncModeChange}
+          onSyncIntervalChange={handleSyncIntervalChange}
+          onSyncAllFeeds={() => void syncAllFeeds("manual sync")}
+          onRefreshSelectedFeed={(feedId) => void handleRefreshFeed(feedId)}
+          onReaderThemeChange={(themeBg) =>
+            setReaderSettings((currentSettings) => ({ ...currentSettings, themeBg }))
+          }
+          onReaderFontSizeChange={(fontSize) =>
+            setReaderSettings((currentSettings) => ({ ...currentSettings, fontSize }))
+          }
+          onReaderLayoutWidthChange={(layoutWidth) =>
+            setReaderSettings((currentSettings) => ({ ...currentSettings, layoutWidth }))
+          }
+        />
       ) : null}
     </main>
   );
@@ -866,10 +924,51 @@ function writePaneLayout(layout: PaneLayout) {
   window.localStorage.setItem(paneLayoutKey, JSON.stringify(layout));
 }
 
+function readReaderSettings(): ReaderSettings {
+  try {
+    const rawSettings = window.localStorage.getItem(readerSettingsKey);
+    if (!rawSettings) {
+      return defaultReaderSettings;
+    }
+
+    const parsedSettings = JSON.parse(rawSettings) as Partial<ReaderSettings>;
+    const themeBg = isThemeBg(parsedSettings.themeBg)
+      ? parsedSettings.themeBg
+      : defaultReaderSettings.themeBg;
+    const fontSize = isFontSize(parsedSettings.fontSize)
+      ? parsedSettings.fontSize
+      : defaultReaderSettings.fontSize;
+    const layoutWidth =
+      typeof parsedSettings.layoutWidth === "number" &&
+      readerLayoutWidthOptions.includes(parsedSettings.layoutWidth)
+        ? parsedSettings.layoutWidth
+        : defaultReaderSettings.layoutWidth;
+
+    return { themeBg, fontSize, layoutWidth };
+  } catch {
+    return defaultReaderSettings;
+  }
+}
+
+function readAppLanguage() {
+  const language = window.localStorage.getItem(appLanguageKey);
+  return language === "en" || language === "zh-Hans" ? language : "zh-Hans";
+}
+
 function sanitizePaneWidth(width: unknown, fallback: number) {
   return typeof width === "number" && Number.isFinite(width)
     ? clamp(width, 220, 760)
     : fallback;
+}
+
+const readerLayoutWidthOptions = [680, 760, 820, 900, 1040];
+
+function isThemeBg(value: unknown): value is ThemeBg {
+  return value === "white" || value === "sepia" || value === "dark" || value === "green";
+}
+
+function isFontSize(value: unknown): value is FontSize {
+  return value === "sm" || value === "md" || value === "lg" || value === "xl";
 }
 
 function clamp(value: number, min: number, max: number) {

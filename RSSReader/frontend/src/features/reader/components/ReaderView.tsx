@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 
 import type { TranslationView } from "../../../../../shared/ai";
@@ -23,6 +23,7 @@ import { ReaderHeader } from "./ReaderHeader";
 import { ReaderSidePanel } from "./ReaderSidePanel";
 import { ReaderToolbar } from "./ReaderToolbar";
 import type { FontSize, ReaderPanel, SelectionTranslationState, ThemeBg, ViewMode } from "../types";
+import { defaultReaderLayoutWidth } from "../types";
 import { markdownForCopy, normalizeMarkdown } from "../utils/markdown";
 import { buildArticleNoteExport } from "../utils/noteExport";
 import { getReaderSelectedText } from "../utils/selection";
@@ -39,6 +40,11 @@ interface ReaderViewProps {
   onTagsChanged?: () => void;
   onOpenAiSettings?: () => void;
   onThemeChange?: (theme: ThemeBg) => void;
+  themeBg: ThemeBg;
+  fontSize: FontSize;
+  layoutWidth: number;
+  onThemeBgChange: (theme: ThemeBg) => void;
+  onFontSizeChange: (fontSize: FontSize) => void;
   articleSearchQuery?: string;
   articleSearchResultCount?: number;
   activeArticleSearchIndex?: number;
@@ -54,6 +60,11 @@ export function ReaderView({
   onTagsChanged,
   onOpenAiSettings,
   onThemeChange,
+  themeBg,
+  fontSize,
+  layoutWidth,
+  onThemeBgChange,
+  onFontSizeChange,
   articleSearchQuery = "",
   articleSearchResultCount = 0,
   activeArticleSearchIndex = 0,
@@ -76,8 +87,6 @@ export function ReaderView({
   const [isDragging, setIsDragging] = useState(false);
   const compareRef = useRef<HTMLDivElement>(null);
 
-  const [themeBg, setThemeBg] = useState<ThemeBg>("white");
-  const [fontSize, setFontSize] = useState<FontSize>("md");
   const [showThemePanel, setShowThemePanel] = useState(false);
   const [activePanel, setActivePanel] = useState<ReaderPanel | undefined>();
   const sidePanelRef = useRef<HTMLElement>(null);
@@ -120,6 +129,10 @@ export function ReaderView({
   useEffect(() => {
     onThemeChange?.(themeBg);
   }, [onThemeChange, themeBg]);
+
+  const readerLayoutStyle = {
+    "--reader-layout-width": `${layoutWidth || defaultReaderLayoutWidth}px`,
+  } as CSSProperties;
 
   const loadCachedTranslation = useCallback(async () => {
     if (!article?.id) {
@@ -707,9 +720,9 @@ export function ReaderView({
       showThemePanel={showThemePanel}
       onToggleThemePanel={() => setShowThemePanel((value) => !value)}
       themeBg={themeBg}
-      onThemeBgChange={setThemeBg}
+      onThemeBgChange={onThemeBgChange}
       fontSize={fontSize}
-      onFontSizeChange={setFontSize}
+      onFontSizeChange={onFontSizeChange}
       bilingualOpen={bilingualOpen}
       targetLanguage={targetLanguage}
       onTargetLanguageChange={handleTargetLanguageChange}
@@ -832,7 +845,12 @@ export function ReaderView({
       ) : null}
 
       {viewMode === "markdown" ? (
-        <div className="reader-themed-page" data-theme={themeBg} data-font-size={fontSize}>
+        <div
+          className="reader-themed-page"
+          data-theme={themeBg}
+          data-font-size={fontSize}
+          style={readerLayoutStyle}
+        >
           <SelectionTranslationPanel
             selectionTranslation={selectionTranslation}
             translationTargetLanguage={targetLanguage}

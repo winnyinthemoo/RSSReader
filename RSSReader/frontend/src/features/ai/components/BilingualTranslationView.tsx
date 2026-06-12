@@ -85,7 +85,7 @@ function formatTranslationError(message: string) {
       normalized.includes("not set") ||
       normalized.includes("missing"))
   ) {
-    return "Translation model is not configured. Please set a model in AI settings. Showing original content.";
+    return "Translation model is not configured. Please set a model in Settings > Agents. Showing original content.";
   }
   return `Translation failed: ${message}. Showing original content.`;
 }

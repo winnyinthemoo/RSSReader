@@ -203,6 +203,10 @@ export interface UsageReportResult {
   totalTokens: number;
 }
 
+export interface UsageCleanupResult {
+  deletedCount: number;
+}
+
 export interface PromptRevealResult {
   path: string;
   created: boolean;

@@ -325,7 +325,119 @@
 }
 
 .ai-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   padding: 0 4px;
+}
+
+.settings-agent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.settings-agent-header .ai-settings-tabs {
+  flex: 1 1 auto;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.settings-section-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: start;
+  gap: 18px;
+}
+
+.settings-card {
+  min-height: 0;
+}
+
+.settings-card .ai-form-grid {
+  grid-template-columns: 1fr;
+}
+
+.settings-sync-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  padding: 12px 14px;
+  color: var(--ink-secondary);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.settings-sync-status strong {
+  color: var(--ink-primary);
+  font-size: 0.94rem;
+}
+
+.settings-sync-status span {
+  color: var(--ink-tertiary);
+  font-size: 0.8rem;
+  font-weight: 680;
+}
+
+.settings-sync-mode {
+  margin: 0;
+}
+
+.settings-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 10px;
+}
+
+.settings-theme-option {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  padding: 10px;
+  color: var(--ink-secondary);
+  background: rgba(255, 255, 255, 0.62);
+  font-weight: 720;
+  text-align: left;
+}
+
+.settings-theme-option:hover,
+.settings-theme-option.active {
+  border-color: rgba(0, 122, 255, 0.28);
+  color: var(--accent-blue);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 28px rgba(24, 27, 32, 0.08);
+}
+
+.settings-theme-swatch {
+  display: grid;
+  width: 100%;
+  min-height: 54px;
+  place-items: center;
+  border-radius: 14px;
+  font-weight: 820;
+  box-shadow: inset 0 0 0 1px rgba(60, 60, 67, 0.1);
+}
+
+.settings-font-options {
+  margin: 0;
+}
+
+.danger-button {
+  border-color: rgba(255, 59, 48, 0.22);
+  color: #d92d20;
+  background: rgba(255, 59, 48, 0.08);
+}
+
+.danger-button:hover {
+  border-color: rgba(255, 59, 48, 0.38);
+  color: #b42318;
+  background: rgba(255, 59, 48, 0.12);
 }
 
 .ai-result-panel {
