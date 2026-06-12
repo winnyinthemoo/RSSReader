@@ -20,6 +20,7 @@ import type {
   FeedWithArticles,
   OpmlExportRequest,
   OpmlExportResult,
+  OpmlBackgroundRefreshEvent,
   OpmlImportItemResult,
   OpmlImportRequest,
   OpmlImportResult,
@@ -59,6 +60,10 @@ const backendBaseUrl = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:518
 
 function getInvoke(): TauriInvoke | undefined {
   return window.__TAURI__?.core?.invoke ?? window.__TAURI__?.tauri?.invoke;
+}
+
+function getEventListen(): TauriListen | undefined {
+  return window.__TAURI__?.event?.listen;
 }
 
 export async function listFeeds(): Promise<FeedListResult> {
@@ -351,6 +356,7 @@ export async function importOpml(request: OpmlImportRequest = {}): Promise<OpmlI
 
   const outlines = parseOpmlOutlines(content);
   const items: OpmlImportItemResult[] = [];
+  const importedFeeds: FeedWithArticles["feed"][] = [];
   const seenUrls = new Set<string>();
   const knownUrls = new Set(
     (await listFeeds()).feeds
@@ -392,8 +398,9 @@ export async function importOpml(request: OpmlImportRequest = {}): Promise<OpmlI
     }
 
     try {
-      await addFeed({ url, name: outline.title });
+      const result = await addFeed({ url, name: outline.title });
       knownUrls.add(url);
+      importedFeeds.push(result.feed);
       items.push({ url, title: outline.title, status: "imported" });
     } catch (error) {
       items.push({
@@ -405,7 +412,20 @@ export async function importOpml(request: OpmlImportRequest = {}): Promise<OpmlI
     }
   }
 
-  return summarizeOpmlImport(true, items);
+  return summarizeOpmlImport(true, items, importedFeeds);
+}
+
+export async function listenOpmlBackgroundRefresh(
+  handler: (event: OpmlBackgroundRefreshEvent) => void,
+): Promise<TauriUnlisten | undefined> {
+  const listen = getEventListen();
+  if (!listen) {
+    return undefined;
+  }
+
+  return listen<OpmlBackgroundRefreshEvent>("opml-import-refresh", (event) => {
+    handler(event.payload);
+  });
 }
 
 function downloadTextFile(content: string, fileName: string, type: string) {
@@ -482,6 +502,7 @@ function normalizeFeedUrl(value: string) {
 function summarizeOpmlImport(
   selected: boolean,
   items: OpmlImportItemResult[],
+  feeds: FeedWithArticles["feed"][] = [],
 ): OpmlImportResult {
   return {
     selected,
@@ -489,6 +510,8 @@ function summarizeOpmlImport(
     imported: items.filter((item) => item.status === "imported").length,
     skipped: items.filter((item) => item.status === "skipped").length,
     failed: items.filter((item) => item.status === "failed").length,
+    backgroundRefreshStarted: false,
+    feeds,
     items,
   };
 }
@@ -500,6 +523,8 @@ function emptyOpmlImportResult(selected: boolean): OpmlImportResult {
     imported: 0,
     skipped: 0,
     failed: 0,
+    backgroundRefreshStarted: false,
+    feeds: [],
     items: [],
   };
 }

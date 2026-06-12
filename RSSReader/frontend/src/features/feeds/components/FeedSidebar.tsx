@@ -1,4 +1,4 @@
-import { Download, FolderOpen, Plus, Rss, Star, Tags, Upload } from "lucide-react";
+import { ChevronLeft, Download, FolderOpen, Plus, Rss, Star, Tags, Upload } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -31,6 +31,7 @@ export function FeedSidebar({
   syncIntervalMinutes,
   syncStatusText,
   nextSyncText,
+  onHideSidebar,
   onModeChange,
   onSelectAll,
   onSelectFeed,
@@ -175,9 +176,15 @@ export function FeedSidebar({
             <h1>Vortex</h1>
           </div>
         </div>
-        <div className="feed-total" aria-label={`${totalUnread} unread articles`}>
-          {totalUnread}
-        </div>
+        <button
+          className="sidebar-hide-button"
+          type="button"
+          aria-label="隐藏侧栏"
+          title="隐藏侧栏"
+          onClick={onHideSidebar}
+        >
+          <ChevronLeft size={18} strokeWidth={2.4} />
+        </button>
       </div>
 
       <div className="sidebar-mode-tabs" role="tablist" aria-label="Sidebar view">

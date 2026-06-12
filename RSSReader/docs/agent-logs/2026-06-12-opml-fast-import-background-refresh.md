@@ -1,0 +1,30 @@
+# 2026-06-12 Agent 工作记录：OPML 快速导入与后台刷新
+
+- 日期：2026-06-12
+- 负责人：Codex
+- 使用工具：Codex、PowerShell、cargo、npm
+- 对应 Issue / PR：未指定
+- 任务目标：优化 OPML 导入速度，导入时先保存所有订阅源并立即展示，文章抓取改为后台多线程刷新。
+- 关键 Prompt 摘要：用户反馈“导入 OPML 太慢”，要求“把所有的源保存，就可以展示，然后在后台多线程获取所有的文章”。
+- Agent 修改内容摘要：
+  - 后端新增 `subscribe_feed` / `feed_subscribe`，只校验并保存订阅源占位记录，不在导入阶段请求 Feed 内容。
+  - 新增 `feed_refresh_isolated`，供后台线程用独立 `FeedService` / SQLite 连接刷新 Feed，避免全局服务锁串行化网络请求。
+  - Tauri OPML 导入改为批量保存源后立即返回，并以最多 6 路并发后台刷新导入的 Feed。
+  - OPML 导入结果新增本次已保存的 Feed 列表，前端导入完成后直接合入并选中第一个新源，避免必须刷新页面后才显示。
+  - Feed 列表折叠时仍强制展示当前选中的 Feed，避免新导入源排序在前 4 个之后时不可见。
+  - 最左侧 Feed 栏右上角改为“隐藏”按钮，隐藏后保留左上角“显示”按钮用于恢复。
+  - 最左侧 Feed 栏隐藏/显示入口改为图标按钮；隐藏后用贴在窗口最左侧的右箭头恢复侧栏。
+  - 调整文章列表已读/未读视觉：Read / Unread 筛选默认灰色，仅选中时蓝色；已读文章灰化，未读标题保持加粗。
+  - 缩小 Markdown 阅读视图文章标题字号，降低标题在正文阅读中的视觉占比。
+  - Tauri 后台刷新通过 `opml-import-refresh` 事件通知前端刷新列表。
+  - 前端监听后台刷新事件，自动更新 Feed / 文章 / 标签统计；Feed 列表改为显示所有源，不再隐藏错误状态源。
+  - OPML 导入提示补充“articles syncing in background”状态。
+- 人工检查结果：已检查导入流程、事件监听和列表刷新逻辑，确认导入返回路径不再调用同步 `feed_add` 抓文章。
+- 是否运行测试：
+  - `RSSReader/frontend`: `npm.cmd run build`，通过；仍有既有 chunk size warning。
+  - `RSSReader/src-tauri`: `cargo test`，通过。
+  - `RSSReader/backend`: `cargo check`，通过。
+  - `RSSReader/backend`: `cargo test --target-dir target-codex`，通过；默认 target 曾因 Windows 文件锁在 `rustls` fingerprint 写入时报拒绝访问。
+- 未解决问题：
+  - 浏览器开发模式的 OPML 降级路径仍复用逐条 `addFeed`，主要优化已落在 Tauri 桌面导入路径。
+  - 后台刷新只通过事件更新当前窗口；若应用退出，未完成的刷新不会继续。

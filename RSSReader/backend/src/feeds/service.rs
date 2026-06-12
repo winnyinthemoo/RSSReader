@@ -1,9 +1,10 @@
 use super::{
-    fetch_and_parse_feed, ArticleDetail, ArticleListFilter, ArticleListItem,
+    fetch_and_parse_feed, host_from_url, stable_id, ArticleDetail, ArticleListFilter,
+    ArticleListItem,
     ArticleMarkFavoriteRequest, ArticleMarkReadRequest, ArticleNote, ArticleNoteSaveRequest,
     ArticleTagDeleteRequest, ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest,
     FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedRenameRequest,
-    FeedRepository, FeedStatus, FeedWithArticles, TagDeleteRequest, TagListResult,
+    FeedRepository, FeedStatus, FeedSummary, FeedWithArticles, TagDeleteRequest, TagListResult,
     TagMergeRequest, TagRenameRequest,
 };
 
@@ -81,6 +82,65 @@ impl FeedService {
         })?;
 
         Ok(FeedWithArticles { feed, articles })
+    }
+
+    pub fn subscribe_feed(&mut self, request: FeedAddRequest) -> Result<FeedWithArticles, String> {
+        let normalized_url = normalize_feed_url(&request.url)?;
+        if let Some(mut existing) = self.repository.get_feed_by_url(&normalized_url)? {
+            if let Some(name) = request
+                .name
+                .as_deref()
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+            {
+                existing.custom_title = Some(name.to_string());
+                existing.title = name.to_string();
+                self.repository.save_feed(&existing)?;
+            }
+
+            return Ok(FeedWithArticles {
+                feed: existing.clone(),
+                articles: self.repository.list_articles(ArticleListFilter {
+                    feed_id: Some(existing.id),
+                    unread_only: false,
+                    favorites_only: false,
+                    tag_id: None,
+                    ..Default::default()
+                })?,
+            });
+        }
+
+        let custom_title = request
+            .name
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_string);
+        let title = custom_title
+            .clone()
+            .unwrap_or_else(|| host_from_url(&normalized_url));
+        let feed = FeedSummary {
+            id: stable_id("feed", &normalized_url),
+            title,
+            source_title: None,
+            custom_title,
+            url: normalized_url,
+            site_url: None,
+            description: None,
+            unread_count: 0,
+            article_count: 0,
+            last_fetched_at: None,
+            status: FeedStatus::Active,
+            error_message: None,
+        };
+
+        self.repository.save_feed(&feed)?;
+        let feed = self.repository.get_feed(&feed.id)?.unwrap_or(feed);
+
+        Ok(FeedWithArticles {
+            feed,
+            articles: Vec::new(),
+        })
     }
 
     pub fn refresh_feed(
@@ -327,6 +387,26 @@ mod tests {
         assert_eq!(feeds[0].article_count, 1);
         assert_eq!(feeds[0].unread_count, 1);
         assert_eq!(articles[0].title, "Stored Article");
+    }
+
+    #[test]
+    fn subscribe_feed_saves_placeholder_without_fetching_articles() {
+        let repository = FeedRepository::open_in_memory().expect("repository opens");
+        let mut service = FeedService::with_repository(repository);
+
+        let result = service
+            .subscribe_feed(FeedAddRequest {
+                url: "https://example.com/rss.xml".to_string(),
+                name: Some("Example OPML".to_string()),
+            })
+            .expect("feed subscribes");
+        let feeds = service.list_feeds().feeds;
+
+        assert_eq!(result.feed.title, "Example OPML");
+        assert_eq!(result.articles.len(), 0);
+        assert_eq!(feeds.len(), 1);
+        assert_eq!(feeds[0].article_count, 0);
+        assert_eq!(feeds[0].last_fetched_at, None);
     }
 
     #[test]

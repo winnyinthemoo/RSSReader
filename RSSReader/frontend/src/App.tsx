@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { ChevronRight } from "lucide-react";
 
 import type {
   ArticleDetail,
@@ -44,6 +45,7 @@ import {
   listArticles,
   listFeeds,
   listTags,
+  listenOpmlBackgroundRefresh,
   markArticleFavorite,
   markArticleRead,
   mergeTags,
@@ -83,6 +85,7 @@ export default function App() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [isSidebarHidden, setIsSidebarHidden] = useState(false);
   const [syncSettings, setSyncSettings] = useFeedSyncSettings();
   const [paneLayout, setPaneLayout] = useState<PaneLayout>(() => readPaneLayout());
   const [lastSyncAt, setLastSyncAt] = useState<Date | undefined>();
@@ -94,14 +97,53 @@ export default function App() {
   const articleListRequestTokenRef = useRef(0);
   const articleSelectionTokenRef = useRef(0);
   const appShellRef = useRef<HTMLElement>(null);
-
-  const activeFeeds = useMemo(
-    () => feeds.filter((feed) => feed.status === "active"),
-    [feeds],
-  );
+  const selectionRef = useRef(selection);
+  const articleSearchQueryRef = useRef(articleSearchQuery);
 
   useEffect(() => {
     void loadFeedsTagsAndArticles();
+  }, []);
+
+  useEffect(() => {
+    selectionRef.current = selection;
+    articleSearchQueryRef.current = articleSearchQuery;
+  }, [selection, articleSearchQuery]);
+
+  useEffect(() => {
+    let active = true;
+    let unlisten: (() => void) | undefined;
+
+    void listenOpmlBackgroundRefresh((event) => {
+      if (!active) {
+        return;
+      }
+
+      const refreshResult = event.result;
+      if (event.status === "completed" && refreshResult) {
+        setFeeds((currentFeeds) => upsertFeed(currentFeeds, refreshResult.feed));
+        void loadArticles(selectionRef.current, articleSearchQueryRef.current);
+        void refreshTagsAndStarredCount();
+        setSyncStatusText(`Imported feed synced: ${refreshResult.feed.title}`);
+        return;
+      }
+
+      if (event.status === "failed") {
+        void loadFeedsOnly();
+        setSyncStatusText("One imported feed failed");
+      }
+    }).then((nextUnlisten) => {
+      if (!active) {
+        nextUnlisten?.();
+        return;
+      }
+
+      unlisten = nextUnlisten;
+    });
+
+    return () => {
+      active = false;
+      unlisten?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -132,7 +174,7 @@ export default function App() {
   useEffect(() => {
     if (
       syncSettings.mode !== "launch" ||
-      activeFeeds.length === 0 ||
+      feeds.length === 0 ||
       launchSyncStartedRef.current
     ) {
       return;
@@ -140,10 +182,10 @@ export default function App() {
 
     launchSyncStartedRef.current = true;
     void syncAllFeeds("opening the app");
-  }, [syncSettings.mode, activeFeeds.length]);
+  }, [syncSettings.mode, feeds.length]);
 
   useEffect(() => {
-    if (syncSettings.mode !== "timer" || activeFeeds.length === 0) {
+    if (syncSettings.mode !== "timer" || feeds.length === 0) {
       return;
     }
 
@@ -152,7 +194,7 @@ export default function App() {
     }, syncSettings.intervalMinutes * 60 * 1000);
 
     return () => window.clearInterval(timerId);
-  }, [syncSettings.mode, syncSettings.intervalMinutes, activeFeeds.length]);
+  }, [syncSettings.mode, syncSettings.intervalMinutes, feeds.length]);
 
   const nextSyncText = useMemo(() => {
     if (syncSettings.mode !== "timer") {
@@ -213,6 +255,28 @@ export default function App() {
       if (!result.articles.some((article) => article.id === selectedArticleId)) {
         await handleSelectArticle(result.articles[0].id);
       }
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  async function loadFeedsOnly() {
+    try {
+      const feedResult = await listFeeds();
+      setFeeds(feedResult.feeds);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  }
+
+  async function refreshTagsAndStarredCount() {
+    try {
+      const [tagResult, starredResult] = await Promise.all([
+        listTags(),
+        listArticles({ favoritesOnly: true }),
+      ]);
+      setTags(tagResult.tags);
+      setStarredCount(starredResult.articles.length);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     }
@@ -472,7 +536,7 @@ export default function App() {
 
   async function handleExportOpml() {
     try {
-      const opmlExport = buildFeedsOpmlExport(activeFeeds);
+      const opmlExport = buildFeedsOpmlExport(feeds);
       await exportOpml(opmlExport);
       setErrorMessage(undefined);
     } catch (error) {
@@ -481,17 +545,17 @@ export default function App() {
   }
 
   async function syncAllFeeds(reason: string) {
-    if (isSyncingAll || activeFeeds.length === 0) {
+    if (isSyncingAll || feeds.length === 0) {
       return;
     }
 
     try {
       setIsSyncingAll(true);
-      setSyncStatusText(`Syncing ${activeFeeds.length} feeds`);
+      setSyncStatusText(`Syncing ${feeds.length} feeds`);
       let failedCount = 0;
       let newArticleCount = 0;
 
-      for (const feed of activeFeeds) {
+      for (const feed of feeds) {
         try {
           const result = await refreshFeed({ feedId: feed.id });
           newArticleCount += result.newArticles.length;
@@ -503,9 +567,9 @@ export default function App() {
       await loadFeedsTagsAndArticles();
       const completedAt = new Date();
       setLastSyncAt(completedAt);
-      setSyncStatusText(formatFeedSyncStatus(activeFeeds.length, failedCount, completedAt));
+      setSyncStatusText(formatFeedSyncStatus(feeds.length, failedCount, completedAt));
       setErrorMessage(
-        formatFeedSyncToast(activeFeeds.length, failedCount, newArticleCount, reason),
+        formatFeedSyncToast(feeds.length, failedCount, newArticleCount, reason),
       );
     } catch (error) {
       setSyncStatusText("Sync failed");
@@ -524,8 +588,28 @@ export default function App() {
         return;
       }
 
-      await loadFeedsTagsAndArticles();
+      const importedFeeds = result.feeds ?? [];
+      if (importedFeeds.length > 0) {
+        const nextSelection: SidebarSelection = { type: "feed", feedId: importedFeeds[0].id };
+        setFeeds((currentFeeds) =>
+          importedFeeds.reduce(
+            (nextFeeds, feed) => upsertFeed(nextFeeds, feed),
+            currentFeeds,
+          ),
+        );
+        setSelection(nextSelection);
+        await Promise.all([
+          loadFeedsOnly(),
+          refreshTagsAndStarredCount(),
+          loadArticles(nextSelection, articleSearchQuery),
+        ]);
+      } else {
+        await loadFeedsTagsAndArticles();
+      }
       setSidebarMode("feeds");
+      if (result.backgroundRefreshStarted) {
+        setSyncStatusText(`Syncing ${result.imported} imported feeds`);
+      }
       setErrorMessage(formatOpmlImportResult(result));
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -538,7 +622,7 @@ export default function App() {
     setSyncSettings((currentSettings) => ({ ...currentSettings, mode }));
     setSyncStatusText(mode === "manual" ? "Manual" : "Ready");
 
-    if (mode === "launch" && activeFeeds.length > 0) {
+    if (mode === "launch" && feeds.length > 0) {
       void syncAllFeeds("opening the app");
     }
   }
@@ -653,53 +737,69 @@ export default function App() {
   return (
     <main
       className="app-shell"
+      data-sidebar-hidden={isSidebarHidden ? "true" : "false"}
       data-reader-theme={readerTheme}
       ref={appShellRef}
       style={appShellStyle}
     >
-      <FeedSidebar
-        feeds={activeFeeds}
-        tags={tags}
-        starredCount={starredCount}
-        selection={selection}
-        mode={sidebarMode}
-        isAdding={isAdding}
-        isRefreshing={isRefreshing}
-        isDeleting={isDeleting}
-        isImporting={isImporting}
-        isSyncingAll={isSyncingAll}
-        syncFeedCount={activeFeeds.length}
-        syncMode={syncSettings.mode}
-        syncIntervalMinutes={syncSettings.intervalMinutes}
-        syncStatusText={syncStatusText}
-        nextSyncText={nextSyncText}
-        onModeChange={setSidebarMode}
-        onSelectAll={() => setSelection({ type: "all" })}
-        onSelectFeed={(feedId) => setSelection({ type: "feed", feedId })}
-        onSelectStarred={() => setSelection({ type: "starred" })}
-        onToggleTag={handleToggleTag}
-        onClearTags={() => setSelection({ type: "all" })}
-        onTagMatchChange={handleTagMatchChange}
-        onRenameTag={handleRenameTag}
-        onMergeTags={handleMergeTags}
-        onDeleteTag={handleDeleteTag}
-        onAddFeed={handleAddFeed}
-        onImportOpml={handleImportOpml}
-        onExportOpml={handleExportOpml}
-        onSyncModeChange={handleSyncModeChange}
-        onSyncIntervalChange={handleSyncIntervalChange}
-        onSyncAllFeeds={() => void syncAllFeeds("manual sync")}
-        onRefreshFeed={handleRefreshFeed}
-        onRenameFeed={handleRenameFeed}
-        onDeleteFeed={handleDeleteFeed}
-      />
+      {isSidebarHidden ? (
+        <button
+          className="sidebar-reveal-button"
+          type="button"
+          aria-label="显示侧栏"
+          title="显示侧栏"
+          onClick={() => setIsSidebarHidden(false)}
+        >
+          <ChevronRight size={18} strokeWidth={2.4} />
+        </button>
+      ) : (
+        <>
+          <FeedSidebar
+            feeds={feeds}
+            tags={tags}
+            starredCount={starredCount}
+            selection={selection}
+            mode={sidebarMode}
+            isAdding={isAdding}
+            isRefreshing={isRefreshing}
+            isDeleting={isDeleting}
+            isImporting={isImporting}
+            isSyncingAll={isSyncingAll}
+            syncFeedCount={feeds.length}
+            syncMode={syncSettings.mode}
+            syncIntervalMinutes={syncSettings.intervalMinutes}
+            syncStatusText={syncStatusText}
+            nextSyncText={nextSyncText}
+            onHideSidebar={() => setIsSidebarHidden(true)}
+            onModeChange={setSidebarMode}
+            onSelectAll={() => setSelection({ type: "all" })}
+            onSelectFeed={(feedId) => setSelection({ type: "feed", feedId })}
+            onSelectStarred={() => setSelection({ type: "starred" })}
+            onToggleTag={handleToggleTag}
+            onClearTags={() => setSelection({ type: "all" })}
+            onTagMatchChange={handleTagMatchChange}
+            onRenameTag={handleRenameTag}
+            onMergeTags={handleMergeTags}
+            onDeleteTag={handleDeleteTag}
+            onAddFeed={handleAddFeed}
+            onImportOpml={handleImportOpml}
+            onExportOpml={handleExportOpml}
+            onSyncModeChange={handleSyncModeChange}
+            onSyncIntervalChange={handleSyncIntervalChange}
+            onSyncAllFeeds={() => void syncAllFeeds("manual sync")}
+            onRefreshFeed={handleRefreshFeed}
+            onRenameFeed={handleRenameFeed}
+            onDeleteFeed={handleDeleteFeed}
+          />
 
-      <button
-        className="pane-resizer pane-resizer-sidebar"
-        type="button"
-        aria-label="Resize feed sidebar"
-        onPointerDown={(event) => handlePaneResizeStart("sidebar", event)}
-      />
+          <button
+            className="pane-resizer pane-resizer-sidebar"
+            type="button"
+            aria-label="Resize feed sidebar"
+            onPointerDown={(event) => handlePaneResizeStart("sidebar", event)}
+          />
+        </>
+      )}
 
       <ArticleList
         articles={articles}

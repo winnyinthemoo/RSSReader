@@ -18,6 +18,15 @@ pub fn feed_add(url: String, name: Option<String>) -> Result<FeedWithArticles, S
     with_service(|service| service.add_feed(FeedAddRequest { url, name }))
 }
 
+pub fn feed_subscribe(url: String, name: Option<String>) -> Result<FeedWithArticles, String> {
+    with_service(|service| service.subscribe_feed(FeedAddRequest { url, name }))
+}
+
+pub fn feed_refresh_isolated(feed_id: String) -> Result<FeedRefreshResult, String> {
+    let mut service = FeedService::new()?;
+    service.refresh_feed(FeedRefreshRequest { feed_id })
+}
+
 pub fn feed_refresh(feed_id: String) -> Result<FeedRefreshResult, String> {
     with_service(|service| service.refresh_feed(FeedRefreshRequest { feed_id }))
 }

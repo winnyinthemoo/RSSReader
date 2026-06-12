@@ -45,6 +45,9 @@ export function formatOpmlImportResult(result: OpmlImportResult) {
   if (result.failed > 0) {
     parts.push(`${result.failed} failed`);
   }
+  if (result.backgroundRefreshStarted) {
+    parts.push("articles syncing in background");
+  }
 
   return `${parts.join(", ")}.`;
 }

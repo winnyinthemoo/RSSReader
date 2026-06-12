@@ -1,10 +1,12 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 use quick_xml::encoding::Decoder;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 use rssreader_backend as backend;
+use rssreader_backend::{FeedRefreshResult, FeedSummary};
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,7 +32,18 @@ pub struct OpmlImportResult {
     pub imported: usize,
     pub skipped: usize,
     pub failed: usize,
+    pub background_refresh_started: bool,
+    pub feeds: Vec<FeedSummary>,
     pub items: Vec<OpmlImportItemResult>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpmlBackgroundRefreshEvent {
+    pub feed_id: String,
+    pub status: String,
+    pub result: Option<FeedRefreshResult>,
+    pub message: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -41,7 +54,9 @@ struct OpmlFeedCandidate {
 
 impl OpmlImportResult {
     pub fn not_selected() -> Self {
-        Self::from_items(false, Vec::new())
+        let mut result = Self::from_items(false, Vec::new());
+        result.background_refresh_started = false;
+        result
     }
 
     fn from_items(selected: bool, items: Vec<OpmlImportItemResult>) -> Self {
@@ -54,12 +69,17 @@ impl OpmlImportResult {
                 .count(),
             skipped: items.iter().filter(|item| item.status == "skipped").count(),
             failed: items.iter().filter(|item| item.status == "failed").count(),
+            background_refresh_started: false,
+            feeds: Vec::new(),
             items,
         }
     }
 }
 
-pub fn import_opml_from_content(content: &str) -> Result<OpmlImportResult, String> {
+pub fn import_opml_from_content(
+    app_handle: Option<AppHandle>,
+    content: &str,
+) -> Result<OpmlImportResult, String> {
     let candidates = parse_opml_candidates(content)?;
     let mut known_urls = backend::feeds::feed_list()
         .feeds
@@ -67,6 +87,8 @@ pub fn import_opml_from_content(content: &str) -> Result<OpmlImportResult, Strin
         .map(|feed| normalize_known_feed_url(&feed.url))
         .collect::<HashSet<_>>();
     let mut seen_urls = HashSet::new();
+    let mut imported_feed_ids = Vec::new();
+    let mut imported_feeds = Vec::new();
     let mut items = Vec::new();
 
     for candidate in candidates {
@@ -97,9 +119,11 @@ pub fn import_opml_from_content(content: &str) -> Result<OpmlImportResult, Strin
             continue;
         }
 
-        match backend::feeds::feed_add(url.clone(), candidate.title.clone()) {
-            Ok(_) => {
+        match backend::feeds::feed_subscribe(url.clone(), candidate.title.clone()) {
+            Ok(result) => {
                 known_urls.insert(url.clone());
+                imported_feed_ids.push(result.feed.id.clone());
+                imported_feeds.push(result.feed);
                 items.push(OpmlImportItemResult {
                     url,
                     title: candidate.title,
@@ -113,7 +137,80 @@ pub fn import_opml_from_content(content: &str) -> Result<OpmlImportResult, Strin
         }
     }
 
-    Ok(OpmlImportResult::from_items(true, items))
+    let background_refresh_started = app_handle.is_some() && !imported_feed_ids.is_empty();
+    if let Some(handle) = app_handle {
+        start_background_refresh(handle, imported_feed_ids);
+    }
+
+    let mut result = OpmlImportResult::from_items(true, items);
+    result.background_refresh_started = background_refresh_started;
+    result.feeds = imported_feeds;
+    Ok(result)
+}
+
+fn start_background_refresh(app_handle: AppHandle, feed_ids: Vec<String>) {
+    if feed_ids.is_empty() {
+        return;
+    }
+
+    std::thread::spawn(move || {
+        let mut pending = feed_ids.into_iter().collect::<VecDeque<_>>();
+        const MAX_PARALLEL_REFRESHES: usize = 6;
+
+        while !pending.is_empty() {
+            let mut workers = Vec::new();
+            for _ in 0..MAX_PARALLEL_REFRESHES {
+                let Some(feed_id) = pending.pop_front() else {
+                    break;
+                };
+                let handle = app_handle.clone();
+                workers.push(std::thread::spawn(move || {
+                    emit_background_refresh_event(
+                        &handle,
+                        OpmlBackgroundRefreshEvent {
+                            feed_id: feed_id.clone(),
+                            status: "started".to_string(),
+                            result: None,
+                            message: None,
+                        },
+                    );
+
+                    match backend::feeds::feed_refresh_isolated(feed_id.clone()) {
+                        Ok(result) => emit_background_refresh_event(
+                            &handle,
+                            OpmlBackgroundRefreshEvent {
+                                feed_id,
+                                status: "completed".to_string(),
+                                result: Some(result),
+                                message: None,
+                            },
+                        ),
+                        Err(error) => emit_background_refresh_event(
+                            &handle,
+                            OpmlBackgroundRefreshEvent {
+                                feed_id,
+                                status: "failed".to_string(),
+                                result: None,
+                                message: Some(error),
+                            },
+                        ),
+                    }
+                }));
+            }
+
+            for worker in workers {
+                if let Err(error) = worker.join() {
+                    eprintln!("OPML background refresh worker failed: {error:?}");
+                }
+            }
+        }
+    });
+}
+
+fn emit_background_refresh_event(app_handle: &AppHandle, event: OpmlBackgroundRefreshEvent) {
+    if let Err(error) = app_handle.emit("opml-import-refresh", event) {
+        eprintln!("OPML background refresh event emit failed: {error}");
+    }
 }
 
 fn parse_opml_candidates(content: &str) -> Result<Vec<OpmlFeedCandidate>, String> {

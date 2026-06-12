@@ -182,7 +182,16 @@ export interface OpmlImportResult {
   imported: number;
   skipped: number;
   failed: number;
+  backgroundRefreshStarted?: boolean;
+  feeds?: FeedSummary[];
   items: OpmlImportItemResult[];
+}
+
+export interface OpmlBackgroundRefreshEvent {
+  feedId: string;
+  status: "started" | "completed" | "failed";
+  result?: FeedRefreshResult;
+  message?: string;
 }
 
 export interface AppErrorPayload {

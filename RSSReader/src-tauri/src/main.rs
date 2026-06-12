@@ -177,7 +177,10 @@ async fn opml_export(request: OpmlExportRequest) -> Result<OpmlExportResult, Str
 }
 
 #[tauri::command]
-async fn opml_import(request: OpmlImportRequest) -> Result<OpmlImportResult, String> {
+async fn opml_import(
+    app_handle: tauri::AppHandle,
+    request: OpmlImportRequest,
+) -> Result<OpmlImportResult, String> {
     run_blocking(move || {
         let content = match request.content.map(|content| content.trim().to_string()) {
             Some(content) if !content.is_empty() => content,
@@ -196,7 +199,7 @@ async fn opml_import(request: OpmlImportRequest) -> Result<OpmlImportResult, Str
             }
         };
 
-        opml::import_opml_from_content(&content)
+        opml::import_opml_from_content(Some(app_handle), &content)
     })
     .await
 }

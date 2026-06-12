@@ -29,6 +29,7 @@ export interface FeedSidebarProps {
   syncIntervalMinutes: number;
   syncStatusText: string;
   nextSyncText?: string;
+  onHideSidebar: () => void;
   onModeChange: (mode: SidebarMode) => void;
   onSelectAll: () => void;
   onSelectFeed: (feedId: string) => void;

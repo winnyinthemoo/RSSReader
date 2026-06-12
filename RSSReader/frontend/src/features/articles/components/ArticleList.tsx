@@ -76,20 +76,22 @@ export function ArticleList({
           <div className="header-title-row">
             <h2>{normalizedSearchQuery ? "Search results" : title}</h2>
             <div className="article-stats">
-              <span
+              <button
+                type="button"
                 className={`unread-count-badge ${filterType === "unread" ? "active" : ""}`}
+                aria-pressed={filterType === "unread"}
                 onClick={() => setFilterType(filterType === "unread" ? null : "unread")}
-                style={{ cursor: "pointer" }}
               >
                 Unread {unreadCount}
-              </span>
-              <span
+              </button>
+              <button
+                type="button"
                 className={`read-count-badge ${filterType === "read" ? "active" : ""}`}
+                aria-pressed={filterType === "read"}
                 onClick={() => setFilterType(filterType === "read" ? null : "read")}
-                style={{ cursor: "pointer" }}
               >
                 Read {readCount}
-              </span>
+              </button>
             </div>
           </div>
           {normalizedSearchQuery ? (

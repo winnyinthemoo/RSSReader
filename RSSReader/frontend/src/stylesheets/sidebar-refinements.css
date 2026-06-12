@@ -92,17 +92,9 @@
   margin-right: 8px;
 }
 
-.unread-count-badge {
-  background: #3b82f6;
-  color: white;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.80rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
+.unread-count-badge,
 .read-count-badge {
+  border: 0;
   background: #e5e7eb;
   color: #6b7280;
   padding: 4px 10px;
@@ -110,20 +102,50 @@
   font-size: 0.80rem;
   font-weight: 500;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 /* Unread 楂樹寒 */
-.unread-count-badge.active {
+.unread-count-badge.active,
+.read-count-badge.active {
   outline: 2px solid #3b82f6;
   outline-offset: 2px;
   background: #3b82f6 !important;
   color: white !important;
 }
 
-/* Read 楂樹寒 */
-.read-count-badge.active {
-  outline: 2px solid #6b7280;
-  outline-offset: 2px;
-  background: #6b7280 !important;
-  color: white !important;
+.article-item.read {
+  color: #8a8f98;
+}
+
+.article-item.read .article-row-meta,
+.article-item.read .article-title-line,
+.article-item.read .article-title-text,
+.article-item.read .article-excerpt {
+  color: #8a8f98;
+}
+
+.article-item.read .article-title-text {
+  font-weight: 600;
+}
+
+.article-item.unread .article-title-line,
+.article-item.unread .article-title-text {
+  color: #111827;
+  font-weight: 760;
+}
+
+.article-item.unread .article-excerpt {
+  color: #4b5563;
+}
+
+.reader-header h2 {
+  font-size: clamp(1.45rem, 1.85vw, 2.05rem);
+  line-height: 1.16;
+  letter-spacing: -0.025em;
+}
+
+.reader-header.compact h2 {
+  font-size: 1.32rem;
+  line-height: 1.2;
 }

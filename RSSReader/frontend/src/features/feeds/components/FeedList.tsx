@@ -91,9 +91,11 @@ export function FeedList({
     }
   }
 
+  const visibleFeeds = buildVisibleFeeds(feeds, showMoreFeeds, feedsToShow, selectedFeedId);
+
   return (
     <div className="feed-list">
-      {(showMoreFeeds ? feeds : feeds.slice(0, feedsToShow)).map((feed) => {
+      {visibleFeeds.map((feed) => {
         const isEditing = editingFeedId === feed.id;
 
         return (
@@ -197,4 +199,23 @@ export function FeedList({
       ) : null}
     </div>
   );
+}
+
+function buildVisibleFeeds(
+  feeds: FeedSummary[],
+  showMoreFeeds: boolean,
+  feedsToShow: number,
+  selectedFeedId?: string,
+) {
+  if (showMoreFeeds || feeds.length <= feedsToShow) {
+    return feeds;
+  }
+
+  const visibleFeeds = feeds.slice(0, feedsToShow);
+  if (!selectedFeedId || visibleFeeds.some((feed) => feed.id === selectedFeedId)) {
+    return visibleFeeds;
+  }
+
+  const selectedFeed = feeds.find((feed) => feed.id === selectedFeedId);
+  return selectedFeed ? [...visibleFeeds, selectedFeed] : visibleFeeds;
 }
