@@ -28,6 +28,7 @@
 | `RSSReader/frontend/src/features/ai/` | React UI |
 | `RSSReader/frontend/src/services/aiService.ts` | API 调用 |
 | `RSSReader/docs/ai-issues.md` | 问题与解决记录 |
+| `RSSReader/docs/ai-compatibility.md` | Provider/Model 兼容性与 Windows 已测清单 |
 | `RSSReader/backend/src/ai/secrets.rs` | API Key 本地存储（keyring） |
 | `RSSReader/frontend/src/constants/targetLanguages.ts` | 摘要/翻译/AI 设置共用的 17 种目标语言 |
 
@@ -283,6 +284,17 @@ cd RSSReader/scripts && frontend-dev.cmd
 3. 本文档新增「目标语言与重试」专节；更新总览表备注。
 
 **验证**：摘要生成后点 Try again 得到新结果；翻译缓存命中后点 ↻ 可重新请求；`partial` 状态亦可整篇重做。
+
+---
+
+### 2026-06-12 — AI 兼容性与已测 Provider/Model 文档
+
+**完成内容**：
+
+1. 新增 `docs/ai-compatibility.md`：OpenAI Chat Completions 兼容原则、Windows 已测 Provider/Model 表、Hy-MT2 本地配置、已知限制与验证流程。
+2. 本文档「目录与入口」增加交叉引用。
+
+**验证**：文档内容与当前 `openai_compat.rs` 实现及本机 Provider 配置一致。
 
 ---
 
