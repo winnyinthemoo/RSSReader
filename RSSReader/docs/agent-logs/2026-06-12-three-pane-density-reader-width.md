@@ -1,0 +1,24 @@
+# 2026-06-12 Agent 工作记录：三栏间距与正文宽度调整
+
+- 日期：2026-06-12
+- 负责人：Codex
+- 使用工具：Codex shell、apply_patch、Browser in-app、npm build
+- 对应 Issue / PR：未关联
+- 任务目标：压缩三栏之间过宽的空隙，并让 Markdown 正文展示区域占阅读页面约 85% 宽度。
+- 关键 Prompt 摘要：用户反馈三栏之间空隙太宽，Markdown 正文展示留白过多，需要扩大到展示页面的 85%。
+- Agent 修改内容摘要：
+  - 将三栏 grid 中两个分隔列从 8px 收窄到 4px。
+  - 将面板间 grid gap 从 5px 收窄到 2px，外层 padding 从 8px 收窄到 6px。
+  - 同步调整拖拽分隔器命中区域与视觉提示。
+  - 将 Reader 标题区和 Markdown 正文容器改为阅读页宽度的 `min(85%, 1280px)`。
+  - 移除 Markdown 正文内部 `900px` 宽度限制。
+  - 双语翻译正文同步使用 85% 阅读宽度。
+  - 移动端保留 22-24px 左右内边距，避免正文贴边。
+- 人工检查结果：
+  - Browser 打开 `http://127.0.0.1:5173` 后，实测 shell padding 为 6px、grid gap 为 2px、两个 resizer 宽度为 4px。
+  - 当前本地数据为空，未能在真实文章数据上截图检查正文内容，但已验证页面可访问且相关 CSS 规则生效。
+- 是否运行测试：
+  - 已运行 `npm.cmd run build`，通过。
+  - 已确认本地 Vite 页面返回 200。
+- 未解决问题：
+  - Vite 构建仍提示单个 JS chunk 超过 500 kB，这是既有打包体积警告，本次未处理。

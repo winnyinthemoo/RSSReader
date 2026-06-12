@@ -46,6 +46,17 @@ A web implementation of an RSS reader with AI
 | Phase 3 | 体验完善           | OPML、收藏、搜索、标签、内容清洗             |
 | Phase 4 | AI 功能与项目收尾     | AI 摘要、测试文档、用户手册、演示材料           |
 
+## 待完成
+
+- [ ] 点击链接在进行展示
+- [ ] 三栏拖动宽度有最小限制，
+- [ ] 最左栏tag部分重构
+- [ ] 设置展示需要重构
+- [ ] 主题部分ui（黑色按钮有诡异高光）→ 翻译展示要跟随主题
+- [ ] 翻译出错处理，有错误提示部分重试，可以单段重试；翻译有小图标
+- [ ] 摘要流式输出
+- [ ] 提示词完善，可以在Agent部分自定义提示词
+
 ## 协作流程
 Issue -> Branch -> 开发 -> Commit -> Push -> Pull Request -> Review -> Merge
 

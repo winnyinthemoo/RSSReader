@@ -55,26 +55,26 @@ button:active:not(:disabled) {
 .app-shell {
   grid-template-columns:
     minmax(220px, var(--sidebar-width))
-    8px
+    4px
     minmax(320px, var(--article-list-width))
-    8px
+    4px
     minmax(0, 1fr);
-  gap: 5px;
-  padding: 8px;
+  gap: 2px;
+  padding: 6px;
   background: transparent;
 }
 
 .app-shell[data-sidebar-hidden="true"] {
   grid-template-columns:
     minmax(320px, var(--article-list-width))
-    8px
+    4px
     minmax(0, 1fr);
 }
 
 .pane-resizer {
   align-self: stretch;
-  width: 8px;
-  min-width: 8px;
+  width: 4px;
+  min-width: 4px;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -88,7 +88,7 @@ button:active:not(:disabled) {
 .pane-resizer::before {
   content: "";
   position: absolute;
-  inset: 12px 3px;
+  inset: 12px 1px;
   border-radius: 999px;
   background: rgba(60, 60, 67, 0.12);
   opacity: 0;
@@ -160,7 +160,7 @@ button:active:not(:disabled) {
 .feed-sidebar,
 .article-list-pane,
 .reader-pane {
-  height: calc(100vh - 16px);
+  height: calc(100vh - 12px);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-soft);
@@ -863,8 +863,9 @@ h2 {
 }
 
 .reader-header {
-  max-width: var(--reader-layout-width, 820px);
-  padding: 52px 56px 18px;
+  width: min(85%, 1280px);
+  max-width: none;
+  padding: 52px 0 18px;
 }
 
 .reader-header h2 {
@@ -876,8 +877,9 @@ h2 {
 }
 
 .reader-content {
-  max-width: var(--reader-layout-width, 820px);
-  padding: 16px 56px 76px;
+  width: min(85%, 1280px);
+  max-width: none;
+  padding: 16px 0 76px;
   color: var(--ink-primary);
   font-size: 1.08rem;
   line-height: 1.78;
@@ -1061,6 +1063,7 @@ h2 {
 
   .reader-header,
   .reader-content {
+    width: 100%;
     padding-right: 24px;
     padding-left: 24px;
   }

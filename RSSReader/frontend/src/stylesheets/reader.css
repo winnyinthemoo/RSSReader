@@ -515,7 +515,7 @@
 
 /* ---- Reader: Markdown rendered content ---- */
 .reader-content-md {
-  max-width: 900px;
+  max-width: none;
   letter-spacing: 0.01em;
 }
 .reader-content-md h1,

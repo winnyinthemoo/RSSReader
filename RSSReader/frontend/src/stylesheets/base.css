@@ -36,9 +36,9 @@ button {
   --article-list-width: 490px;
   grid-template-columns:
     minmax(220px, var(--sidebar-width))
-    8px
+    4px
     minmax(320px, var(--article-list-width))
-    8px
+    4px
     minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
@@ -47,7 +47,7 @@ button {
 .app-shell[data-sidebar-hidden="true"] {
   grid-template-columns:
     minmax(320px, var(--article-list-width))
-    8px
+    4px
     minmax(0, 1fr);
 }
 
@@ -928,10 +928,10 @@ h2 {
 }
 
 .reader-header {
-  max-width: var(--reader-layout-width, 900px);
+  max-width: none;
   margin: 0 auto;
-  width: 100%;
-  padding: 36px 44px 18px;
+  width: min(85%, 1280px);
+  padding: 36px 0 18px;
 }
 
 .reader-header h2 {
@@ -960,10 +960,10 @@ h2 {
 }
 
 .reader-content {
-  max-width: var(--reader-layout-width, 900px);
+  max-width: none;
   margin: 0 auto;
-  width: 100%;
-  padding: 12px 44px 64px;
+  width: min(85%, 1280px);
+  padding: 12px 0 64px;
   font-size: 1.05rem;
   line-height: 1.75;
 }
@@ -1174,6 +1174,7 @@ h2 {
 
   .reader-header,
   .reader-content {
+    width: 100%;
     padding-right: 22px;
     padding-left: 22px;
   }
