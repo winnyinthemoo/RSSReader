@@ -1,17 +1,8 @@
 import type { FeedSummary } from "../../../../../shared/feed";
 
-export function getFeedStats(feeds: FeedSummary[], selectedFeed?: FeedSummary) {
-  if (selectedFeed) {
-    return {
-      scope: selectedFeed.title,
-      articleCount: selectedFeed.articleCount,
-      unreadCount: selectedFeed.unreadCount,
-      lastFetchedAt: selectedFeed.lastFetchedAt,
-    };
-  }
-
+export function getFeedStats(feeds: FeedSummary[]) {
   return {
-    scope: "All subscriptions",
+    feedCount: feeds.length,
     articleCount: feeds.reduce((total, feed) => total + feed.articleCount, 0),
     unreadCount: feeds.reduce((total, feed) => total + feed.unreadCount, 0),
     lastFetchedAt: latestFetchedAt(feeds),

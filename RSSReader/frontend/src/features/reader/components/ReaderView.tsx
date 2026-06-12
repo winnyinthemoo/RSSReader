@@ -96,6 +96,12 @@ export function ReaderView({
   const [tagStatus, setTagStatus] = useState<string | undefined>();
   const [noteContent, setNoteContent] = useState("");
   const [noteStatus, setNoteStatus] = useState<string | undefined>();
+  const noteLoadedArticleIdRef = useRef<string | undefined>(undefined);
+  const noteLastSavedContentRef = useRef("");
+  const noteLoadTokenRef = useRef(0);
+  const notePendingContentRef = useRef<Map<string, string>>(new Map());
+  const noteSaveTokenRef = useRef(0);
+  const noteSaveTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [shareStatus, setShareStatus] = useState<string | undefined>();
   const articleContentRef = useRef<HTMLDivElement>(null);
   const markdownRenderTokenRef = useRef(0);
@@ -606,29 +612,72 @@ export function ReaderView({
   }
 
   async function loadArticleNote(articleId: string) {
+    const loadToken = ++noteLoadTokenRef.current;
     try {
       const note = await getArticleNote(articleId);
-      setNoteContent(note?.content ?? "");
-      setNoteStatus(undefined);
+      if (noteLoadTokenRef.current !== loadToken) {
+        return;
+      }
+
+      const savedContent = note?.content ?? "";
+      const pendingContent = notePendingContentRef.current.get(articleId);
+      const content = pendingContent ?? savedContent;
+      noteLoadedArticleIdRef.current = articleId;
+      noteLastSavedContentRef.current = savedContent;
+      setNoteContent(content);
+      setNoteStatus(pendingContent ? "Saving..." : undefined);
     } catch (error) {
+      if (noteLoadTokenRef.current !== loadToken) {
+        return;
+      }
+
       setNoteStatus(error instanceof Error ? error.message : String(error));
     }
   }
 
-  async function handleSaveNote() {
-    if (!article?.id) {
+  function handleNoteChange(value: string) {
+    setNoteContent(value);
+
+    const articleId = noteLoadedArticleIdRef.current;
+    if (!articleId || articleId !== article?.id) {
       return;
     }
 
-    try {
-      await saveArticleNote({
-        articleId: article.id,
-        content: noteContent,
-      });
-      setNoteStatus("Saved");
-    } catch (error) {
-      setNoteStatus(error instanceof Error ? error.message : String(error));
+    const existingTimer = noteSaveTimersRef.current.get(articleId);
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+      noteSaveTimersRef.current.delete(articleId);
     }
+
+    if (value === noteLastSavedContentRef.current) {
+      setNoteStatus(undefined);
+      return;
+    }
+
+    setNoteStatus("Saving...");
+    notePendingContentRef.current.set(articleId, value);
+    const saveToken = ++noteSaveTokenRef.current;
+    const timerId = window.setTimeout(() => {
+      noteSaveTimersRef.current.delete(articleId);
+      void saveArticleNote({ articleId, content: value })
+        .then(() => {
+          if (noteSaveTokenRef.current !== saveToken || noteLoadedArticleIdRef.current !== articleId) {
+            return;
+          }
+          if (notePendingContentRef.current.get(articleId) === value) {
+            notePendingContentRef.current.delete(articleId);
+          }
+          noteLastSavedContentRef.current = value;
+          setNoteStatus("Saved");
+        })
+        .catch((error) => {
+          if (noteSaveTokenRef.current !== saveToken || noteLoadedArticleIdRef.current !== articleId) {
+            return;
+          }
+          setNoteStatus(error instanceof Error ? error.message : String(error));
+        });
+    }, 700);
+    noteSaveTimersRef.current.set(articleId, timerId);
   }
 
   async function handleShareNote() {
@@ -781,8 +830,7 @@ export function ReaderView({
           onAiTagsApplied={setTags}
           onTagsChanged={onTagsChanged}
           onDeleteTag={(tagId) => void handleDeleteTag(tagId)}
-          onNoteChange={setNoteContent}
-          onSaveNote={() => void handleSaveNote()}
+          onNoteChange={handleNoteChange}
           onShareNote={() => void handleShareNote()}
           onExportNote={() => void handleExportNote()}
         />

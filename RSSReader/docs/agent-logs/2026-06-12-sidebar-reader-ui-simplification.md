@@ -1,0 +1,21 @@
+# 2026-06-12 Agent 工作记录：侧栏与阅读器 UI 精简
+
+- 日期：2026-06-12
+- 负责人：Codex
+- 使用工具：Codex shell、apply_patch、Browser in-app、npm build
+- 对应 Issue / PR：未关联
+- 任务目标：按用户反馈精简三栏界面中的冗余信息和操作。
+- 关键 Prompt 摘要：用户要求隐藏左下同步功能，将订阅统计缩小为 `Feeds: X Entries: X Unread: X, Last Sync: X`，note 改为自动保存且只保留导出/分享，去掉左栏 `FEEDS`、中栏 `INBOX`、右栏标题上方来源。
+- Agent 修改内容摘要：
+  - 左栏底部统计改为轻量文本汇总，不再显示统计卡片标题/网格。
+  - 去掉左栏 Feed 列表前的 `FEEDS` 标题。
+  - 去掉中栏文章列表顶部的 `Inbox` eyebrow。
+  - 去掉阅读器标题上方的来源 eyebrow。
+  - Note 面板移除 `Save note` 按钮，输入内容后延迟自动保存，保留 Share 和 Export。
+- 人工检查结果：
+  - 已用 Browser 检查本地页面：未发现 `FEEDS`、`Inbox/INBOX`、左栏同步控制面板或阅读器标题上方来源 eyebrow。
+  - 左下统计显示为 `Feeds: 0 Entries: 0 Unread: 0, Last Sync: Never` 样式文本。
+- 是否运行测试：
+  - 已运行 `npm.cmd run build`，通过。
+- 未解决问题：
+  - Vite 构建仍有 chunk size 警告，属于既有打包体积提示，本次未处理。

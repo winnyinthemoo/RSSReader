@@ -131,9 +131,6 @@ export function FeedSidebar({
   }
 
   const selectedFeedId = selection.type === "feed" ? selection.feedId : undefined;
-  const selectedFeed = selectedFeedId
-    ? feeds.find((feed) => feed.id === selectedFeedId)
-    : undefined;
   const selectedTagIds = selection.type === "tag" ? selection.tagIds : [];
   const selectedTagSet = useMemo(() => new Set(selectedTagIds), [selectedTagIds]);
   const selectedTags = selectedTagIds
@@ -241,9 +238,6 @@ export function FeedSidebar({
       </button>
 
       <div className="sidebar-divider" />
-      <div className="feeds-header">
-        <span>FEEDS</span>
-      </div>
 
       {mode === "feeds" ? (
         <FeedList
@@ -279,7 +273,7 @@ export function FeedSidebar({
         />
       )}
 
-      <FeedStatsPanel feeds={feeds} selectedFeed={selectedFeed} />
+      <FeedStatsPanel feeds={feeds} />
 
       {deleteConfirmFeedId
         ? createPortal(

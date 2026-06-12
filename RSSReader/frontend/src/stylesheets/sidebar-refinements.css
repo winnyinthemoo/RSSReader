@@ -7,18 +7,6 @@
   margin: 0px 0 0px 0;  /* 鍘熸潵鏄?16px 0 */
 }
 
-/* FEEDS 鏍囬 - 鍑忓皯涓婅竟璺?*/
-.feeds-header {
-  margin: 0px 0 4px 0;  /* 鍘熸潵鏄?8px 0 12px 0锛屾敼灏忎簡 */
-}
-
-.feeds-header span {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #9ca3af;
-  letter-spacing: 0.5px;
-}
-
 /* 鑷畾涔?Feed 鍥炬爣 */
 .feed-icon-custom {
   width: 32px;

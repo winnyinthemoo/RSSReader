@@ -451,66 +451,13 @@ h2 {
 }
 
 .feed-stats-panel {
-  display: grid;
-  gap: 8px;
-  border: 1px solid #d5ddd4;
-  border-radius: 10px;
-  padding: 10px;
-  background: rgba(248, 250, 247, 0.72);
-}
-
-.feed-stats-header {
-  display: flex;
   min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.feed-stats-title,
-.feed-stats-scope {
-  min-width: 0;
-  white-space: nowrap;
-}
-
-.feed-stats-title {
-  color: #2f3d35;
-  font-size: 0.8rem;
-  font-weight: 760;
-}
-
-.feed-stats-scope {
+  padding: 0 2px;
   overflow: hidden;
   color: #747468;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 650;
-  text-overflow: ellipsis;
-}
-
-.feed-stats-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  row-gap: 6px;
-  column-gap: 10px;
-  align-items: baseline;
-}
-
-.feed-stat-label {
-  min-width: 0;
-  overflow: hidden;
-  color: #747468;
-  font-size: 0.72rem;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.feed-stat-value {
-  color: #20221f;
-  font-size: 0.78rem;
-  font-weight: 760;
-  text-align: right;
-  white-space: nowrap;
+  line-height: 1.35;
 }
 
 .sync-spin {

@@ -3,28 +3,16 @@ import { formatLastFetchedAt, getFeedStats } from "../utils/feedStats";
 
 interface FeedStatsPanelProps {
   feeds: FeedSummary[];
-  selectedFeed?: FeedSummary;
 }
 
-export function FeedStatsPanel({ feeds, selectedFeed }: FeedStatsPanelProps) {
-  const feedStats = getFeedStats(feeds, selectedFeed);
+export function FeedStatsPanel({ feeds }: FeedStatsPanelProps) {
+  const feedStats = getFeedStats(feeds);
+  const lastSyncText = formatLastFetchedAt(feedStats.lastFetchedAt);
 
   return (
-    <div className="feed-stats-panel" aria-label="Feed statistics">
-      <div className="feed-stats-header">
-        <span className="feed-stats-title">Feed Stats</span>
-        <span className="feed-stats-scope" title={feedStats.scope}>
-          {feedStats.scope}
-        </span>
-      </div>
-      <div className="feed-stats-grid">
-        <span className="feed-stat-label">Articles</span>
-        <span className="feed-stat-value">{feedStats.articleCount}</span>
-        <span className="feed-stat-label">Unread</span>
-        <span className="feed-stat-value">{feedStats.unreadCount}</span>
-        <span className="feed-stat-label">Last Sync</span>
-        <span className="feed-stat-value">{formatLastFetchedAt(feedStats.lastFetchedAt)}</span>
-      </div>
+    <div className="feed-stats-panel" aria-label="Feed summary">
+      Feeds: {feedStats.feedCount} Entries: {feedStats.articleCount} Unread:{" "}
+      {feedStats.unreadCount}, Last Sync: {lastSyncText}
     </div>
   );
 }

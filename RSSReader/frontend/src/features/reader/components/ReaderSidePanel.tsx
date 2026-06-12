@@ -20,7 +20,6 @@ interface ReaderSidePanelProps {
   onTagsChanged?: () => void;
   onDeleteTag: (tagId: string) => void;
   onNoteChange: (value: string) => void;
-  onSaveNote: () => void;
   onShareNote: () => void;
   onExportNote: () => void;
 }
@@ -42,7 +41,6 @@ export const ReaderSidePanel = forwardRef<HTMLElement, ReaderSidePanelProps>(
       onTagsChanged,
       onDeleteTag,
       onNoteChange,
-      onSaveNote,
       onShareNote,
       onExportNote,
     },
@@ -108,14 +106,6 @@ export const ReaderSidePanel = forwardRef<HTMLElement, ReaderSidePanelProps>(
               />
             </label>
             <div className="note-panel-actions">
-              <button
-                className="secondary-button"
-                type="button"
-                disabled={!articleId}
-                onClick={onSaveNote}
-              >
-                Save note
-              </button>
               <button
                 className="secondary-button"
                 type="button"

@@ -70,9 +70,6 @@ export function ArticleList({
     <section className="article-list-pane">
       <div className="pane-header article-header">
         <div>
-          <p className="eyebrow">
-            {normalizedSearchQuery ? "Search" : selection.type === "starred" ? "Saved" : "Inbox"}
-          </p>
           <div className="header-title-row">
             <h2>{normalizedSearchQuery ? "Search results" : title}</h2>
             <div className="article-stats">

@@ -11,7 +11,6 @@ interface ReaderHeaderProps {
 export function ReaderHeader({ article, variant = "default" }: ReaderHeaderProps) {
   return (
     <header className={`reader-header${variant === "compact" ? " compact" : ""}`}>
-      <p className="eyebrow">{article.feedTitle}</p>
       <h2>{article.title}</h2>
       <div className="reader-meta">
         <span>{article.author ?? "Unknown author"}</span>
