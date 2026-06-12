@@ -396,11 +396,8 @@ export function ReaderView({
     }, 0);
   }
 
-  async function handleTranslate() {
-    if (!article?.id) return;
-
-    if (bilingualOpen) {
-      setBilingualOpen(false);
+  async function runArticleTranslation(forceRefresh = false) {
+    if (!article?.id) {
       return;
     }
 
@@ -426,20 +423,23 @@ export function ReaderView({
 
     try {
       setTranslationLoading(true);
-      const cached = await getArticleTranslation(article.id, targetLanguage).catch((error) => {
-        if (translationRequestTokenRef.current === requestToken) {
-          setTranslationError(error instanceof Error ? error.message : String(error));
+
+      if (!forceRefresh) {
+        const cached = await getArticleTranslation(article.id, targetLanguage).catch((error) => {
+          if (translationRequestTokenRef.current === requestToken) {
+            setTranslationError(error instanceof Error ? error.message : String(error));
+          }
+          return null;
+        });
+
+        if (translationRequestTokenRef.current !== requestToken) {
+          return;
         }
-        return null;
-      });
 
-      if (translationRequestTokenRef.current !== requestToken) {
-        return;
-      }
-
-      if (cached && cached.segments.length > 0 && cached.status !== "failed") {
-        setTranslation(cached);
-        return;
+        if (cached && cached.segments.length > 0 && cached.status !== "failed") {
+          setTranslation(cached);
+          return;
+        }
       }
 
       const result = await startTranslation(
@@ -471,6 +471,27 @@ export function ReaderView({
         setTranslationLoading(false);
       }
     }
+  }
+
+  async function handleTranslate() {
+    if (!article?.id) {
+      return;
+    }
+
+    if (bilingualOpen) {
+      setBilingualOpen(false);
+      return;
+    }
+
+    await runArticleTranslation(false);
+  }
+
+  async function handleRetryTranslation() {
+    if (!article?.id || !bilingualOpen || translationSkipped) {
+      return;
+    }
+
+    await runArticleTranslation(true);
   }
 
   async function handleTranslateSelection() {
@@ -714,6 +735,7 @@ export function ReaderView({
       targetLanguage={targetLanguage}
       onTargetLanguageChange={handleTargetLanguageChange}
       onTranslate={() => void handleTranslate()}
+      onRetryTranslation={() => void handleRetryTranslation()}
       translateDisabled={translationLoading}
       activePanel={activePanel}
       searchQuery={articleSearchQuery}

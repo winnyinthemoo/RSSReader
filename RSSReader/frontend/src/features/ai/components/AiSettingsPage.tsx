@@ -12,6 +12,7 @@ import type {
   UsageDailyRow,
   UsageReportResult,
 } from "../../../../../shared/ai";
+import { targetLanguageOptions } from "../../../constants/targetLanguages";
 import {
   createAiModel,
   createAiProvider,
@@ -1231,8 +1232,11 @@ function LanguageSelect({
     <label className="ai-field">
       <span>{label}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="zh-Hans">简体中文</option>
-        <option value="en">English</option>
+        {targetLanguageOptions.map((language) => (
+          <option key={language.value} value={language.value}>
+            {language.label}
+          </option>
+        ))}
       </select>
     </label>
   );

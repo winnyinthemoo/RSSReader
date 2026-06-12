@@ -24,12 +24,30 @@
 |------|------|------|
 | HTTP 本地 LLM | Windows 上 `http://localhost` 一般可用 | 文档写明 Base URL 格式 |
 | 正文质量 | 仅用 `sanitized_html`，摘要效果可能一般 | 后续增强 reader 清洗或抓取全文 |
-| API Key 存储 | 当前为文件占位，非系统钥匙串 | 上线前换 `keyring` |
+| 开发模式 HTTP API 无鉴权 | 浏览器开发时 `/api/ai/*` 可被本机其他进程调用 | dev_server 增加本地 token 或限制写 Key 接口 |
 | 双库连接 | Feed 与 AI 各开 SQLite 连接 | 短期可接受；后期统一 `Database` 池 |
 
 ---
 
 ## 问题记录
+
+### 2026-06-12 API Key 明文文件存储
+
+- **现象**：API Key 以明文写入 `%APPDATA%/.../secrets/{provider_id}.key`，存在本地泄露风险。
+- **影响**：备份、云同步或本机其他用户可能读取 Key。
+- **原因**：初期使用文件占位，尚未接入系统凭据存储。
+- **解决**：`backend/src/ai/secrets.rs` 改用 `keyring` 写入 OS 凭据管理器（服务名 `com.rssreader.vortex`）；首次读写时自动将遗留 `.key` 文件迁移并删除，写入 `secrets/.keyring-migrated` 标记。
+- **验证**：保存 Provider 后 `secrets/` 下无 `*.key` 明文；Windows 凭据管理器可见 `com.rssreader.vortex` 条目；Provider Test 与 AI 调用正常。
+- **关联**：`backend/Cargo.toml`、`backend/src/ai/secrets.rs`、`db/README.md`
+
+### 2026-06-12 keyring 未启用 windows-native 导致 Key 丢失
+
+- **现象**：保存 Provider 后 AI 翻译/摘要报 `API key not configured for provider`；Windows 凭据管理器无 `com.rssreader.vortex` 条目。
+- **影响**：所有 AI 功能不可用；界面显示已保存 Provider，但 Key 实际未持久化。
+- **原因**：`keyring = "3"` 未启用 `windows-native`，crate 回退到内存 mock store，进程重启后 Key 消失；旧版迁移标记阻止重新迁移。
+- **解决**：`Cargo.toml` 为 keyring 启用 `windows-native` / `apple-native` / `linux-native-sync-persistent`；迁移标记升级为 `migrated-to-keyring-native-v1`；补充从 `%APPDATA%/RSSReader/secrets` 的遗留目录迁移。
+- **验证**：`cargo test secrets::tests::keyring_roundtrip_persists_provider_key` 通过；用户重新输入 API Key 并保存后，翻译/摘要恢复正常。
+- **关联**：`backend/Cargo.toml`、`backend/src/ai/secrets.rs`
 
 ### 2026-05-22 Provider Test 报 base_url is required
 
