@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, Copy, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, Copy, Sparkles } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -119,6 +119,7 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
   }
 
   const isBusy = status === "loading-cache" || status === "generating";
+  const SummaryCaret = isOpen ? ChevronDown : ChevronUp;
 
   return (
     <aside
@@ -136,7 +137,7 @@ export function SummaryPanel({ articleId, disabled }: SummaryPanelProps) {
           <Sparkles size={15} />
         </span>
         <span>Summary</span>
-        <ChevronDown className="summary-caret" size={16} aria-hidden="true" />
+        <SummaryCaret className="summary-caret" size={16} aria-hidden="true" />
       </button>
 
       {isOpen ? (

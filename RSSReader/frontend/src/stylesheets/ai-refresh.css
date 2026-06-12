@@ -729,8 +729,7 @@
   transition: transform 160ms ease;
 }
 
-.selection-translation-floating.open .selection-translation-caret,
-.summary-floating.open .summary-caret {
+.selection-translation-floating.open .selection-translation-caret {
   transform: rotate(180deg);
 }
 
