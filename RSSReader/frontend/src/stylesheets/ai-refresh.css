@@ -327,8 +327,31 @@
 .ai-settings-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
   padding: 0 4px;
+}
+
+.ai-action-feedback {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  max-width: min(420px, 100%);
+  border: 1px solid rgba(60, 60, 67, 0.12);
+  border-radius: 999px;
+  padding: 0 12px;
+  color: var(--ink-secondary);
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 0.86rem;
+  font-weight: 680;
+  line-height: 1.25;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.ai-action-feedback.error {
+  border-color: rgba(255, 59, 48, 0.18);
+  color: #b42318;
+  background: rgba(255, 247, 245, 0.84);
 }
 
 .settings-agent-header {
@@ -353,8 +376,18 @@
   gap: 18px;
 }
 
+.settings-section-list {
+  display: grid;
+  grid-template-columns: minmax(0, min(920px, 100%));
+  justify-content: center;
+  width: 100%;
+  align-items: start;
+  gap: 18px;
+}
+
 .settings-card {
   min-height: 0;
+  width: 100%;
 }
 
 .settings-card .ai-form-grid {
@@ -394,6 +427,10 @@
   gap: 10px;
 }
 
+.settings-reading-controls .settings-theme-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .settings-theme-option {
   display: grid;
   gap: 8px;
@@ -426,6 +463,122 @@
 
 .settings-font-options {
   margin: 0;
+}
+
+.settings-reading-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.86fr) minmax(420px, 1.14fr);
+  align-items: stretch;
+  gap: 18px;
+  min-height: 0;
+}
+
+.settings-reading-controls {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  min-height: 0;
+}
+
+.settings-reading-preview-card {
+  min-height: 0;
+}
+
+.settings-reader-preview {
+  display: grid;
+  min-height: 520px;
+  place-items: start center;
+  border: 1px solid var(--line-soft);
+  border-radius: 22px;
+  overflow: auto;
+  padding: 28px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66);
+}
+
+.settings-reader-preview.reader-themed-page {
+  color: var(--settings-preview-color);
+  background: var(--settings-preview-bg);
+}
+
+.settings-reader-preview .settings-reader-preview-sheet {
+  width: min(100%, var(--settings-preview-width));
+  max-width: var(--settings-preview-width);
+  padding: 0;
+  color: inherit;
+}
+
+.settings-reader-preview .settings-reader-preview-sheet h2,
+.settings-reader-preview .settings-reader-preview-sheet p,
+.settings-reader-preview .settings-reader-preview-sheet blockquote {
+  color: inherit;
+}
+
+.settings-reader-preview .eyebrow {
+  margin-bottom: 10px;
+}
+
+.settings-reader-preview h2 {
+  margin: 0 0 18px;
+  font-size: 1.8em;
+  line-height: 1.12;
+}
+
+.settings-reader-preview blockquote {
+  margin: 1.2em 0;
+}
+
+.ai-field input::placeholder {
+  color: rgba(60, 60, 67, 0.42);
+  opacity: 1;
+}
+
+.ai-manager-body-agents {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ai-manager-body-agents .settings-agent-header {
+  flex: 0 0 auto;
+}
+
+.ai-manager-body-agents .ai-manager-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.ai-manager-body-agents .ai-manager-list {
+  position: static;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+
+.ai-manager-body-agents .ai-properties {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 122, 255, 0.34) transparent;
+}
+
+.ai-manager-body-agents .ai-form-grid {
+  overflow: visible;
+}
+
+.ai-manager-body-agents .ai-properties::-webkit-scrollbar {
+  width: 7px;
+}
+
+.ai-manager-body-agents .ai-properties::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ai-manager-body-agents .ai-properties::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(0, 122, 255, 0.32);
+  background-clip: padding-box;
 }
 
 .danger-button {
@@ -618,6 +771,144 @@
   }
 }
 
+/* ---- Reader translation polish ---- */
+.bilingual-content .translation-block {
+  margin: -0.2em 0 1.15em;
+  border-left: 3px solid #3d8f7a;
+  border-radius: 0 12px 12px 0;
+  padding: 0.72em 0.95em;
+  color: #1f3d2c;
+  background: rgba(61, 143, 122, 0.08);
+  font-size: 1em;
+  line-height: inherit;
+  white-space: pre-wrap;
+}
+
+.reader-themed-page[data-theme="dark"] .bilingual-content .translation-block {
+  border-left-color: #7bd0b5;
+  color: #d7f0df;
+  background: #242724;
+}
+
+.reader-themed-page[data-theme="sepia"] .bilingual-content .translation-block {
+  border-left-color: #9a6a36;
+  color: #453628;
+  background: rgba(154, 106, 54, 0.08);
+}
+
+.reader-themed-page[data-theme="green"] .bilingual-content .translation-block {
+  border-left-color: #3d8f7a;
+  color: #244235;
+  background: rgba(61, 143, 122, 0.09);
+}
+
+.reader-themed-page[data-theme="dark"] .bilingual-status {
+  color: #c0c8bc;
+}
+
+.reader-themed-page[data-theme="dark"] .bilingual-align-warning {
+  border: 1px solid rgba(255, 214, 102, 0.24);
+  color: #ffe39b;
+  background: rgba(94, 74, 22, 0.42);
+}
+
+/* ---- Dark reader theme coverage for settings overlay ---- */
+body:has(.app-shell[data-reader-theme="dark"]) .ai-manager-panel {
+  --surface-card: rgba(52, 54, 61, 0.72);
+  --ink-primary: #f4f4f6;
+  --ink-secondary: #c7c8cf;
+  --ink-tertiary: #9a9ca5;
+  --line-soft: rgba(235, 235, 245, 0.13);
+  --line-strong: rgba(235, 235, 245, 0.22);
+  color: var(--ink-primary);
+  background:
+    linear-gradient(180deg, rgba(43, 45, 51, 0.96), rgba(32, 34, 39, 0.94)),
+    rgba(37, 39, 45, 0.96);
+}
+
+body:has(.app-shell[data-reader-theme="dark"]) .ai-manager-header,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-settings-tabs,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-manager-footer {
+  background: rgba(32, 34, 39, 0.72);
+}
+
+body:has(.app-shell[data-reader-theme="dark"]) .usage-launch-button,
+body:has(.app-shell[data-reader-theme="dark"]) .usage-popover,
+body:has(.app-shell[data-reader-theme="dark"]) .usage-popover-close,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-manager-list,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-list-item,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-properties,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-form-grid,
+body:has(.app-shell[data-reader-theme="dark"]) .settings-sync-status,
+body:has(.app-shell[data-reader-theme="dark"]) .settings-theme-option,
+body:has(.app-shell[data-reader-theme="dark"]) .settings-reader-preview,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-result-panel,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-usage-panel,
+body:has(.app-shell[data-reader-theme="dark"]) .usage-stat-card,
+body:has(.app-shell[data-reader-theme="dark"]) .usage-chart,
+body:has(.app-shell[data-reader-theme="dark"]) .usage-chart-toolbar,
+body:has(.app-shell[data-reader-theme="dark"]) .usage-leader-row,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-action-feedback {
+  border-color: var(--line-soft);
+  color: var(--ink-secondary);
+  background: rgba(52, 54, 61, 0.74);
+  box-shadow: none;
+}
+
+body:has(.app-shell[data-reader-theme="dark"]) .ai-list-item:hover,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-list-item.selected,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-settings-tabs button:hover,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-settings-tabs button.active,
+body:has(.app-shell[data-reader-theme="dark"]) .settings-theme-option:hover,
+body:has(.app-shell[data-reader-theme="dark"]) .settings-theme-option.active {
+  border-color: rgba(10, 132, 255, 0.38);
+  color: #8cc8ff;
+  background: rgba(63, 66, 75, 0.9);
+}
+
+body:has(.app-shell[data-reader-theme="dark"]) .ai-panel-title h3,
+body:has(.app-shell[data-reader-theme="dark"]) .model-call-title h3,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-list-item strong,
+body:has(.app-shell[data-reader-theme="dark"]) .settings-sync-status strong,
+body:has(.app-shell[data-reader-theme="dark"]) .usage-stat-card strong,
+body:has(.app-shell[data-reader-theme="dark"]) .usage-leader-row strong {
+  color: var(--ink-primary);
+}
+
+body:has(.app-shell[data-reader-theme="dark"]) .ai-field input,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-field select,
+body:has(.app-shell[data-reader-theme="dark"]) .ai-field textarea,
+body:has(.app-shell[data-reader-theme="dark"]) .dialog-field input,
+body:has(.app-shell[data-reader-theme="dark"]) .dialog-field select {
+  border-color: var(--line-soft);
+  color: var(--ink-primary);
+  background: rgba(37, 39, 45, 0.92);
+}
+
+body:has(.app-shell[data-reader-theme="dark"]) .ai-field input::placeholder {
+  color: rgba(235, 235, 245, 0.46);
+}
+
+body:has(.app-shell[data-reader-theme="dark"]) .danger-button {
+  border-color: rgba(255, 99, 87, 0.3);
+  color: #ff8a7a;
+  background: rgba(255, 99, 87, 0.12);
+}
+
+body:has(.app-shell[data-reader-theme="dark"]) .ai-action-feedback.error {
+  border-color: rgba(255, 99, 87, 0.28);
+  color: #ffb4a8;
+  background: rgba(255, 99, 87, 0.12);
+}
+
+body:has(.app-shell[data-reader-theme="dark"]) .usage-grid-line {
+  stroke: rgba(235, 235, 245, 0.14);
+}
+
+body:has(.app-shell[data-reader-theme="dark"]) .usage-point {
+  fill: #24262b;
+}
+
 /* ---- AI settings compact professional layout ---- */
 .ai-usage-panel {
   grid-template-columns: minmax(260px, 0.95fr) minmax(320px, 1.25fr);
@@ -777,6 +1068,36 @@
   .ai-field {
     grid-template-columns: 1fr;
     gap: 6px;
+  }
+
+  .settings-section-list,
+  .settings-reading-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-reader-preview {
+    min-height: 360px;
+    padding: 22px;
+  }
+
+  .settings-reading-controls .settings-theme-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ai-manager-body-agents {
+    overflow: auto;
+  }
+
+  .ai-manager-body-agents .ai-manager-grid {
+    height: auto;
+  }
+
+  .ai-manager-body-agents .ai-manager-list {
+    max-height: 240px;
+  }
+
+  .ai-manager-body-agents .ai-properties {
+    overflow: visible;
   }
 }
 

@@ -1,9 +1,13 @@
-export function formatFeedSyncStatus(feedCount: number, failedCount: number, completedAt: Date) {
-  if (failedCount > 0) {
-    return `${feedCount - failedCount}/${feedCount} synced`;
-  }
+import type { AppLanguage } from "../../../i18n";
+import { formatClockTime as formatLocalizedClockTime, getAppText } from "../../../i18n";
 
-  return `Synced ${formatClockTime(completedAt)}`;
+export function formatFeedSyncStatus(
+  feedCount: number,
+  failedCount: number,
+  completedAt: Date,
+  language: AppLanguage,
+) {
+  return getAppText(language).app.feedSyncStatus(feedCount, failedCount, completedAt);
 }
 
 export function formatFeedSyncToast(
@@ -11,25 +15,15 @@ export function formatFeedSyncToast(
   failedCount: number,
   newArticleCount: number,
   reason: string,
+  language: AppLanguage,
 ) {
-  const parts = [
-    `Synced ${feedCount - failedCount}/${feedCount} feeds`,
-    `${newArticleCount} new articles`,
-  ];
-  if (failedCount > 0) {
-    parts.push(`${failedCount} failed`);
-  }
-
-  return `${parts.join(", ")} (${reason}).`;
+  return getAppText(language).app.feedSyncToast(feedCount, failedCount, newArticleCount, reason);
 }
 
 export function formatSyncInterval(minutes: number) {
   return minutes >= 60 ? `${minutes / 60}h` : `${minutes}m`;
 }
 
-export function formatClockTime(date: Date) {
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+export function formatClockTime(date: Date, language: AppLanguage) {
+  return formatLocalizedClockTime(date, language);
 }

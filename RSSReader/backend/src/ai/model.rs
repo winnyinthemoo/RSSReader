@@ -52,6 +52,7 @@ pub struct AiProvider {
     pub id: String,
     pub display_name: String,
     pub base_url: String,
+    pub api_key_hint: Option<String>,
     pub is_enabled: bool,
     pub created_at: String,
     pub updated_at: String,

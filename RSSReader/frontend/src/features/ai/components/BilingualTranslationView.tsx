@@ -1,9 +1,12 @@
 import { useMemo } from "react";
 
 import type { TranslationView } from "../../../../../shared/ai";
+import { getAppText } from "../../../i18n";
+import type { AppLanguage } from "../../../i18n";
 import { buildBilingualArticleHtml } from "../utils/buildBilingualArticleHtml";
 
 interface BilingualTranslationViewProps {
+  appLanguage: AppLanguage;
   articleHtml: string;
   translation?: TranslationView;
   isLoading?: boolean;
@@ -13,6 +16,7 @@ interface BilingualTranslationViewProps {
 }
 
 export function BilingualTranslationView({
+  appLanguage,
   articleHtml,
   translation,
   isLoading,
@@ -20,6 +24,8 @@ export function BilingualTranslationView({
   showEmptyMessage = true,
   isSelection = false,
 }: BilingualTranslationViewProps) {
+  const text = getAppText(appLanguage);
+  const translationText = text.reader.translationUi;
   const built = useMemo(() => {
     if (translation?.bilingualHtml) {
       return {
@@ -50,34 +56,34 @@ export function BilingualTranslationView({
       ) : null}
       {errorMessage ? (
         <p className="summary-error" role="status">
-          {formatTranslationError(errorMessage)}
+          {formatTranslationError(errorMessage, appLanguage)}
         </p>
       ) : null}
       {isLoading ? (
         <p className="bilingual-status muted">
           {isSelection
-            ? "Translating selected text..."
-            : "Translating article by segment (may take a few minutes)..."}
+            ? translationText.translatingSelected
+            : translationText.translatingArticle}
         </p>
       ) : null}
       {!translation && !isLoading && showEmptyMessage ? (
-        <p className="bilingual-status muted">No translation yet.</p>
+        <p className="bilingual-status muted">{translationText.empty}</p>
       ) : null}
       {built.placed < built.expected ? (
         <p className="bilingual-align-warning" role="status">
-          Some segments could not be aligned with the article layout (
-          {built.placed}/{built.expected} placed).
+          {translationText.alignWarning(built.placed, built.expected)}
         </p>
       ) : null}
       <div
-        className="reader-content bilingual-content"
+        className="reader-content reader-content-md bilingual-content"
         dangerouslySetInnerHTML={{ __html: built.html }}
       />
     </div>
   );
 }
 
-function formatTranslationError(message: string) {
+function formatTranslationError(message: string, appLanguage: AppLanguage) {
+  const text = getAppText(appLanguage).reader.translationUi;
   const normalized = message.toLowerCase();
   if (
     normalized.includes("model") &&
@@ -85,7 +91,7 @@ function formatTranslationError(message: string) {
       normalized.includes("not set") ||
       normalized.includes("missing"))
   ) {
-    return "Translation model is not configured. Please set a model in Settings > Agents. Showing original content.";
+    return text.missingModel;
   }
-  return `Translation failed: ${message}. Showing original content.`;
+  return text.failed(message);
 }

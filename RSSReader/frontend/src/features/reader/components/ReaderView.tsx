@@ -4,6 +4,8 @@ import { ChevronDown, ChevronUp, X } from "lucide-react";
 
 import type { TranslationView } from "../../../../../shared/ai";
 import type { ArticleDetail, ArticleTag } from "../../../../../shared/feed";
+import type { AppLanguage } from "../../../i18n";
+import { getAppText } from "../../../i18n";
 import { BilingualTranslationView } from "../../ai/components/BilingualTranslationView";
 import { SelectionTranslationPanel } from "../../ai/components/SelectionTranslationPanel";
 import { SummaryPanel } from "../../ai/components/SummaryPanel";
@@ -35,6 +37,7 @@ import {
 } from "../utils/translation";
 
 interface ReaderViewProps {
+  appLanguage: AppLanguage;
   article?: ArticleDetail;
   isLoading?: boolean;
   onTagsChanged?: () => void;
@@ -55,6 +58,7 @@ interface ReaderViewProps {
 }
 
 export function ReaderView({
+  appLanguage,
   article,
   isLoading = false,
   onTagsChanged,
@@ -73,6 +77,7 @@ export function ReaderView({
   onArticleSearchCompositionChange,
   onArticleSearchStep,
 }: ReaderViewProps) {
+  const text = getAppText(appLanguage);
   const [viewMode, setViewMode] = useState<ViewMode>("markdown");
   const [sourceIframeError, setSourceIframeError] = useState(false);
   const [sourceUseRender, setSourceUseRender] = useState(false);
@@ -134,7 +139,7 @@ export function ReaderView({
 
   useEffect(() => {
     onThemeChange?.(themeBg);
-  }, [onThemeChange, themeBg]);
+  }, [themeBg]);
 
   const readerLayoutStyle = {
     "--reader-layout-width": `${layoutWidth || defaultReaderLayoutWidth}px`,
@@ -557,7 +562,7 @@ export function ReaderView({
         selectedText,
         status: "result",
         message: notice,
-        translatedText: translatedText || "No translation returned.",
+        translatedText: translatedText || text.reader.noTranslationReturned,
       });
     } catch (error) {
       if (selectionTranslationRequestTokenRef.current !== requestToken) {
@@ -608,7 +613,7 @@ export function ReaderView({
       });
       setTags(result.tags);
       setTagInput("");
-      showTagStatus("Saved");
+      showTagStatus(text.common.saved);
       onTagsChanged?.();
     } catch (error) {
       clearTimeout(tagStatusTimerRef.current);
@@ -624,7 +629,7 @@ export function ReaderView({
     try {
       await deleteArticleTag({ articleId: article.id, tagId });
       setTags((currentTags) => currentTags.filter((tag) => tag.id !== tagId));
-      showTagStatus("Removed");
+      showTagStatus(text.reader.removed);
       onTagsChanged?.();
     } catch (error) {
       clearTimeout(tagStatusTimerRef.current);
@@ -646,7 +651,7 @@ export function ReaderView({
       noteLoadedArticleIdRef.current = articleId;
       noteLastSavedContentRef.current = savedContent;
       setNoteContent(content);
-      setNoteStatus(pendingContent ? "Saving..." : undefined);
+      setNoteStatus(pendingContent ? text.reader.saving : undefined);
     } catch (error) {
       if (noteLoadTokenRef.current !== loadToken) {
         return;
@@ -675,7 +680,7 @@ export function ReaderView({
       return;
     }
 
-    setNoteStatus("Saving...");
+    setNoteStatus(text.reader.saving);
     notePendingContentRef.current.set(articleId, value);
     const saveToken = ++noteSaveTokenRef.current;
     const timerId = window.setTimeout(() => {
@@ -689,7 +694,7 @@ export function ReaderView({
             notePendingContentRef.current.delete(articleId);
           }
           noteLastSavedContentRef.current = value;
-          setNoteStatus("Saved");
+          setNoteStatus(text.common.saved);
         })
         .catch((error) => {
           if (noteSaveTokenRef.current !== saveToken || noteLoadedArticleIdRef.current !== articleId) {
@@ -707,7 +712,7 @@ export function ReaderView({
     }
 
     try {
-      const request = buildArticleNoteExport(article, noteContent);
+      const request = buildArticleNoteExport(article, noteContent, appLanguage);
       if (navigator.share) {
         try {
           await navigator.share({
@@ -715,18 +720,18 @@ export function ReaderView({
             text: request.content,
             url: article.url,
           });
-          setNoteStatus("Shared");
+          setNoteStatus(text.reader.shared);
           return;
         } catch (error) {
           if (error instanceof DOMException && error.name === "AbortError") {
-            setNoteStatus("Share canceled");
+            setNoteStatus(text.reader.shareCanceled);
             return;
           }
         }
       }
 
       await navigator.clipboard.writeText(request.content);
-      setNoteStatus("Copied for sharing");
+      setNoteStatus(text.reader.copiedForSharing);
     } catch (error) {
       setNoteStatus(error instanceof Error ? error.message : String(error));
     }
@@ -738,8 +743,10 @@ export function ReaderView({
     }
 
     try {
-      const result = await exportArticleNote(buildArticleNoteExport(article, noteContent));
-      setNoteStatus(result.saved ? "Exported" : "Export canceled");
+      const result = await exportArticleNote(
+        buildArticleNoteExport(article, noteContent, appLanguage),
+      );
+      setNoteStatus(result.saved ? text.reader.exported : text.reader.exportCanceled);
     } catch (error) {
       setNoteStatus(error instanceof Error ? error.message : String(error));
     }
@@ -785,6 +792,7 @@ export function ReaderView({
 
   const toolbar = (
     <ReaderToolbar
+      appLanguage={appLanguage}
       viewMode={viewMode}
       onViewModeChange={handleViewModeChange}
       showThemePanel={showThemePanel}
@@ -821,12 +829,12 @@ export function ReaderView({
       <section className="reader-pane">
         {toolbar}
         <div className="reader-empty">
-          <p className="eyebrow">Reader</p>
-          <h2>{isLoading ? "Loading article" : "Select an article"}</h2>
+          <p className="eyebrow">{text.reader.reader}</p>
+          <h2>{isLoading ? text.reader.loadingArticle : text.reader.selectArticle}</h2>
           <p>
             {isLoading
-              ? "Opening the selected article."
-              : "Choose a feed item from the middle column to open the reading view."}
+              ? text.reader.loadingArticleBody
+              : text.reader.selectArticleBody}
           </p>
         </div>
       </section>
@@ -839,6 +847,7 @@ export function ReaderView({
       {activePanel ? (
         <ReaderSidePanel
           ref={sidePanelRef}
+          appLanguage={appLanguage}
           activePanel={activePanel}
           articleId={article.id}
           tags={tags}
@@ -858,8 +867,8 @@ export function ReaderView({
         />
       ) : null}
       {readerSearchOpen ? (
-        <div className="reader-find-bar" role="search" aria-label="Find in current article">
-          <span>Find</span>
+        <div className="reader-find-bar" role="search" aria-label={text.reader.findCurrentArticle}>
+          <span>{text.reader.find}</span>
           <input
             ref={readerSearchInputRef}
             value={readerSearchQuery}
@@ -875,8 +884,8 @@ export function ReaderView({
                 handleCloseReaderSearch();
               }
             }}
-            placeholder="Current article"
-            aria-label="Find in current article"
+            placeholder={text.reader.currentArticle}
+            aria-label={text.reader.findCurrentArticle}
           />
           <span className="reader-find-count">
             {readerSearchQuery.trim()
@@ -888,7 +897,7 @@ export function ReaderView({
           <button
             className="tool-button"
             type="button"
-            title="Previous match"
+            title={text.reader.previousMatch}
             disabled={readerSearchMatches.length === 0}
             onClick={() => handleReaderSearchStep(-1)}
           >
@@ -897,7 +906,7 @@ export function ReaderView({
           <button
             className="tool-button"
             type="button"
-            title="Next match"
+            title={text.reader.nextMatch}
             disabled={readerSearchMatches.length === 0}
             onClick={() => handleReaderSearchStep(1)}
           >
@@ -906,7 +915,7 @@ export function ReaderView({
           <button
             className="tool-button"
             type="button"
-            title="Close find"
+            title={text.reader.closeFind}
             onClick={handleCloseReaderSearch}
           >
             <X size={15} />
@@ -922,11 +931,12 @@ export function ReaderView({
           style={readerLayoutStyle}
         >
           <SelectionTranslationPanel
+            appLanguage={appLanguage}
             selectionTranslation={selectionTranslation}
             translationTargetLanguage={targetLanguage}
             onTranslateSelection={() => void handleTranslateSelection()}
           />
-          <ReaderHeader article={article} />
+          <ReaderHeader appLanguage={appLanguage} article={article} />
           <div
             ref={articleContentRef}
             onMouseUp={refreshSelectionPopover}
@@ -934,10 +944,11 @@ export function ReaderView({
           >
             {isLoading ? (
               <div className="reader-content reader-content-md">
-                <p className="muted">Loading article...</p>
+                <p className="muted">{text.reader.loadingArticle}...</p>
               </div>
             ) : bilingualOpen ? (
               <BilingualTranslationView
+                appLanguage={appLanguage}
                 articleHtml={article.sanitizedHtml}
                 translation={translation}
                 isLoading={translationLoading}
@@ -947,7 +958,7 @@ export function ReaderView({
               />
             ) : markdownLoading ? (
               <div className="reader-content reader-content-md">
-                <p className="muted">Loading article...</p>
+                <p className="muted">{text.reader.loadingArticle}...</p>
               </div>
             ) : (
               <MarkdownArticle
@@ -981,6 +992,7 @@ export function ReaderView({
         />
       ) : (
         <CompareView
+          appLanguage={appLanguage}
           article={article}
           markdown={markdown}
           themeBg={themeBg}

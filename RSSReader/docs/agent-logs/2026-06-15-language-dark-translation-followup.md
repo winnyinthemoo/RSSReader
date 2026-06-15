@@ -1,0 +1,26 @@
+# 2026-06-15 语言漏点、暗色主题与翻译样式修复
+
+- 日期：2026-06-15
+- 负责人：Codex
+- 使用工具：PowerShell、apply_patch、npm、Browser、node_repl
+- 对应 Issue / PR：未指定
+- 任务目标：补齐全局语言在删除弹窗、AI 用量展示和标签工作区中的漏点；为 tag 删除增加确认弹窗；修复暗色主题下组件对比度；统一翻译内容样式并让字号设置作用于译文。
+- 关键 Prompt 摘要：用户反馈 feed 删除弹窗、AI 用量展示等未应用全局语言，tag 删除缺少弹窗，暗色主题下部分组件文字和背景对比不足，翻译内容样式不统一且字号调整不生效。
+- Agent 修改内容摘要：
+  - 扩展 `frontend/src/i18n.ts`，新增删除弹窗、tag 工作区、合并 tag、AI 用量面板、保存/删除状态、翻译视图等中英文文案。
+  - 将 feed/tag/provider/model 删除确认、tag 工作区、AI 用量浮层、选中文本翻译和双语翻译视图接入全局语言。
+  - 新增 `DeleteTagDialog`，替换 tag 删除的 `window.confirm`。
+  - 为双语翻译内容补充 `reader-content-md`，并调整 `.translation-block` 主题样式，使阅读字号设置能作用于译文。
+  - 增加暗色主题下侧栏、文章列表、tag 控件、modal 和 AI 设置 overlay 的对比度覆盖。
+  - 修复 Provider/Model placeholder 的语言漏点。
+- 人工检查结果：
+  - 通过 Browser 打开 `http://127.0.0.1:5173/` 验证主界面和设置页。
+  - 验证切换英文后，通用页用量数据、清理按钮、智能体页用量浮层和 Provider placeholder 变为英文；随后已切回中文。
+  - 验证阅读预览切换深色主题后，设置面板、预览区域、主题按钮和侧栏按钮计算色值可读。
+  - 验证 tag 工作区英文空状态、搜索 placeholder、Any/All 和 Usage 排序文案生效。
+- 是否运行测试：
+  - 已运行 `npm run frontend:build`，通过。
+  - 使用本地 Vite dev server 做浏览器验证；验证结束后已停止临时监听进程并清理临时日志。
+- 未解决问题：
+  - 当前未连接 Rust backend，因此没有真实 tag 数据可在浏览器中触发 tag 删除确认弹窗；已通过 TypeScript 构建验证组件接线。
+  - 网页预览仍会显示 backend 未连接 toast，这是未启动 backend 的预期状态。

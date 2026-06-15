@@ -3,8 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
 import type { FeedSummary } from "../../../../../shared/feed";
+import type { AppLanguage } from "../../../i18n";
+import { getAppText } from "../../../i18n";
 
 interface FeedListProps {
+  appLanguage: AppLanguage;
   feeds: FeedSummary[];
   selectedFeedId?: string;
   isDeleting: boolean;
@@ -17,6 +20,7 @@ interface FeedListProps {
 }
 
 export function FeedList({
+  appLanguage,
   feeds,
   selectedFeedId,
   isDeleting,
@@ -27,6 +31,7 @@ export function FeedList({
   onRenameFeed,
   onRequestDeleteFeed,
 }: FeedListProps) {
+  const text = getAppText(appLanguage);
   const [editingFeedId, setEditingFeedId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [renameHint, setRenameHint] = useState<string | undefined>();
@@ -60,7 +65,7 @@ export function FeedList({
   async function submitRename(feed: FeedSummary) {
     const nextTitle = editingTitle.trim();
     if (!nextTitle) {
-      setRenameHint("Name cannot be empty.");
+      setRenameHint(text.feedList.nameCannotBeEmpty);
       return;
     }
     if (nextTitle === feed.title) {
@@ -107,7 +112,7 @@ export function FeedList({
                   <input
                     ref={editInputRef}
                     value={editingTitle}
-                    aria-label="Feed name"
+                    aria-label={text.feedList.feedName}
                     disabled={isRenaming}
                     onChange={(event) => {
                       setEditingTitle(event.target.value);
@@ -122,8 +127,8 @@ export function FeedList({
                   <button
                     className="feed-rename-save"
                     type="button"
-                    title="Save feed name"
-                    aria-label={`Save ${feed.title} name`}
+                    title={text.feedList.saveFeedName}
+                    aria-label={`${text.feedList.saveFeedName}: ${feed.title}`}
                     disabled={isRenaming}
                     onClick={() => void submitRename(feed)}
                   >
@@ -132,8 +137,8 @@ export function FeedList({
                   <button
                     className="feed-rename-cancel"
                     type="button"
-                    title="Cancel rename"
-                    aria-label={`Cancel renaming ${feed.title}`}
+                    title={text.feedList.cancelRename}
+                    aria-label={`${text.feedList.cancelRename}: ${feed.title}`}
                     disabled={isRenaming}
                     onClick={cancelRename}
                   >
@@ -159,8 +164,8 @@ export function FeedList({
                   <button
                     className="feed-edit-button"
                     type="button"
-                    title="Rename feed"
-                    aria-label={`Rename ${feed.title}`}
+                    title={text.feedList.renameFeed}
+                    aria-label={`${text.feedList.renameFeed}: ${feed.title}`}
                     onClick={(event) => {
                       event.stopPropagation();
                       startRename(feed);
@@ -171,8 +176,8 @@ export function FeedList({
                   <button
                     className="feed-delete-button"
                     type="button"
-                    title="Delete feed"
-                    aria-label={`Delete ${feed.title}`}
+                    title={text.feedList.deleteFeed}
+                    aria-label={`${text.feedList.deleteFeed}: ${feed.title}`}
                     disabled={isDeleting}
                     onClick={(event) => {
                       event.stopPropagation();
@@ -193,7 +198,7 @@ export function FeedList({
           type="button"
           onClick={() => onShowMoreFeedsChange(!showMoreFeeds)}
         >
-          <span>{showMoreFeeds ? "Show less" : "More feeds"}</span>
+          <span>{showMoreFeeds ? text.feedList.showLess : text.feedList.moreFeeds}</span>
           {showMoreFeeds ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
       ) : null}

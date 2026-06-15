@@ -33,7 +33,12 @@ impl AiProviderService {
 
     pub fn list_providers(&self) -> AiResult<AiProviderListResult> {
         Ok(AiProviderListResult {
-            providers: self.repository.list_providers()?,
+            providers: self
+                .repository
+                .list_providers()?
+                .into_iter()
+                .map(with_api_key_hint)
+                .collect(),
         })
     }
 
@@ -43,13 +48,14 @@ impl AiProviderService {
             id: Uuid::new_v4().to_string(),
             display_name: request.display_name.trim().to_string(),
             base_url: normalize_base_url(&request.base_url)?,
+            api_key_hint: None,
             is_enabled: true,
             created_at: now.clone(),
             updated_at: now,
         };
         self.repository.insert_provider(&provider)?;
         SecretStore::save_provider_key(&provider.id, &request.api_key)?;
-        Ok(provider)
+        Ok(with_api_key_hint(provider))
     }
 
     pub fn update_provider(
@@ -76,7 +82,7 @@ impl AiProviderService {
         }
         provider.updated_at = now_marker();
         self.repository.update_provider(&provider)?;
-        Ok(provider)
+        Ok(with_api_key_hint(provider))
     }
 
     pub fn delete_provider(&self, provider_id: &str) -> AiResult<()> {
@@ -230,6 +236,36 @@ fn record_to_agent_settings(agent_type: AgentType, record: AgentSettingsRecord) 
             }
         }),
     }
+}
+
+fn with_api_key_hint(mut provider: AiProvider) -> AiProvider {
+    provider.api_key_hint = SecretStore::load_provider_key(&provider.id)
+        .ok()
+        .flatten()
+        .map(|api_key| mask_api_key(&api_key));
+    provider
+}
+
+fn mask_api_key(api_key: &str) -> String {
+    let chars = api_key.trim().chars().collect::<Vec<_>>();
+    if chars.is_empty() {
+        return "·····".to_string();
+    }
+
+    if chars.len() <= 8 {
+        let suffix = chars
+            .iter()
+            .skip(chars.len().saturating_sub(2))
+            .collect::<String>();
+        return format!("·····{suffix}");
+    }
+
+    let prefix = chars.iter().take(4).collect::<String>();
+    let suffix = chars
+        .iter()
+        .skip(chars.len().saturating_sub(4))
+        .collect::<String>();
+    format!("{prefix}······{suffix}")
 }
 
 fn agent_settings_to_record(settings: &AiAgentSettings) -> AgentSettingsRecord {

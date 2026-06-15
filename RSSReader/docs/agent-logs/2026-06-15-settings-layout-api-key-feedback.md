@@ -1,0 +1,28 @@
+# 2026-06-15 Agent 工作记录：设置页布局与保存反馈调整
+
+- 日期：2026-06-15
+- 负责人：Codex
+- 使用工具：Codex shell、apply_patch、Browser in-app、npm build、cargo check、cargo test
+- 对应 Issue / PR：未关联
+- 任务目标：按用户反馈调整设置页通用、阅读预览、智能体分区布局，并优化 Provider API Key 展示与保存提示位置。
+- 关键 Prompt 摘要：用户要求通用设置改为单列纵向表单；阅读预览改为左侧控制、右侧效果预览；智能体两栏独立滚动；API Key 用脱敏形式展示；新增 Provider 表单提示使用灰色 placeholder；Provider/Models/Agents 保存成功提示改到保存按钮附近且统一样式。
+- Agent 修改内容摘要：
+  - 通用设置使用 `settings-section-list` 单列布局。
+  - 阅读预览使用 `settings-reading-layout` 双栏布局，左侧为主题、排版、正文宽度，右侧渲染阅读样例预览。
+  - 智能体设置分区使用 `ai-manager-body-agents`，左侧列表与右侧属性栏独立滚动。
+  - 新增 Provider `apiKeyHint` 共享契约字段，后端仅返回本地 API Key 的脱敏提示，不返回完整密钥。
+  - 新增 Provider 表单改为灰色 placeholder 示例，不再把示例 Base URL 当作真实输入值。
+  - 保存反馈改为 `ai-action-feedback`，显示在对应保存按钮右侧附近，成功态使用中性样式。
+- 人工检查结果：
+  - Browser 加载构建产物，并用同一份构建 CSS 的设置页 mock 检查布局规则。
+  - 已确认通用分区为 780px 单列网格。
+  - 已确认阅读预览分区为左右双栏。
+  - 已确认智能体分区左侧列表与右侧属性栏均为独立滚动区域，右侧长表单不再被内部 grid 裁切。
+  - 已确认 API Key placeholder 可显示 `已保存：sk-a······bcde` 这类脱敏提示。
+- 是否运行测试：
+  - 已运行 `npm run frontend:build`，通过；Vite 仍提示既有 chunk size 警告。
+  - 已运行 `cargo check`，通过。
+  - 已运行 `cargo test`，通过，31 个 lib/bin 单元测试和 2 个 dev_server 测试通过。
+- 未解决问题：
+  - 当前沙箱下 `npm run frontend:dev` 会因 Vite 解析上层目录时报 `Access is denied` 而无法启动 dev server；本次改用构建产物和 Browser mock 检查视觉布局。
+  - Vite 构建仍有单个 JS chunk 超过 500 kB 的既有提示，本次未处理。

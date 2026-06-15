@@ -2,12 +2,14 @@ import type { MouseEvent, RefObject } from "react";
 import { RefreshCw } from "lucide-react";
 
 import type { ArticleDetail } from "../../../../../shared/feed";
+import type { AppLanguage } from "../../../i18n";
 import type { FontSize, ThemeBg } from "../types";
 import { MarkdownArticle } from "./MarkdownArticle";
 import { OriginalPageFallback } from "./OriginalPageFallback";
 import { ReaderHeader } from "./ReaderHeader";
 
 interface CompareViewProps {
+  appLanguage: AppLanguage;
   article: ArticleDetail;
   markdown: string;
   themeBg: ThemeBg;
@@ -27,6 +29,7 @@ interface CompareViewProps {
 }
 
 export function CompareView({
+  appLanguage,
   article,
   markdown,
   themeBg,
@@ -49,7 +52,7 @@ export function CompareView({
       <div className="compare-pane" style={{ width: `${splitRatio}%` }}>
         <div className="compare-pane-label">Readable Markdown</div>
         <div className="compare-pane-content" data-theme={themeBg} data-font-size={fontSize}>
-          <ReaderHeader article={article} variant="compact" />
+          <ReaderHeader appLanguage={appLanguage} article={article} variant="compact" />
           <MarkdownArticle
             markdown={markdown}
             variant="compare"

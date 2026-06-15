@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useId, useMemo, useState } from "react";
 import { LineChart, X } from "lucide-react";
 
 import type {
@@ -13,6 +13,8 @@ import type {
   UsageReportResult,
 } from "../../../../../shared/ai";
 import { targetLanguageOptions } from "../../../constants/targetLanguages";
+import type { AppLanguage } from "../../../i18n";
+import { appLanguageOptions, appLocale, getAppText, normalizeAppLanguage } from "../../../i18n";
 import {
   clearAllUsage,
   clearExpiredUsage,
@@ -36,7 +38,7 @@ import type { FontSize, ThemeBg } from "../../reader/types";
 
 interface AiSettingsPageProps {
   onClose: () => void;
-  appLanguage: string;
+  appLanguage: AppLanguage;
   syncMode: FeedSyncMode;
   syncIntervalMinutes: number;
   syncStatusText: string;
@@ -49,7 +51,7 @@ interface AiSettingsPageProps {
   readerTheme: ThemeBg;
   readerFontSize: FontSize;
   readerLayoutWidth: number;
-  onAppLanguageChange: (language: string) => void;
+  onAppLanguageChange: (language: AppLanguage) => void;
   onSyncModeChange: (mode: FeedSyncMode) => void;
   onSyncIntervalChange: (minutes: number) => void;
   onSyncAllFeeds: () => void;
@@ -65,16 +67,16 @@ type AgentPanelType = Extract<AgentType, "summary" | "translation" | "tagging">;
 type UsageDimension = "provider" | "model" | "agent";
 type UsageMetric = "tokens" | "requests";
 
-const settingsTabs: { id: SettingsTab; label: string }[] = [
-  { id: "general", label: "通用" },
-  { id: "reading", label: "阅读预览" },
-  { id: "agents", label: "智能体" },
+const settingsTabs: { id: SettingsTab }[] = [
+  { id: "general" },
+  { id: "reading" },
+  { id: "agents" },
 ];
 
-const agentTabs: { id: AiSettingsTab; label: string }[] = [
-  { id: "providers", label: "Providers" },
-  { id: "models", label: "Models" },
-  { id: "agents", label: "Agents" },
+const agentTabs: { id: AiSettingsTab }[] = [
+  { id: "providers" },
+  { id: "models" },
+  { id: "agents" },
 ];
 
 const usageRetentionOptions = [7, 30, 90, 180, 365];
@@ -104,6 +106,7 @@ export function AiSettingsPage({
   onReaderFontSizeChange,
   onReaderLayoutWidthChange,
 }: AiSettingsPageProps) {
+  const text = getAppText(appLanguage);
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>("general");
   const [activeTab, setActiveTab] = useState<AiSettingsTab>("providers");
   const [providers, setProviders] = useState<AiProvider[]>([]);
@@ -113,8 +116,8 @@ export function AiSettingsPage({
   const [activeAgent, setActiveAgent] = useState<AgentPanelType>("summary");
   const [usageReport, setUsageReport] = useState<UsageReportResult | undefined>();
 
-  const [providerName, setProviderName] = useState("DeepSeek");
-  const [providerBaseUrl, setProviderBaseUrl] = useState("https://api.deepseek.com/v1");
+  const [providerName, setProviderName] = useState("");
+  const [providerBaseUrl, setProviderBaseUrl] = useState("");
   const [providerApiKey, setProviderApiKey] = useState("");
   const [providerEnabled, setProviderEnabled] = useState(true);
 
@@ -178,6 +181,7 @@ export function AiSettingsPage({
     if (selectedProvider) {
       setProviderName(selectedProvider.displayName);
       setProviderBaseUrl(selectedProvider.baseUrl);
+      setProviderApiKey("");
       setProviderEnabled(selectedProvider.isEnabled);
       return;
     }
@@ -280,7 +284,7 @@ export function AiSettingsPage({
       setIsLoading(true);
       const result = await clearExpiredUsage(usageRetentionDays);
       await loadUsage(usageDimension, usageRowKey);
-      setStatusMessage(`已清除 ${result.deletedCount} 条过期用量记录。`);
+      setStatusMessage(text.settings.general.clearExpiredUsageDone(result.deletedCount));
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -290,7 +294,7 @@ export function AiSettingsPage({
   }
 
   async function handleClearAllUsage() {
-    if (!window.confirm("确认清除全部本地 AI 用量记录？")) {
+    if (!window.confirm(text.settings.general.clearAllUsageConfirm)) {
       return;
     }
 
@@ -298,7 +302,7 @@ export function AiSettingsPage({
       setIsLoading(true);
       const result = await clearAllUsage();
       await loadUsage(usageDimension, usageRowKey);
-      setStatusMessage(`已清除 ${result.deletedCount} 条用量记录。`);
+      setStatusMessage(text.settings.general.clearAllUsageDone(result.deletedCount));
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -322,11 +326,13 @@ export function AiSettingsPage({
 
   async function handleSaveProvider() {
     if (!providerName.trim() || !providerBaseUrl.trim()) {
-      setErrorMessage("Provider name and Base URL are required.");
+      setStatusMessage(undefined);
+      setErrorMessage(text.settings.providers.requiredFields);
       return;
     }
     if (!selectedProviderId && !providerApiKey.trim()) {
-      setErrorMessage("API Key is required for a new provider.");
+      setStatusMessage(undefined);
+      setErrorMessage(text.settings.providers.newApiKeyRequired);
       return;
     }
 
@@ -349,7 +355,7 @@ export function AiSettingsPage({
       setProviderApiKey("");
       await loadAll();
       setSelectedProviderId(provider.id);
-      setStatusMessage(`Provider "${provider.displayName}" saved.`);
+      setStatusMessage(text.settings.providers.saved(provider.displayName));
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -374,7 +380,7 @@ export function AiSettingsPage({
       setSelectedProviderId("");
       setTestResult(undefined);
       await loadAll();
-      setStatusMessage(`Provider "${provider?.displayName}" deleted.`);
+      setStatusMessage(text.settings.providers.deleted(provider?.displayName));
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -386,7 +392,7 @@ export function AiSettingsPage({
 
   async function handleTestProvider() {
     if (!selectedProviderId) {
-      setErrorMessage("Select a provider first.");
+      setErrorMessage(text.settings.providers.selectFirst);
       return;
     }
     try {
@@ -408,11 +414,13 @@ export function AiSettingsPage({
 
   async function handleSaveModel() {
     if (!modelProviderId || !modelName.trim()) {
-      setErrorMessage("Provider and model name are required.");
+      setStatusMessage(undefined);
+      setErrorMessage(text.settings.models.requiredFields);
       return;
     }
     try {
       setIsLoading(true);
+      setStatusMessage(undefined);
       const model = selectedModelId
         ? await updateAiModel(selectedModelId, {
             modelName: modelName.trim(),
@@ -425,7 +433,7 @@ export function AiSettingsPage({
       setSelectedModelId(model.id);
       await loadAll();
       setSelectedModelId(model.id);
-      setStatusMessage(`Model "${model.modelName}" saved.`);
+      setStatusMessage(text.settings.models.saved(model.modelName));
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -449,7 +457,7 @@ export function AiSettingsPage({
       await deleteAiModel(deleteModelId);
       setSelectedModelId("");
       await loadAll();
-      setStatusMessage(`Model "${model?.modelName}" deleted.`);
+      setStatusMessage(text.settings.models.deleted(model?.modelName));
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -462,9 +470,10 @@ export function AiSettingsPage({
   async function handleSaveAgent(agentType: AgentPanelType) {
     try {
       setIsLoading(true);
+      setStatusMessage(undefined);
       const settings = buildAgentSettings(agentType);
       await updateAiAgentSettings(settings);
-      setStatusMessage(`${agentLabel(agentType)} settings saved.`);
+      setStatusMessage(text.settings.agents.saved(agentLabel(agentType, appLanguage)));
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -505,10 +514,12 @@ export function AiSettingsPage({
   function resetProviderForm() {
     setSelectedProviderId("");
     setProviderName("");
-    setProviderBaseUrl("https://api.example.com/v1");
+    setProviderBaseUrl("");
     setProviderApiKey("");
     setProviderEnabled(true);
     setTestResult(undefined);
+    setStatusMessage(undefined);
+    setErrorMessage(undefined);
   }
 
   function resetModelForm() {
@@ -516,36 +527,42 @@ export function AiSettingsPage({
     setModelProviderId(providers[0]?.id ?? "");
     setModelName("");
     setModelEnabled(true);
+    setStatusMessage(undefined);
+    setErrorMessage(undefined);
   }
 
   return (
-    <div className="ai-settings-overlay" role="dialog" aria-label="设置">
+    <div className="ai-settings-overlay" role="dialog" aria-label={text.settings.title}>
       <section className="ai-settings-panel ai-manager-panel">
         <header className="ai-settings-header ai-manager-header">
           <div>
-            <h2>设置</h2>
+            <h2>{text.settings.title}</h2>
           </div>
           <div className="ai-header-actions">
             <button className="secondary-button" type="button" onClick={onClose}>
-              关闭
+              {text.common.close}
             </button>
           </div>
         </header>
 
-        <nav className="ai-settings-tabs" aria-label="设置分区">
+        <nav className="ai-settings-tabs" aria-label={text.settings.title}>
           {settingsTabs.map((tab) => (
             <button
               key={tab.id}
               className={activeSettingsTab === tab.id ? "active" : ""}
               type="button"
-              onClick={() => setActiveSettingsTab(tab.id)}
+              onClick={() => {
+                setActiveSettingsTab(tab.id);
+                setStatusMessage(undefined);
+                setErrorMessage(undefined);
+              }}
             >
-              {tab.label}
+              {text.settings.tabs[tab.id]}
             </button>
           ))}
         </nav>
 
-        <div className="ai-manager-body">
+        <div className={`ai-manager-body ${activeSettingsTab === "agents" ? "ai-manager-body-agents" : ""}`}>
           {activeSettingsTab === "general" ? (
             <GeneralSettingsTab
               appLanguage={appLanguage}
@@ -568,11 +585,14 @@ export function AiSettingsPage({
               onUsageRetentionDaysChange={setUsageRetentionDays}
               onClearExpiredUsage={() => void handleClearExpiredUsage()}
               onClearAllUsage={() => void handleClearAllUsage()}
+              statusMessage={statusMessage}
+              errorMessage={errorMessage}
             />
           ) : null}
 
           {activeSettingsTab === "reading" ? (
             <ReadingSettingsTab
+              appLanguage={appLanguage}
               readerTheme={readerTheme}
               readerFontSize={readerFontSize}
               readerLayoutWidth={readerLayoutWidth}
@@ -585,15 +605,19 @@ export function AiSettingsPage({
           {activeSettingsTab === "agents" ? (
             <>
               <div className="settings-agent-header">
-                <nav className="ai-settings-tabs" aria-label="智能体设置分区">
+                <nav className="ai-settings-tabs" aria-label={text.settings.tabs.agents}>
                   {agentTabs.map((tab) => (
                     <button
                       key={tab.id}
                       className={activeTab === tab.id ? "active" : ""}
                       type="button"
-                      onClick={() => setActiveTab(tab.id)}
+                      onClick={() => {
+                        setActiveTab(tab.id);
+                        setStatusMessage(undefined);
+                        setErrorMessage(undefined);
+                      }}
                     >
-                      {tab.label}
+                      {text.settings.agentTabs[tab.id]}
                     </button>
                   ))}
                 </nav>
@@ -605,25 +629,32 @@ export function AiSettingsPage({
                   onClick={() => setIsUsagePopoverOpen((isOpen) => !isOpen)}
                 >
                   <LineChart size={17} />
-                  <span>用量</span>
+                  <span>{text.settings.usage}</span>
                 </button>
               </div>
 
               {activeTab === "providers" ? (
                 <ProvidersTab
+                  appLanguage={appLanguage}
                   providers={providers}
                   modelsByProvider={modelsByProvider}
                   selectedProviderId={selectedProviderId}
                   providerName={providerName}
                   providerBaseUrl={providerBaseUrl}
                   providerApiKey={providerApiKey}
+                  providerApiKeyHint={selectedProvider?.apiKeyHint}
                   providerEnabled={providerEnabled}
                   testModelName={testModelName}
                   testResult={testResult}
                   isLoading={isLoading}
+                  statusMessage={statusMessage}
+                  errorMessage={errorMessage}
                   onSelectProvider={(providerId) => {
                     setSelectedProviderId(providerId);
+                    setProviderApiKey("");
                     setTestResult(undefined);
+                    setStatusMessage(undefined);
+                    setErrorMessage(undefined);
                   }}
                   onAddProvider={resetProviderForm}
                   onProviderNameChange={setProviderName}
@@ -639,6 +670,7 @@ export function AiSettingsPage({
 
               {activeTab === "models" ? (
                 <ModelsTab
+                  appLanguage={appLanguage}
                   providers={providers}
                   models={models}
                   selectedModelId={selectedModelId}
@@ -646,7 +678,13 @@ export function AiSettingsPage({
                   modelName={modelName}
                   modelEnabled={modelEnabled}
                   isLoading={isLoading}
-                  onSelectModel={setSelectedModelId}
+                  statusMessage={statusMessage}
+                  errorMessage={errorMessage}
+                  onSelectModel={(modelId) => {
+                    setSelectedModelId(modelId);
+                    setStatusMessage(undefined);
+                    setErrorMessage(undefined);
+                  }}
                   onAddModel={resetModelForm}
                   onModelProviderChange={setModelProviderId}
                   onModelNameChange={setModelName}
@@ -658,6 +696,7 @@ export function AiSettingsPage({
 
               {activeTab === "agents" ? (
                 <AgentsTab
+                  appLanguage={appLanguage}
                   models={models}
                   activeAgent={activeAgent}
                   summaryModelId={summaryModelId}
@@ -669,7 +708,13 @@ export function AiSettingsPage({
                   translationStrategy={translationStrategy}
                   taggingModelId={taggingModelId}
                   isLoading={isLoading}
-                  onActiveAgentChange={setActiveAgent}
+                  statusMessage={statusMessage}
+                  errorMessage={errorMessage}
+                  onActiveAgentChange={(agent) => {
+                    setActiveAgent(agent);
+                    setStatusMessage(undefined);
+                    setErrorMessage(undefined);
+                  }}
                   onSummaryModelChange={setSummaryModelId}
                   onSummaryLanguageChange={setSummaryLanguage}
                   onSummaryDetailLevelChange={setSummaryDetailLevel}
@@ -685,13 +730,6 @@ export function AiSettingsPage({
           ) : null}
         </div>
 
-        <footer className="ai-manager-footer">
-          <div>
-            {statusMessage ? <span className="ai-status-ok">{statusMessage}</span> : null}
-            {errorMessage ? <span className="ai-status-error">{errorMessage}</span> : null}
-          </div>
-        </footer>
-
         {isUsagePopoverOpen && activeSettingsTab === "agents" ? (
           <div
             className="usage-popover-layer"
@@ -701,18 +739,19 @@ export function AiSettingsPage({
             <aside
               className="usage-popover"
               role="dialog"
-              aria-label={`${dimensionLabel(usageDimension)} usage`}
+              aria-label={text.settings.usagePanel.usageAria(dimensionLabel(usageDimension, appLanguage))}
               onMouseDown={(event) => event.stopPropagation()}
             >
               <button
                 className="usage-popover-close"
                 type="button"
-                aria-label="Close usage panel"
+                aria-label={text.common.close}
                 onClick={() => setIsUsagePopoverOpen(false)}
               >
                 <X size={16} />
               </button>
               <UsageSummary
+                appLanguage={appLanguage}
                 dimension={usageDimension}
                 report={usageReport}
                 rowKey={usageRowKey}
@@ -726,20 +765,20 @@ export function AiSettingsPage({
           <div className="modal-backdrop" role="presentation" onMouseDown={() => setDeleteProviderId(null)}>
             <div className="add-feed-dialog" role="dialog" onMouseDown={(e) => e.stopPropagation()}>
               <div className="dialog-header">
-                <h2>Confirm Delete</h2>
+                <h2>{text.settings.confirmDelete}</h2>
                 <button type="button" onClick={() => setDeleteProviderId(null)}>
                   <X size={17} />
                 </button>
               </div>
               <div className="confirm-body">
-                <p>Are you sure you want to delete provider &quot;{providers.find(p => p.id === deleteProviderId)?.displayName}&quot;?</p>
+                <p>{text.settings.deleteProviderMessage(providers.find(p => p.id === deleteProviderId)?.displayName)}</p>
               </div>
               <div className="dialog-actions">
                 <button className="secondary-button" onClick={() => setDeleteProviderId(null)}>
-                  Cancel
+                  {text.common.cancel}
                 </button>
                 <button className="primary-button delete-button" onClick={confirmDeleteProvider}>
-                  Delete
+                  {text.common.delete}
                 </button>
               </div>
             </div>
@@ -751,20 +790,20 @@ export function AiSettingsPage({
           <div className="modal-backdrop" role="presentation" onMouseDown={() => setDeleteModelId(null)}>
             <div className="add-feed-dialog" role="dialog" onMouseDown={(e) => e.stopPropagation()}>
               <div className="dialog-header">
-                <h2>Confirm Delete</h2>
+                <h2>{text.settings.confirmDelete}</h2>
                 <button type="button" onClick={() => setDeleteModelId(null)}>
                   <X size={17} />
                 </button>
               </div>
               <div className="confirm-body">
-                <p>Are you sure you want to delete model &quot;{models.find(m => m.id === deleteModelId)?.modelName}&quot;?</p>
+                <p>{text.settings.deleteModelMessage(models.find(m => m.id === deleteModelId)?.modelName)}</p>
               </div>
               <div className="dialog-actions">
                 <button className="secondary-button" onClick={() => setDeleteModelId(null)}>
-                  Cancel
+                  {text.common.cancel}
                 </button>
                 <button className="primary-button delete-button" onClick={confirmDeleteModel}>
-                  Delete
+                  {text.common.delete}
                 </button>
               </div>
             </div>
@@ -779,16 +818,20 @@ export function AiSettingsPage({
 }
 
 interface ProvidersTabProps {
+  appLanguage: AppLanguage;
   providers: AiProvider[];
   modelsByProvider: Map<string, AiModel[]>;
   selectedProviderId: string;
   providerName: string;
   providerBaseUrl: string;
   providerApiKey: string;
+  providerApiKeyHint?: string;
   providerEnabled: boolean;
   testModelName: string;
   testResult?: ProviderTestResult;
   isLoading: boolean;
+  statusMessage?: string;
+  errorMessage?: string;
   onSelectProvider: (providerId: string) => void;
   onAddProvider: () => void;
   onProviderNameChange: (value: string) => void;
@@ -802,16 +845,20 @@ interface ProvidersTabProps {
 }
 
 function ProvidersTab({
+  appLanguage,
   providers,
   modelsByProvider,
   selectedProviderId,
   providerName,
   providerBaseUrl,
   providerApiKey,
+  providerApiKeyHint,
   providerEnabled,
   testModelName,
   testResult,
   isLoading,
+  statusMessage,
+  errorMessage,
   onSelectProvider,
   onAddProvider,
   onProviderNameChange,
@@ -823,18 +870,23 @@ function ProvidersTab({
   onDeleteProvider,
   onTestProvider,
 }: ProvidersTabProps) {
+  const text = getAppText(appLanguage);
+  const apiKeyPlaceholder = selectedProviderId
+    ? text.settings.providers.savedApiKey(providerApiKeyHint)
+    : text.settings.providers.unsavedApiKey;
+
   return (
     <div className="ai-manager-grid">
-      <aside className="ai-manager-list" aria-label="Providers">
+      <aside className="ai-manager-list" aria-label={text.settings.providers.listAria}>
         <div className="ai-list-header">
-          <h3>Providers</h3>
+          <h3>{text.settings.agentTabs.providers}</h3>
           <button className="secondary-button" type="button" onClick={onAddProvider}>
-            Add
+            {text.settings.providers.add}
           </button>
         </div>
         <div className="ai-list-scroll">
           {providers.length === 0 ? (
-            <p className="muted ai-list-empty">No providers yet.</p>
+            <p className="muted ai-list-empty">{text.settings.providers.noProviders}</p>
           ) : (
             providers.map((provider) => (
               <button
@@ -845,7 +897,7 @@ function ProvidersTab({
               >
                 <strong>{provider.displayName}</strong>
                 <span>{provider.baseUrl}</span>
-                <small>{modelsByProvider.get(provider.id)?.length ?? 0} models</small>
+                <small>{text.settings.providers.modelsCount(modelsByProvider.get(provider.id)?.length ?? 0)}</small>
               </button>
             ))
           )}
@@ -853,14 +905,21 @@ function ProvidersTab({
       </aside>
 
       <section className="ai-properties">
-        <PanelTitle title="Properties" subtitle="Provider connection and local secret settings." />
+        <PanelTitle
+          title={text.settings.providers.propertiesTitle}
+          subtitle={text.settings.providers.propertiesSubtitle}
+        />
         <div className="ai-form-grid">
           <label className="ai-field">
-            <span>Name</span>
-            <input value={providerName} onChange={(event) => onProviderNameChange(event.target.value)} />
+            <span>{text.settings.providers.name}</span>
+            <input
+              value={providerName}
+              onChange={(event) => onProviderNameChange(event.target.value)}
+              placeholder={text.settings.providers.namePlaceholder}
+            />
           </label>
           <label className="ai-field">
-            <span>Base URL</span>
+            <span>{text.settings.providers.baseUrl}</span>
             <input
               value={providerBaseUrl}
               onChange={(event) => onProviderBaseUrlChange(event.target.value)}
@@ -868,12 +927,12 @@ function ProvidersTab({
             />
           </label>
           <label className="ai-field">
-            <span>API Key</span>
+            <span>{text.settings.providers.apiKey}</span>
             <input
               type="password"
               value={providerApiKey}
               onChange={(event) => onProviderApiKeyChange(event.target.value)}
-              placeholder={selectedProviderId ? "Leave blank to keep existing key" : "Required"}
+              placeholder={apiKeyPlaceholder}
             />
           </label>
           <label className="ai-check-field">
@@ -882,12 +941,12 @@ function ProvidersTab({
               checked={providerEnabled}
               onChange={(event) => onProviderEnabledChange(event.target.checked)}
             />
-            Enabled
+            {text.settings.providers.enabled}
           </label>
         </div>
         <div className="ai-settings-actions">
           <button className="primary-button" type="button" disabled={isLoading} onClick={onSaveProvider}>
-            Save Provider
+            {text.settings.providers.save}
           </button>
           <button
             className="secondary-button"
@@ -895,15 +954,23 @@ function ProvidersTab({
             disabled={isLoading || !selectedProviderId}
             onClick={onDeleteProvider}
           >
-            Delete
+            {text.settings.providers.delete}
           </button>
+          <ActionFeedback statusMessage={statusMessage} errorMessage={errorMessage} />
         </div>
 
         <section className="ai-result-panel">
-          <PanelTitle title="Result" subtitle="Run a lightweight provider connection test." />
+          <PanelTitle
+            title={text.settings.providers.resultTitle}
+            subtitle={text.settings.providers.resultSubtitle}
+          />
           <label className="ai-field">
-            <span>Test model</span>
-            <input value={testModelName} onChange={(event) => onTestModelNameChange(event.target.value)} />
+            <span>{text.settings.providers.testModel}</span>
+            <input
+              value={testModelName}
+              onChange={(event) => onTestModelNameChange(event.target.value)}
+              placeholder={text.settings.providers.testModelPlaceholder}
+            />
           </label>
           <button
             className="secondary-button"
@@ -911,12 +978,12 @@ function ProvidersTab({
             disabled={isLoading || !selectedProviderId}
             onClick={onTestProvider}
           >
-            Test Connection
+            {text.settings.providers.testConnection}
           </button>
           {testResult ? (
             <p className={testResult.ok ? "ai-status-ok" : "ai-status-error"}>{testResult.message}</p>
           ) : (
-            <p className="muted">No test result yet.</p>
+            <p className="muted">{text.settings.providers.noTestResult}</p>
           )}
         </section>
       </section>
@@ -925,6 +992,7 @@ function ProvidersTab({
 }
 
 interface ModelsTabProps {
+  appLanguage: AppLanguage;
   providers: AiProvider[];
   models: AiModel[];
   selectedModelId: string;
@@ -932,6 +1000,8 @@ interface ModelsTabProps {
   modelName: string;
   modelEnabled: boolean;
   isLoading: boolean;
+  statusMessage?: string;
+  errorMessage?: string;
   onSelectModel: (modelId: string) => void;
   onAddModel: () => void;
   onModelProviderChange: (providerId: string) => void;
@@ -942,6 +1012,7 @@ interface ModelsTabProps {
 }
 
 function ModelsTab({
+  appLanguage,
   providers,
   models,
   selectedModelId,
@@ -949,6 +1020,8 @@ function ModelsTab({
   modelName,
   modelEnabled,
   isLoading,
+  statusMessage,
+  errorMessage,
   onSelectModel,
   onAddModel,
   onModelProviderChange,
@@ -957,45 +1030,52 @@ function ModelsTab({
   onSaveModel,
   onDeleteModel,
 }: ModelsTabProps) {
+  const text = getAppText(appLanguage);
+
   return (
     <div className="ai-manager-grid">
-      <aside className="ai-manager-list" aria-label="Models">
+      <aside className="ai-manager-list" aria-label={text.settings.models.listAria}>
         <div className="ai-list-header">
-          <h3>Models</h3>
+          <h3>{text.settings.agentTabs.models}</h3>
           <button className="secondary-button" type="button" onClick={onAddModel}>
-            Add
+            {text.settings.models.add}
           </button>
         </div>
-        {models.length === 0 ? (
-          <p className="muted">No models yet.</p>
-        ) : (
-          models.map((model) => (
-            <button
-              key={model.id}
-              className={`ai-list-item ${selectedModelId === model.id ? "selected" : ""}`}
-              type="button"
-              onClick={() => onSelectModel(model.id)}
-            >
-              <strong>{model.modelName}</strong>
-              <span>{providerLabel(providers, model.providerId)}</span>
-              <small>{model.isEnabled ? "Enabled" : "Disabled"}</small>
-            </button>
-          ))
-        )}
+        <div className="ai-list-scroll">
+          {models.length === 0 ? (
+            <p className="muted ai-list-empty">{text.settings.models.noModels}</p>
+          ) : (
+            models.map((model) => (
+              <button
+                key={model.id}
+                className={`ai-list-item ${selectedModelId === model.id ? "selected" : ""}`}
+                type="button"
+                onClick={() => onSelectModel(model.id)}
+              >
+                <strong>{model.modelName}</strong>
+                <span>{providerLabel(providers, model.providerId)}</span>
+                <small>{model.isEnabled ? text.common.enabled : text.common.disabled}</small>
+              </button>
+            ))
+          )}
+        </div>
       </aside>
 
       <section className="ai-properties">
-        <PanelTitle title="Properties" subtitle="Model name and provider binding." />
+        <PanelTitle
+          title={text.settings.models.propertiesTitle}
+          subtitle={text.settings.models.propertiesSubtitle}
+        />
         <div className="ai-form-grid">
           <label className="ai-field">
-            <span>Provider</span>
+            <span>{text.settings.models.provider}</span>
             <select
               value={modelProviderId}
               onChange={(event) => onModelProviderChange(event.target.value)}
               disabled={providers.length === 0 || Boolean(selectedModelId)}
             >
               {providers.length === 0 ? (
-                <option value="">Add a provider first</option>
+                <option value="">{text.settings.models.addProviderFirst}</option>
               ) : (
                 providers.map((provider) => (
                   <option key={provider.id} value={provider.id}>
@@ -1006,8 +1086,12 @@ function ModelsTab({
             </select>
           </label>
           <label className="ai-field">
-            <span>Model name</span>
-            <input value={modelName} onChange={(event) => onModelNameChange(event.target.value)} />
+            <span>{text.settings.models.modelName}</span>
+            <input
+              value={modelName}
+              onChange={(event) => onModelNameChange(event.target.value)}
+              placeholder={text.settings.models.modelNamePlaceholder}
+            />
           </label>
           <label className="ai-check-field">
             <input
@@ -1015,12 +1099,12 @@ function ModelsTab({
               checked={modelEnabled}
               onChange={(event) => onModelEnabledChange(event.target.checked)}
             />
-            Enabled
+            {text.common.enabled}
           </label>
         </div>
         <div className="ai-settings-actions">
           <button className="primary-button" type="button" disabled={isLoading} onClick={onSaveModel}>
-            Save Model
+            {text.settings.models.save}
           </button>
           <button
             className="secondary-button"
@@ -1028,16 +1112,20 @@ function ModelsTab({
             disabled={isLoading || !selectedModelId}
             onClick={onDeleteModel}
           >
-            Delete
+            {text.settings.models.delete}
           </button>
+          <ActionFeedback statusMessage={statusMessage} errorMessage={errorMessage} />
         </div>
 
         <section className="ai-result-panel">
-          <PanelTitle title="Result" subtitle="Model save operations update this local registry." />
+          <PanelTitle
+            title={text.settings.models.resultTitle}
+            subtitle={text.settings.models.resultSubtitle}
+          />
           <p className="muted">
             {selectedModelId
-              ? "This model can be assigned to Summary, Translation, or Tag agents."
-              : "Create a model after adding a provider."}
+              ? text.settings.models.resultSavedHint
+              : text.settings.models.resultCreateHint}
           </p>
         </section>
       </section>
@@ -1046,7 +1134,7 @@ function ModelsTab({
 }
 
 interface GeneralSettingsTabProps {
-  appLanguage: string;
+  appLanguage: AppLanguage;
   syncMode: FeedSyncMode;
   syncIntervalMinutes: number;
   syncStatusText: string;
@@ -1058,7 +1146,9 @@ interface GeneralSettingsTabProps {
   isRefreshing: boolean;
   usageRetentionDays: number;
   isLoading: boolean;
-  onAppLanguageChange: (language: string) => void;
+  statusMessage?: string;
+  errorMessage?: string;
+  onAppLanguageChange: (language: AppLanguage) => void;
   onSyncModeChange: (mode: FeedSyncMode) => void;
   onSyncIntervalChange: (minutes: number) => void;
   onSyncAllFeeds: () => void;
@@ -1081,6 +1171,8 @@ function GeneralSettingsTab({
   isRefreshing,
   usageRetentionDays,
   isLoading,
+  statusMessage,
+  errorMessage,
   onAppLanguageChange,
   onSyncModeChange,
   onSyncIntervalChange,
@@ -1090,45 +1182,63 @@ function GeneralSettingsTab({
   onClearExpiredUsage,
   onClearAllUsage,
 }: GeneralSettingsTabProps) {
+  const text = getAppText(appLanguage);
+
   return (
-    <div className="settings-section-grid">
+    <div className="settings-section-list">
       <section className="ai-properties settings-card">
-        <PanelTitle title="语言" subtitle="选择应用界面的默认语言。" />
+        <PanelTitle
+          title={text.settings.general.languageTitle}
+          subtitle={text.settings.general.languageSubtitle}
+        />
         <div className="ai-form-grid">
           <label className="ai-field">
-            <span>应用语言</span>
-            <select value={appLanguage} onChange={(event) => onAppLanguageChange(event.target.value)}>
-              <option value="zh-Hans">简体中文</option>
-              <option value="en">English</option>
+            <span>{text.settings.general.appLanguage}</span>
+            <select
+              value={appLanguage}
+              onChange={(event) => onAppLanguageChange(normalizeAppLanguage(event.target.value))}
+            >
+              {appLanguageOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.labels[appLanguage]}
+                </option>
+              ))}
             </select>
           </label>
         </div>
       </section>
 
       <section className="ai-properties settings-card">
-        <PanelTitle title="同步设置" subtitle="控制订阅源自动同步方式，也可以手动同步全部源。" />
+        <PanelTitle
+          title={text.settings.general.syncTitle}
+          subtitle={text.settings.general.syncSubtitle}
+        />
         <div className="settings-sync-status">
           <strong>{syncStatusText}</strong>
           {nextSyncText ? <span>{nextSyncText}</span> : null}
         </div>
-        <div className="feed-sync-mode settings-sync-mode" role="tablist" aria-label="RSS 同步模式">
+        <div
+          className="feed-sync-mode settings-sync-mode"
+          role="tablist"
+          aria-label={text.settings.general.syncModeAria}
+        >
           {syncModes.map((item) => (
             <button
               className={syncMode === item.mode ? "active" : ""}
               type="button"
               role="tab"
               aria-selected={syncMode === item.mode}
-              title={item.title}
+              title={text.settings.general.syncModes[item.mode].title}
               key={item.mode}
               onClick={() => onSyncModeChange(item.mode)}
             >
-              {item.label}
+              {text.settings.general.syncModes[item.mode].label}
             </button>
           ))}
         </div>
         {syncMode === "timer" ? (
           <label className="ai-field">
-            <span>同步间隔</span>
+            <span>{text.settings.general.syncInterval}</span>
             <select
               value={syncIntervalMinutes}
               onChange={(event) => onSyncIntervalChange(Number(event.target.value))}
@@ -1148,32 +1258,41 @@ function GeneralSettingsTab({
             disabled={syncFeedCount === 0 || isSyncingAll || isRefreshing}
             onClick={onSyncAllFeeds}
           >
-            {isSyncingAll ? "同步全部中" : "同步全部"}
+            {isSyncingAll ? text.settings.general.syncAllActive : text.settings.general.syncAll}
           </button>
           <button
             className="secondary-button"
             type="button"
             disabled={!selectedFeedId || isRefreshing || isSyncingAll}
-            title={selectedFeedTitle ? `同步 ${selectedFeedTitle}` : "选择一个订阅源后同步"}
+            title={
+              selectedFeedTitle
+                ? text.settings.general.syncSelected(selectedFeedTitle)
+                : text.settings.general.selectFeedToSync
+            }
             onClick={() => selectedFeedId && onRefreshSelectedFeed(selectedFeedId)}
           >
-            {isRefreshing ? "同步当前中" : "同步当前"}
+            {isRefreshing
+              ? text.settings.general.refreshingCurrent
+              : text.settings.general.refreshCurrent}
           </button>
         </div>
       </section>
 
       <section className="ai-properties settings-card">
-        <PanelTitle title="用量数据" subtitle="设置本地 AI 用量数据的保留期，并清理不再需要的记录。" />
+        <PanelTitle
+          title={text.settings.general.usageTitle}
+          subtitle={text.settings.general.usageSubtitle}
+        />
         <div className="ai-form-grid">
           <label className="ai-field">
-            <span>保留期</span>
+            <span>{text.settings.general.retention}</span>
             <select
               value={usageRetentionDays}
               onChange={(event) => onUsageRetentionDaysChange(Number(event.target.value))}
             >
               {usageRetentionOptions.map((days) => (
                 <option key={days} value={days}>
-                  {days} 天
+                  {appLanguage === "zh-Hans" ? `${days} 天` : `${days} days`}
                 </option>
               ))}
             </select>
@@ -1186,7 +1305,7 @@ function GeneralSettingsTab({
             disabled={isLoading}
             onClick={onClearExpiredUsage}
           >
-            清除过期数据
+            {text.settings.general.clearExpiredUsage}
           </button>
           <button
             className="secondary-button danger-button"
@@ -1194,8 +1313,9 @@ function GeneralSettingsTab({
             disabled={isLoading}
             onClick={onClearAllUsage}
           >
-            清除全部数据
+            {text.settings.general.clearAllUsage}
           </button>
+          <ActionFeedback statusMessage={statusMessage} errorMessage={errorMessage} />
         </div>
       </section>
     </div>
@@ -1203,6 +1323,7 @@ function GeneralSettingsTab({
 }
 
 interface ReadingSettingsTabProps {
+  appLanguage: AppLanguage;
   readerTheme: ThemeBg;
   readerFontSize: FontSize;
   readerLayoutWidth: number;
@@ -1212,6 +1333,7 @@ interface ReadingSettingsTabProps {
 }
 
 function ReadingSettingsTab({
+  appLanguage,
   readerTheme,
   readerFontSize,
   readerLayoutWidth,
@@ -1219,67 +1341,112 @@ function ReadingSettingsTab({
   onReaderFontSizeChange,
   onReaderLayoutWidthChange,
 }: ReadingSettingsTabProps) {
+  const text = getAppText(appLanguage);
+  const selectedThemeOption =
+    themeBgOptions.find((option) => option.key === readerTheme) ?? themeBgOptions[0];
+  const scaledPreviewWidth = Math.round(readerLayoutWidth * 0.56);
+  const previewStyle = {
+    "--settings-preview-width": `${scaledPreviewWidth}px`,
+    "--settings-preview-bg": selectedThemeOption.color,
+    "--settings-preview-color": selectedThemeOption.text,
+  } as CSSProperties;
+
   return (
-    <div className="settings-section-grid">
-      <section className="ai-properties settings-card">
-        <PanelTitle title="主题预设" subtitle="设置阅读器 Markdown 和双语阅读背景。" />
-        <div className="settings-theme-grid">
-          {themeBgOptions.map((option) => (
-            <button
-              key={option.key}
-              className={`settings-theme-option${readerTheme === option.key ? " active" : ""}`}
-              type="button"
-              onClick={() => onReaderThemeChange(option.key)}
-            >
-              <span
-                className="settings-theme-swatch"
-                style={{ background: option.color, color: option.text }}
+    <div className="settings-reading-layout">
+      <div className="settings-reading-controls">
+        <section className="ai-properties settings-card">
+          <PanelTitle
+            title={text.settings.reading.themeTitle}
+            subtitle={text.settings.reading.themeSubtitle}
+          />
+          <div className="settings-theme-grid">
+            {themeBgOptions.map((option) => (
+              <button
+                key={option.key}
+                className={`settings-theme-option${readerTheme === option.key ? " active" : ""}`}
+                type="button"
+                onClick={() => onReaderThemeChange(option.key)}
               >
-                Aa
-              </span>
-              <span>{option.label}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="ai-properties settings-card">
-        <PanelTitle title="排版" subtitle="选择阅读正文的默认字号。" />
-        <div className="theme-font-options settings-font-options">
-          {fontSizeOptions.map((option) => (
-            <button
-              key={option.key}
-              className={`theme-font-button${readerFontSize === option.key ? " active" : ""}`}
-              type="button"
-              onClick={() => onReaderFontSizeChange(option.key)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="ai-properties settings-card">
-        <PanelTitle title="阅读布局宽度" subtitle="调整正文列宽，适配不同显示器和阅读距离。" />
-        <label className="ai-field">
-          <span>正文宽度</span>
-          <select
-            value={readerLayoutWidth}
-            onChange={(event) => onReaderLayoutWidthChange(Number(event.target.value))}
-          >
-            {readerWidthOptions.map((width) => (
-              <option key={width} value={width}>
-                {width}px
-              </option>
+                <span
+                  className="settings-theme-swatch"
+                  style={{ background: option.color, color: option.text }}
+                >
+                  Aa
+                </span>
+                <span>{text.settings.reading.themeLabels[option.key]}</span>
+              </button>
             ))}
-          </select>
-        </label>
+          </div>
+        </section>
+
+        <section className="ai-properties settings-card">
+          <PanelTitle
+            title={text.settings.reading.fontTitle}
+            subtitle={text.settings.reading.fontSubtitle}
+          />
+          <div className="theme-font-options settings-font-options">
+            {fontSizeOptions.map((option) => (
+              <button
+                key={option.key}
+                className={`theme-font-button${readerFontSize === option.key ? " active" : ""}`}
+                type="button"
+                onClick={() => onReaderFontSizeChange(option.key)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="ai-properties settings-card">
+          <PanelTitle
+            title={text.settings.reading.layoutTitle}
+            subtitle={text.settings.reading.layoutSubtitle}
+          />
+          <label className="ai-field">
+            <span>{text.settings.reading.width}</span>
+            <select
+              value={readerLayoutWidth}
+              onChange={(event) => onReaderLayoutWidthChange(Number(event.target.value))}
+            >
+              {readerWidthOptions.map((width) => (
+                <option key={width} value={width}>
+                  {width}px
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+      </div>
+
+      <section className="ai-properties settings-reading-preview-card">
+        <PanelTitle
+          title={text.settings.reading.previewTitle}
+          subtitle={text.settings.reading.previewSubtitle}
+        />
+        <div
+          className="settings-reader-preview reader-themed-page"
+          data-theme={readerTheme}
+          data-font-size={readerFontSize}
+          style={previewStyle}
+        >
+          <article className="settings-reader-preview-sheet reader-content reader-content-md">
+            <p className="eyebrow">{text.settings.reading.preview}</p>
+            <h2>{text.settings.reading.title}</h2>
+            <p>{text.settings.reading.previewBody1}</p>
+            <blockquote>
+              <p>{text.settings.reading.previewQuote}</p>
+            </blockquote>
+            <p>{text.settings.reading.previewBody2}</p>
+          </article>
+        </div>
       </section>
     </div>
   );
 }
 
 interface AgentsTabProps {
+  appLanguage: AppLanguage;
   models: AiModel[];
   activeAgent: AgentPanelType;
   summaryModelId: string;
@@ -1291,6 +1458,8 @@ interface AgentsTabProps {
   translationStrategy: TranslationPromptStrategy;
   taggingModelId: string;
   isLoading: boolean;
+  statusMessage?: string;
+  errorMessage?: string;
   onActiveAgentChange: (agent: AgentPanelType) => void;
   onSummaryModelChange: (modelId: string) => void;
   onSummaryLanguageChange: (value: string) => void;
@@ -1304,6 +1473,7 @@ interface AgentsTabProps {
 }
 
 function AgentsTab({
+  appLanguage,
   models,
   activeAgent,
   summaryModelId,
@@ -1315,6 +1485,8 @@ function AgentsTab({
   translationStrategy,
   taggingModelId,
   isLoading,
+  statusMessage,
+  errorMessage,
   onActiveAgentChange,
   onSummaryModelChange,
   onSummaryLanguageChange,
@@ -1326,37 +1498,44 @@ function AgentsTab({
   onTaggingModelChange,
   onSaveAgent,
 }: AgentsTabProps) {
+  const text = getAppText(appLanguage);
+
   return (
     <div className="ai-manager-grid">
-      <aside className="ai-manager-list" aria-label="Agents">
-        {(["summary", "translation", "tagging"] as AgentPanelType[]).map((agent) => (
-          <button
-            key={agent}
-            className={`ai-list-item ${activeAgent === agent ? "selected" : ""}`}
-            type="button"
-            onClick={() => onActiveAgentChange(agent)}
-          >
-            <strong>{agentLabel(agent)}</strong>
-            <span>{agentDescription(agent)}</span>
-          </button>
-        ))}
+      <aside className="ai-manager-list" aria-label={text.settings.agents.listAria}>
+        <div className="ai-list-scroll">
+          {(["summary", "translation", "tagging"] as AgentPanelType[]).map((agent) => (
+            <button
+              key={agent}
+              className={`ai-list-item ${activeAgent === agent ? "selected" : ""}`}
+              type="button"
+              onClick={() => onActiveAgentChange(agent)}
+            >
+              <strong>{agentLabel(agent, appLanguage)}</strong>
+              <span>{agentDescription(agent, appLanguage)}</span>
+            </button>
+          ))}
+        </div>
       </aside>
 
       <section className="ai-properties">
-        <PanelTitle title={`${agentLabel(activeAgent)} Properties`} subtitle="Choose the model and defaults used by this agent." />
+        <PanelTitle
+          title={`${agentLabel(activeAgent, appLanguage)} ${text.settings.models.propertiesTitle}`}
+          subtitle={text.settings.agents.propertiesSubtitle}
+        />
         {activeAgent === "summary" ? (
           <div className="ai-form-grid">
-            <ModelSelect label="Model" models={models} value={summaryModelId} onChange={onSummaryModelChange} />
-            <LanguageSelect label="Default language" value={summaryLanguage} onChange={onSummaryLanguageChange} />
+            <ModelSelect label={text.settings.agents.model} models={models} value={summaryModelId} onChange={onSummaryModelChange} />
+            <LanguageSelect label={text.settings.agents.defaultLanguage} value={summaryLanguage} onChange={onSummaryLanguageChange} />
             <label className="ai-field">
-              <span>Detail level</span>
+              <span>{text.settings.agents.detailLevel}</span>
               <select
                 value={summaryDetailLevel}
                 onChange={(event) => onSummaryDetailLevelChange(event.target.value as SummaryDetailLevel)}
               >
-                <option value="short">Short</option>
-                <option value="medium">Medium</option>
-                <option value="detailed">Detailed</option>
+                <option value="short">{text.settings.agents.short}</option>
+                <option value="medium">{text.settings.agents.medium}</option>
+                <option value="detailed">{text.settings.agents.detailed}</option>
               </select>
             </label>
           </div>
@@ -1364,10 +1543,10 @@ function AgentsTab({
 
         {activeAgent === "translation" ? (
           <div className="ai-form-grid">
-            <ModelSelect label="Model" models={models} value={translationModelId} onChange={onTranslationModelChange} />
-            <LanguageSelect label="Default language" value={translationLanguage} onChange={onTranslationLanguageChange} />
+            <ModelSelect label={text.settings.agents.model} models={models} value={translationModelId} onChange={onTranslationModelChange} />
+            <LanguageSelect label={text.settings.agents.defaultLanguage} value={translationLanguage} onChange={onTranslationLanguageChange} />
             <label className="ai-field">
-              <span>Concurrency</span>
+              <span>{text.settings.agents.concurrency}</span>
               <input
                 type="number"
                 min={1}
@@ -1377,7 +1556,7 @@ function AgentsTab({
               />
             </label>
             <label className="ai-field">
-              <span>Prompt strategy</span>
+              <span>{text.settings.agents.promptStrategy}</span>
               <select
                 value={translationStrategy}
                 onChange={(event) => onTranslationStrategyChange(event.target.value as TranslationPromptStrategy)}
@@ -1391,7 +1570,7 @@ function AgentsTab({
 
         {activeAgent === "tagging" ? (
           <div className="ai-form-grid">
-            <ModelSelect label="Model" models={models} value={taggingModelId} onChange={onTaggingModelChange} />
+            <ModelSelect label={text.settings.agents.model} models={models} value={taggingModelId} onChange={onTaggingModelChange} />
           </div>
         ) : null}
 
@@ -1402,8 +1581,9 @@ function AgentsTab({
             disabled={isLoading}
             onClick={() => onSaveAgent(activeAgent)}
           >
-            Save {agentLabel(activeAgent)}
+            {text.settings.agents.save(agentLabel(activeAgent, appLanguage))}
           </button>
+          <ActionFeedback statusMessage={statusMessage} errorMessage={errorMessage} />
         </div>
       </section>
     </div>
@@ -1411,12 +1591,15 @@ function AgentsTab({
 }
 
 interface UsageSummaryProps {
+  appLanguage: AppLanguage;
   dimension: UsageDimension;
   report?: UsageReportResult;
   rowKey?: string;
 }
 
-function UsageSummary({ dimension, report, rowKey }: UsageSummaryProps) {
+function UsageSummary({ appLanguage, dimension, report, rowKey }: UsageSummaryProps) {
+  const text = getAppText(appLanguage);
+  const usageText = text.settings.usagePanel;
   const gradientId = `usageGradient-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const [usageMetric, setUsageMetric] = useState<UsageMetric>("tokens");
   const [selectedPointLabel, setSelectedPointLabel] = useState<string | undefined>();
@@ -1425,7 +1608,7 @@ function UsageSummary({ dimension, report, rowKey }: UsageSummaryProps) {
   const points = buildUsageChartPoints(dailyRows, usageMetric);
   const linePoints = points.map((point) => `${point.x},${point.y}`).join(" ");
   const areaPoints = points.length > 0 ? `36,96 ${linePoints} 304,96` : "";
-  const yAxisLabels = buildUsageYAxisLabels(points);
+  const yAxisLabels = buildUsageYAxisLabels(points, appLanguage);
   const topRows = visibleReport?.rows.slice(0, 3) ?? [];
   const metricTotal = usageMetric === "tokens" ? visibleReport?.totalTokens ?? 0 : visibleReport?.totalRequests ?? 0;
   const todayRow = dailyRows[dailyRows.length - 1];
@@ -1442,32 +1625,32 @@ function UsageSummary({ dimension, report, rowKey }: UsageSummaryProps) {
           <LineChart size={20} />
         </div>
         <div className="model-call-title">
-          <p className="eyebrow">7-day usage</p>
-          <h3>{dimensionLabel(dimension)} Activity</h3>
+          <p className="eyebrow">{usageText.days7}</p>
+          <h3>{usageText.activity(dimensionLabel(dimension, appLanguage))}</h3>
           <p>
-            Recent AI calls grouped by {dimensionLabel(dimension).toLowerCase()}.
+            {usageText.recentGrouped(dimensionLabel(dimension, appLanguage))}
           </p>
         </div>
       </div>
 
-      <div className="usage-insight-row" aria-label="Usage insights">
-        <span>Today {formatCompactNumber(todayValue)}</span>
-        <span>Daily avg {formatCompactNumber(dailyAverage)}</span>
+      <div className="usage-insight-row" aria-label={usageText.insights}>
+        <span>{usageText.today(formatCompactNumber(todayValue, appLanguage))}</span>
+        <span>{usageText.dailyAvg(formatCompactNumber(dailyAverage, appLanguage))}</span>
       </div>
 
       <div className="usage-stat-grid">
         <div className="usage-stat-card">
-          <span>Requests</span>
-          <strong>{formatCompactNumber(visibleReport?.totalRequests ?? 0)}</strong>
+          <span>{metricLabel("requests", appLanguage)}</span>
+          <strong>{formatCompactNumber(visibleReport?.totalRequests ?? 0, appLanguage)}</strong>
         </div>
         <div className="usage-stat-card">
-          <span>Tokens</span>
-          <strong>{formatCompactNumber(visibleReport?.totalTokens ?? 0)}</strong>
+          <span>{metricLabel("tokens", appLanguage)}</span>
+          <strong>{formatCompactNumber(visibleReport?.totalTokens ?? 0, appLanguage)}</strong>
         </div>
       </div>
 
-      <div className="usage-chart" aria-label={`Daily ${usageMetric} usage`}>
-        <div className="usage-chart-toolbar" aria-label="Usage metric">
+      <div className="usage-chart" aria-label={usageText.chartAria(metricLabel(usageMetric, appLanguage))}>
+        <div className="usage-chart-toolbar" aria-label={usageText.metric}>
           {(["tokens", "requests"] as UsageMetric[]).map((metric) => (
             <button
               key={metric}
@@ -1479,7 +1662,7 @@ function UsageSummary({ dimension, report, rowKey }: UsageSummaryProps) {
                 setSelectedPointLabel(undefined);
               }}
             >
-              {metricLabel(metric)}
+              {metricLabel(metric, appLanguage)}
             </button>
           ))}
         </div>
@@ -1508,12 +1691,12 @@ function UsageSummary({ dimension, report, rowKey }: UsageSummaryProps) {
                   className="usage-point-hit"
                   role="button"
                   tabIndex={0}
-                  aria-label={usagePointDescription(point)}
+                  aria-label={usagePointDescription(point, appLanguage)}
                   onClick={() => setSelectedPointLabel(point.label)}
                   onFocus={() => setSelectedPointLabel(point.label)}
                   onMouseEnter={() => setSelectedPointLabel(point.label)}
                 >
-                  <title>{usagePointDescription(point)}</title>
+                  <title>{usagePointDescription(point, appLanguage)}</title>
                   <circle
                     className={`usage-point ${point.isPeak ? "peak" : ""}`}
                     cx={point.x}
@@ -1522,7 +1705,7 @@ function UsageSummary({ dimension, report, rowKey }: UsageSummaryProps) {
                   />
                   {point.isPeak ? (
                     <text className="usage-peak-label" x={point.x + 7} y={Math.max(12, point.y - 7)}>
-                      Peak
+                      {usageText.peak}
                     </text>
                   ) : null}
                 </g>
@@ -1530,31 +1713,34 @@ function UsageSummary({ dimension, report, rowKey }: UsageSummaryProps) {
             </svg>
             {activePoint ? (
               <p className="usage-point-detail" aria-live="polite">
-                {usagePointDescription(activePoint)}
+                {usagePointDescription(activePoint, appLanguage)}
               </p>
             ) : null}
           </>
         ) : (
-          <div className="usage-empty-chart">No AI calls in the last 7 days.</div>
+          <div className="usage-empty-chart">{usageText.emptyChart}</div>
         )}
         <div className="usage-axis">
           {dailyRows.map((row) => (
-            <span key={row.date}>{formatUsageDay(row.date)}</span>
+            <span key={row.date}>{formatUsageDay(row.date, appLanguage)}</span>
           ))}
         </div>
       </div>
 
       {dimension === "model" ? null : (
-        <div className="usage-leaders" aria-label="Top usage rows">
+        <div className="usage-leaders" aria-label={usageText.leaders}>
           {topRows.length === 0 ? (
-            <p className="muted">No usage events yet.</p>
+            <p className="muted">{usageText.noEvents}</p>
           ) : (
             topRows.map((row) => (
               <div className="usage-leader-row" key={row.key}>
                 <span>{row.label}</span>
                 <strong>
-                  {formatCompactNumber(usageMetric === "tokens" ? row.totalTokens : row.requestCount)}{" "}
-                  {metricUnit(usageMetric)}
+                  {formatCompactNumber(
+                    usageMetric === "tokens" ? row.totalTokens : row.requestCount,
+                    appLanguage,
+                  )}{" "}
+                  {metricUnit(usageMetric, appLanguage)}
                 </strong>
               </div>
             ))
@@ -1571,6 +1757,25 @@ function PanelTitle({ title, subtitle }: { title: string; subtitle: string }) {
       <h3>{title}</h3>
       <p>{subtitle}</p>
     </div>
+  );
+}
+
+function ActionFeedback({
+  statusMessage,
+  errorMessage,
+}: {
+  statusMessage?: string;
+  errorMessage?: string;
+}) {
+  const message = errorMessage ?? statusMessage;
+  if (!message) {
+    return null;
+  }
+
+  return (
+    <span className={`ai-action-feedback ${errorMessage ? "error" : "success"}`} role="status">
+      {message}
+    </span>
   );
 }
 
@@ -1696,33 +1901,51 @@ function usageMetricValue(row: UsageDailyRow, metric: UsageMetric) {
   return metric === "tokens" ? row.totalTokens : row.requestCount;
 }
 
-function buildUsageYAxisLabels(points: ReturnType<typeof buildUsageChartPoints>) {
+function buildUsageYAxisLabels(
+  points: ReturnType<typeof buildUsageChartPoints>,
+  language: AppLanguage,
+) {
   const maxValue = points[0]?.maxValue ?? 1;
-  return [maxValue, maxValue / 2, 0].map((value) => formatCompactNumber(value));
+  return [maxValue, maxValue / 2, 0].map((value) => formatCompactNumber(value, language));
 }
 
-function usagePointDescription(point: ReturnType<typeof buildUsageChartPoints>[number]) {
-  return `${formatUsageDay(point.label)}: ${formatCompactNumber(point.requests)} requests, ${formatCompactNumber(point.tokens)} tokens`;
+function usagePointDescription(
+  point: ReturnType<typeof buildUsageChartPoints>[number],
+  language: AppLanguage,
+) {
+  const text = getAppText(language).settings.usagePanel;
+  return text.pointDescription(
+    formatUsageDay(point.label, language),
+    formatCompactNumber(point.requests, language),
+    formatCompactNumber(point.tokens, language),
+  );
 }
 
-function metricLabel(metric: UsageMetric) {
-  return metric === "tokens" ? "Tokens" : "Requests";
+function metricLabel(metric: UsageMetric, language: AppLanguage) {
+  return getAppText(language).settings.usagePanel.metricLabels[metric];
 }
 
-function metricUnit(metric: UsageMetric) {
-  return metric === "tokens" ? "tokens" : "calls";
+function metricUnit(metric: UsageMetric, language: AppLanguage) {
+  return getAppText(language).settings.usagePanel.metricUnits[metric];
 }
 
-function formatUsageDay(value: string) {
+function formatUsageDay(value: string, language: AppLanguage) {
   const parts = value.split("-");
   if (parts.length === 3) {
+    const date = new Date(`${value}T00:00:00`);
+    if (!Number.isNaN(date.getTime())) {
+      return new Intl.DateTimeFormat(appLocale(language), {
+        month: "numeric",
+        day: "2-digit",
+      }).format(date);
+    }
     return `${parts[1]}/${parts[2]}`;
   }
   return value;
 }
 
-function formatCompactNumber(value: number) {
-  return new Intl.NumberFormat("en", {
+function formatCompactNumber(value: number, language: AppLanguage) {
+  return new Intl.NumberFormat(appLocale(language), {
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(value);
@@ -1738,34 +1961,30 @@ function tabUsageDimension(tab: AiSettingsTab): UsageDimension {
   return "agent";
 }
 
-function agentLabel(agent: AgentPanelType) {
+function agentLabel(agent: AgentPanelType, language: AppLanguage = "en") {
+  const text = getAppText(language).settings.agents;
   if (agent === "summary") {
-    return "Summary";
+    return text.summaryLabel;
   }
   if (agent === "translation") {
-    return "Translation";
+    return text.translationLabel;
   }
-  return "Tag";
+  return text.tagLabel;
 }
 
-function agentDescription(agent: AgentPanelType) {
+function agentDescription(agent: AgentPanelType, language: AppLanguage = "en") {
+  const text = getAppText(language).settings.agents;
   if (agent === "summary") {
-    return "Article summary generation";
+    return text.summaryDescription;
   }
   if (agent === "translation") {
-    return "Reader translation workflow";
+    return text.translationDescription;
   }
-  return "Tag suggestion workflow";
+  return text.tagDescription;
 }
 
-function dimensionLabel(dimension: UsageDimension) {
-  if (dimension === "provider") {
-    return "Provider";
-  }
-  if (dimension === "model") {
-    return "Model";
-  }
-  return "Agent";
+function dimensionLabel(dimension: UsageDimension, language: AppLanguage) {
+  return getAppText(language).settings.usagePanel.dimensionLabels[dimension];
 }
 
 function getErrorMessage(error: unknown) {

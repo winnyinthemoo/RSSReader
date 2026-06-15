@@ -4,9 +4,11 @@ import { createPortal } from "react-dom";
 
 import vortexLogo from "../../../assets/vortex-logo.png";
 import type { FeedAddRequest, TagSummary } from "../../../../../shared/feed";
+import { getAppText } from "../../../i18n";
 import type { FeedSidebarProps } from "../types";
 import { AddFeedDialog } from "./AddFeedDialog";
 import { DeleteFeedDialog } from "./DeleteFeedDialog";
+import { DeleteTagDialog } from "./DeleteTagDialog";
 import { FeedList } from "./FeedList";
 import { FeedStatsPanel } from "./FeedStatsPanel";
 import { MergeTagDialog } from "./MergeTagDialog";
@@ -15,6 +17,7 @@ import { TagWorkspace } from "./TagWorkspace";
 const feedsToShow = 4;
 
 export function FeedSidebar({
+  appLanguage,
   feeds,
   tags,
   starredCount,
@@ -40,6 +43,7 @@ export function FeedSidebar({
   onRenameFeed,
   onDeleteFeed,
 }: FeedSidebarProps) {
+  const text = getAppText(appLanguage);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [showMoreFeeds, setShowMoreFeeds] = useState(false);
   const [name, setName] = useState("");
@@ -49,6 +53,8 @@ export function FeedSidebar({
   const [tagSort, setTagSort] = useState<"name" | "count">("count");
   const nameInputRef = useRef<HTMLInputElement>(null);
   const [deleteConfirmFeedId, setDeleteConfirmFeedId] = useState<string | null>(null);
+  const [deleteConfirmTagId, setDeleteConfirmTagId] = useState<string | null>(null);
+  const [isDeletingTag, setIsDeletingTag] = useState(false);
   const [mergeSourceTagId, setMergeSourceTagId] = useState<string | null>(null);
   const [mergeTargetTagId, setMergeTargetTagId] = useState("");
   const [mergeHint, setMergeHint] = useState<string | undefined>();
@@ -66,7 +72,7 @@ export function FeedSidebar({
     const trimmedName = name.trim();
 
     if (!trimmedUrl) {
-      setFormHint("Please enter an RSS or Atom URL.");
+      setFormHint(text.sidebar.enterFeedUrl);
       return;
     }
 
@@ -106,7 +112,7 @@ export function FeedSidebar({
 
   async function handleConfirmMergeTag() {
     if (!mergeSourceTagId || !mergeTargetTagId || mergeSourceTagId === mergeTargetTagId) {
-      setMergeHint("Choose a different target tag.");
+      setMergeHint(text.sidebar.chooseDifferentTag);
       return;
     }
 
@@ -122,12 +128,18 @@ export function FeedSidebar({
     }
   }
 
-  async function handleDeleteTag(tag: TagSummary) {
-    if (!window.confirm(`Delete tag "${tag.name}" from all articles?`)) {
+  async function handleConfirmDeleteTag() {
+    if (!deleteConfirmTagId) {
       return;
     }
 
-    await onDeleteTag(tag.id);
+    try {
+      setIsDeletingTag(true);
+      await onDeleteTag(deleteConfirmTagId);
+      setDeleteConfirmTagId(null);
+    } finally {
+      setIsDeletingTag(false);
+    }
   }
 
   const selectedFeedId = selection.type === "feed" ? selection.feedId : undefined;
@@ -138,6 +150,7 @@ export function FeedSidebar({
     .filter((tag): tag is TagSummary => Boolean(tag));
   const mergeSourceTag = tags.find((tag) => tag.id === mergeSourceTagId);
   const mergeTargetTags = tags.filter((tag) => tag.id !== mergeSourceTagId);
+  const deleteConfirmTag = tags.find((tag) => tag.id === deleteConfirmTagId);
   const visibleTags = useMemo(() => {
     const normalizedSearch = tagSearch.trim().toLowerCase();
     return tags
@@ -164,15 +177,15 @@ export function FeedSidebar({
         <button
           className="sidebar-hide-button"
           type="button"
-          aria-label="隐藏侧栏"
-          title="隐藏侧栏"
+          aria-label={text.sidebar.hideSidebar}
+          title={text.sidebar.hideSidebar}
           onClick={onHideSidebar}
         >
           <ChevronLeft size={18} strokeWidth={2.4} />
         </button>
       </div>
 
-      <div className="sidebar-mode-tabs" role="tablist" aria-label="Sidebar view">
+      <div className="sidebar-mode-tabs" role="tablist" aria-label={text.sidebar.sidebarView}>
         <button
           className={mode === "feeds" ? "active" : ""}
           type="button"
@@ -181,7 +194,7 @@ export function FeedSidebar({
           onClick={() => onModeChange("feeds")}
         >
           <Rss size={16} />
-          <span>Feed</span>
+          <span>{text.sidebar.feed}</span>
         </button>
         <button
           className={mode === "tags" ? "active" : ""}
@@ -191,18 +204,18 @@ export function FeedSidebar({
           onClick={() => onModeChange("tags")}
         >
           <Tags size={16} />
-          <span>Tag</span>
+          <span>{text.sidebar.tag}</span>
         </button>
       </div>
 
-      <div className="sidebar-actions" aria-label="Feed actions">
-        <button type="button" title="Add feed" onClick={() => setIsAddDialogOpen(true)}>
+      <div className="sidebar-actions" aria-label={text.sidebar.feedActions}>
+        <button type="button" title={text.sidebar.addFeed} onClick={() => setIsAddDialogOpen(true)}>
           <Plus size={16} />
         </button>
-        <button type="button" title="Import OPML" disabled={isImporting} onClick={onImportOpml}>
+        <button type="button" title={text.sidebar.importOpml} disabled={isImporting} onClick={onImportOpml}>
           <Upload size={16} />
         </button>
-        <button type="button" title="Export OPML" disabled={feeds.length === 0} onClick={onExportOpml}>
+        <button type="button" title={text.sidebar.exportOpml} disabled={feeds.length === 0} onClick={onExportOpml}>
           <Download size={16} />
         </button>
       </div>
@@ -216,8 +229,8 @@ export function FeedSidebar({
           <FolderOpen size={18} />
         </span>
         <span className="feed-main">
-          <span className="feed-title">All feeds</span>
-          <span className="feed-url">Everything local</span>
+          <span className="feed-title">{text.sidebar.allFeeds}</span>
+          <span className="feed-url">{text.sidebar.everythingLocal}</span>
         </span>
         <span className="unread-count">{totalUnread}</span>
       </button>
@@ -231,8 +244,8 @@ export function FeedSidebar({
           <Star size={17} fill="currentColor" />
         </span>
         <span className="feed-main">
-          <span className="feed-title">Starred</span>
-          <span className="feed-url">Saved articles</span>
+          <span className="feed-title">{text.sidebar.starred}</span>
+          <span className="feed-url">{text.sidebar.savedArticles}</span>
         </span>
         <span className="unread-count">{starredCount}</span>
       </button>
@@ -241,6 +254,7 @@ export function FeedSidebar({
 
       {mode === "feeds" ? (
         <FeedList
+          appLanguage={appLanguage}
           feeds={feeds}
           selectedFeedId={selectedFeedId}
           isDeleting={isDeleting}
@@ -253,6 +267,7 @@ export function FeedSidebar({
         />
       ) : (
         <TagWorkspace
+          appLanguage={appLanguage}
           tags={tags}
           visibleTags={visibleTags}
           selectedTagIds={selectedTagIds}
@@ -269,15 +284,16 @@ export function FeedSidebar({
           onClearTags={onClearTags}
           onRenameTag={onRenameTag}
           onMergeTag={handleMergeTag}
-          onDeleteTag={(tag) => void handleDeleteTag(tag)}
+          onDeleteTag={(tag) => setDeleteConfirmTagId(tag.id)}
         />
       )}
 
-      <FeedStatsPanel feeds={feeds} />
+      <FeedStatsPanel appLanguage={appLanguage} feeds={feeds} />
 
       {deleteConfirmFeedId
         ? createPortal(
             <DeleteFeedDialog
+              appLanguage={appLanguage}
               feedTitle={deleteConfirmFeed?.title}
               isDeleting={isDeleting}
               onClose={() => setDeleteConfirmFeedId(null)}
@@ -292,9 +308,27 @@ export function FeedSidebar({
           )
         : null}
 
+      {deleteConfirmTagId
+        ? createPortal(
+            <DeleteTagDialog
+              appLanguage={appLanguage}
+              tagName={deleteConfirmTag?.name}
+              isDeleting={isDeletingTag}
+              onClose={() => {
+                if (!isDeletingTag) {
+                  setDeleteConfirmTagId(null);
+                }
+              }}
+              onConfirm={() => void handleConfirmDeleteTag()}
+            />,
+            document.body,
+          )
+        : null}
+
       {isAddDialogOpen
         ? createPortal(
             <AddFeedDialog
+              appLanguage={appLanguage}
               name={name}
               url={url}
               formHint={formHint}
@@ -317,6 +351,7 @@ export function FeedSidebar({
       {mergeSourceTag
         ? createPortal(
             <MergeTagDialog
+              appLanguage={appLanguage}
               sourceTag={mergeSourceTag}
               targetTags={mergeTargetTags}
               targetTagId={mergeTargetTagId}

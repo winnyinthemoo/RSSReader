@@ -1,7 +1,11 @@
 import type { FormEvent, RefObject } from "react";
 import { X } from "lucide-react";
 
+import type { AppLanguage } from "../../../i18n";
+import { getAppText } from "../../../i18n";
+
 interface AddFeedDialogProps {
+  appLanguage: AppLanguage;
   name: string;
   url: string;
   formHint?: string;
@@ -14,6 +18,7 @@ interface AddFeedDialogProps {
 }
 
 export function AddFeedDialog({
+  appLanguage,
   name,
   url,
   formHint,
@@ -24,36 +29,38 @@ export function AddFeedDialog({
   onNameChange,
   onUrlChange,
 }: AddFeedDialogProps) {
+  const text = getAppText(appLanguage);
+
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <form
         className="add-feed-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="Add feed"
+        aria-label={text.addFeedDialog.aria}
         onSubmit={onSubmit}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="dialog-header">
-          <h2>Add Feed</h2>
-          <button type="button" title="Close" onClick={onClose}>
+          <h2>{text.addFeedDialog.title}</h2>
+          <button type="button" title={text.common.close} onClick={onClose}>
             <X size={17} />
           </button>
         </div>
 
         <label className="dialog-field">
-          <span>Name</span>
+          <span>{text.addFeedDialog.name}</span>
           <input
             ref={nameInputRef}
             value={name}
             onChange={(event) => onNameChange(event.target.value)}
-            placeholder="Optional display name"
+            placeholder={text.addFeedDialog.optionalName}
             disabled={isAdding}
           />
         </label>
 
         <label className="dialog-field">
-          <span>URL</span>
+          <span>{text.addFeedDialog.url}</span>
           <input
             value={url}
             onChange={(event) => onUrlChange(event.target.value)}
@@ -66,10 +73,10 @@ export function AddFeedDialog({
 
         <div className="dialog-actions">
           <button className="secondary-button" type="button" onClick={onClose}>
-            Cancel
+            {text.common.cancel}
           </button>
           <button className="primary-button" type="submit" disabled={isAdding}>
-            Add
+            {text.addFeedDialog.add}
           </button>
         </div>
       </form>

@@ -20,6 +20,8 @@ import { ArticleList } from "./features/articles/components/ArticleList";
 import { FeedSidebar } from "./features/feeds/components/FeedSidebar";
 import { AiSettingsPage } from "./features/ai/components/AiSettingsPage";
 import { ReaderView } from "./features/reader/components/ReaderView";
+import type { AppLanguage } from "./i18n";
+import { getAppText, normalizeAppLanguage } from "./i18n";
 import { useFeedSyncSettings } from "./features/feeds/hooks/useFeedSyncSettings";
 import type { FeedSyncMode, SidebarMode, SidebarSelection } from "./features/feeds/types";
 import type { FontSize, ThemeBg } from "./features/reader/types";
@@ -105,10 +107,11 @@ export default function App() {
   const [syncSettings, setSyncSettings] = useFeedSyncSettings();
   const [paneLayout, setPaneLayout] = useState<PaneLayout>(() => readPaneLayout());
   const [lastSyncAt, setLastSyncAt] = useState<Date | undefined>();
-  const [syncStatusText, setSyncStatusText] = useState("Ready");
   const [showAiSettings, setShowAiSettings] = useState(false);
   const [readerSettings, setReaderSettings] = useState<ReaderSettings>(() => readReaderSettings());
-  const [appLanguage, setAppLanguage] = useState(() => readAppLanguage());
+  const [appLanguage, setAppLanguage] = useState<AppLanguage>(() => readAppLanguage());
+  const text = getAppText(appLanguage);
+  const [syncStatusText, setSyncStatusText] = useState(() => text.app.ready);
   const launchSyncStartedRef = useRef(false);
   const initialArticlesLoadedRef = useRef(false);
   const articleListRequestTokenRef = useRef(0);
@@ -140,13 +143,13 @@ export default function App() {
         setFeeds((currentFeeds) => upsertFeed(currentFeeds, refreshResult.feed));
         void loadArticles(selectionRef.current, articleSearchQueryRef.current);
         void refreshTagsAndStarredCount();
-        setSyncStatusText(`Imported feed synced: ${refreshResult.feed.title}`);
+        setSyncStatusText(text.app.importedFeedSynced(refreshResult.feed.title));
         return;
       }
 
       if (event.status === "failed") {
         void loadFeedsOnly();
-        setSyncStatusText("One imported feed failed");
+        setSyncStatusText(text.app.oneImportedFeedFailed);
       }
     }).then((nextUnlisten) => {
       if (!active) {
@@ -161,7 +164,7 @@ export default function App() {
       active = false;
       unlisten?.();
     };
-  }, []);
+  }, [text]);
 
   useEffect(() => {
     if (!initialArticlesLoadedRef.current) {
@@ -206,8 +209,8 @@ export default function App() {
     }
 
     launchSyncStartedRef.current = true;
-    void syncAllFeeds("opening the app");
-  }, [syncSettings.mode, feeds.length]);
+    void syncAllFeeds(text.app.syncReasonLaunch);
+  }, [syncSettings.mode, feeds.length, text]);
 
   useEffect(() => {
     if (syncSettings.mode !== "timer" || feeds.length === 0) {
@@ -215,11 +218,11 @@ export default function App() {
     }
 
     const timerId = window.setInterval(() => {
-      void syncAllFeeds("timer");
+      void syncAllFeeds(text.app.syncReasonTimer);
     }, syncSettings.intervalMinutes * 60 * 1000);
 
     return () => window.clearInterval(timerId);
-  }, [syncSettings.mode, syncSettings.intervalMinutes, feeds.length]);
+  }, [syncSettings.mode, syncSettings.intervalMinutes, feeds.length, text]);
 
   const nextSyncText = useMemo(() => {
     if (syncSettings.mode !== "timer") {
@@ -227,14 +230,14 @@ export default function App() {
     }
 
     if (!lastSyncAt) {
-      return `Every ${formatSyncInterval(syncSettings.intervalMinutes)}`;
+      return text.app.every(formatSyncInterval(syncSettings.intervalMinutes));
     }
 
     const nextSyncAt = new Date(
       lastSyncAt.getTime() + syncSettings.intervalMinutes * 60 * 1000,
     );
-    return `Next ${formatClockTime(nextSyncAt)}`;
-  }, [lastSyncAt, syncSettings.intervalMinutes, syncSettings.mode]);
+    return text.app.next(formatClockTime(nextSyncAt, appLanguage));
+  }, [appLanguage, lastSyncAt, syncSettings.intervalMinutes, syncSettings.mode, text]);
 
   async function loadFeedsTagsAndArticles() {
     try {
@@ -576,7 +579,7 @@ export default function App() {
 
     try {
       setIsSyncingAll(true);
-      setSyncStatusText(`Syncing ${feeds.length} feeds`);
+      setSyncStatusText(text.app.syncingFeeds(feeds.length));
       let failedCount = 0;
       let newArticleCount = 0;
 
@@ -592,12 +595,12 @@ export default function App() {
       await loadFeedsTagsAndArticles();
       const completedAt = new Date();
       setLastSyncAt(completedAt);
-      setSyncStatusText(formatFeedSyncStatus(feeds.length, failedCount, completedAt));
+      setSyncStatusText(formatFeedSyncStatus(feeds.length, failedCount, completedAt, appLanguage));
       setErrorMessage(
-        formatFeedSyncToast(feeds.length, failedCount, newArticleCount, reason),
+        formatFeedSyncToast(feeds.length, failedCount, newArticleCount, reason, appLanguage),
       );
     } catch (error) {
-      setSyncStatusText("Sync failed");
+      setSyncStatusText(text.app.syncFailed);
       setErrorMessage(getErrorMessage(error));
     } finally {
       setIsSyncingAll(false);
@@ -633,7 +636,7 @@ export default function App() {
       }
       setSidebarMode("feeds");
       if (result.backgroundRefreshStarted) {
-        setSyncStatusText(`Syncing ${result.imported} imported feeds`);
+        setSyncStatusText(text.app.syncImportedFeeds(result.imported));
       }
       setErrorMessage(formatOpmlImportResult(result));
     } catch (error) {
@@ -645,11 +648,18 @@ export default function App() {
 
   function handleSyncModeChange(mode: FeedSyncMode) {
     setSyncSettings((currentSettings) => ({ ...currentSettings, mode }));
-    setSyncStatusText(mode === "manual" ? "Manual" : "Ready");
+    setSyncStatusText(mode === "manual" ? text.app.manual : text.app.ready);
 
     if (mode === "launch" && feeds.length > 0) {
-      void syncAllFeeds("opening the app");
+      void syncAllFeeds(text.app.syncReasonLaunch);
     }
+  }
+
+  function handleAppLanguageChange(language: AppLanguage) {
+    const nextLanguage = normalizeAppLanguage(language);
+    const nextText = getAppText(nextLanguage);
+    setAppLanguage(nextLanguage);
+    setSyncStatusText(syncSettings.mode === "manual" ? nextText.app.manual : nextText.app.ready);
   }
 
   function handleSyncIntervalChange(intervalMinutes: number) {
@@ -775,8 +785,8 @@ export default function App() {
         <button
           className="sidebar-reveal-button"
           type="button"
-          aria-label="显示侧栏"
-          title="显示侧栏"
+          aria-label={text.app.showSidebar}
+          title={text.app.showSidebar}
           onClick={() => setIsSidebarHidden(false)}
         >
           <ChevronRight size={18} strokeWidth={2.4} />
@@ -784,6 +794,7 @@ export default function App() {
       ) : (
         <>
           <FeedSidebar
+            appLanguage={appLanguage}
             feeds={feeds}
             tags={tags}
             starredCount={starredCount}
@@ -813,13 +824,14 @@ export default function App() {
           <button
             className="pane-resizer pane-resizer-sidebar"
             type="button"
-            aria-label="Resize feed sidebar"
+            aria-label={text.app.resizeFeedSidebar}
             onPointerDown={(event) => handlePaneResizeStart("sidebar", event)}
           />
         </>
       )}
 
       <ArticleList
+        appLanguage={appLanguage}
         articles={articles}
         feeds={feeds}
         tags={tags}
@@ -833,11 +845,12 @@ export default function App() {
       <button
         className="pane-resizer pane-resizer-articles"
         type="button"
-        aria-label="Resize article list"
+        aria-label={text.app.resizeArticleList}
         onPointerDown={(event) => handlePaneResizeStart("article", event)}
       />
 
       <ReaderView
+        appLanguage={appLanguage}
         article={selectedArticle}
         isLoading={isArticleLoading}
         onTagsChanged={() => void handleTagsChanged()}
@@ -883,10 +896,10 @@ export default function App() {
           readerTheme={readerSettings.themeBg}
           readerFontSize={readerSettings.fontSize}
           readerLayoutWidth={readerSettings.layoutWidth}
-          onAppLanguageChange={setAppLanguage}
+          onAppLanguageChange={handleAppLanguageChange}
           onSyncModeChange={handleSyncModeChange}
           onSyncIntervalChange={handleSyncIntervalChange}
-          onSyncAllFeeds={() => void syncAllFeeds("manual sync")}
+          onSyncAllFeeds={() => void syncAllFeeds(text.app.syncReasonManual)}
           onRefreshSelectedFeed={(feedId) => void handleRefreshFeed(feedId)}
           onReaderThemeChange={(themeBg) =>
             setReaderSettings((currentSettings) => ({ ...currentSettings, themeBg }))
@@ -950,9 +963,9 @@ function readReaderSettings(): ReaderSettings {
   }
 }
 
-function readAppLanguage() {
+function readAppLanguage(): AppLanguage {
   const language = window.localStorage.getItem(appLanguageKey);
-  return language === "en" || language === "zh-Hans" ? language : "zh-Hans";
+  return normalizeAppLanguage(language);
 }
 
 function sanitizePaneWidth(width: unknown, fallback: number) {

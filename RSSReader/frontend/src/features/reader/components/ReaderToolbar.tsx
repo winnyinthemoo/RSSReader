@@ -19,11 +19,14 @@ import {
 } from "lucide-react";
 
 import type { ArticleDetail } from "../../../../../shared/feed";
+import type { AppLanguage } from "../../../i18n";
+import { getAppText } from "../../../i18n";
 import { translationLanguageOptions } from "../options";
 import type { FontSize, ReaderPanel, ThemeBg, ViewMode } from "../types";
 import { ThemePanel } from "./ThemePanel";
 
 interface ReaderToolbarProps {
+  appLanguage: AppLanguage;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   showThemePanel: boolean;
@@ -55,6 +58,7 @@ interface ReaderToolbarProps {
 }
 
 export function ReaderToolbar({
+  appLanguage,
   viewMode,
   onViewModeChange,
   showThemePanel,
@@ -84,6 +88,7 @@ export function ReaderToolbar({
   onShareStatusChange,
   shareMarkdown = "",
 }: ReaderToolbarProps) {
+  const text = getAppText(appLanguage);
   const themePanelRef = useRef<HTMLDivElement>(null);
   const sharePanelRef = useRef<HTMLDivElement>(null);
   const [showSharePanel, setShowSharePanel] = useState(false);
@@ -126,17 +131,17 @@ export function ReaderToolbar({
       onShareStatusChange?.(status);
       window.setTimeout(() => onShareStatusChange?.(undefined), 1500);
     } catch (error) {
-      onShareStatusChange?.(error instanceof Error ? error.message : "Copy failed");
+      onShareStatusChange?.(error instanceof Error ? error.message : text.reader.copyFailed);
     }
   }
 
   return (
-    <div className="reader-toolbar" aria-label="Reader tools">
-      <div className="tool-group reader-view-tools" aria-label="Display mode">
+    <div className="reader-toolbar" aria-label={text.reader.readerTools}>
+      <div className="tool-group reader-view-tools" aria-label={text.reader.displayMode}>
         <button
           className={`tool-button${viewMode === "markdown" ? " active" : ""}`}
           type="button"
-          title="Markdown view"
+          title={text.reader.markdownView}
           onClick={() => onViewModeChange("markdown")}
         >
           <FileText size={17} />
@@ -144,7 +149,7 @@ export function ReaderToolbar({
         <button
           className={`tool-button${viewMode === "source" ? " active" : ""}`}
           type="button"
-          title="Original page"
+          title={text.reader.originalPage}
           onClick={() => onViewModeChange("source")}
         >
           <Globe2 size={17} />
@@ -152,21 +157,21 @@ export function ReaderToolbar({
         <button
           className={`tool-button${viewMode === "compare" ? " active" : ""}`}
           type="button"
-          title="Compare with original page"
+          title={text.reader.compareOriginal}
           onClick={() => onViewModeChange("compare")}
         >
           <Columns2 size={17} />
         </button>
       </div>
 
-      <div className="tool-group reader-action-tools" aria-label="Article actions">
+      <div className="tool-group reader-action-tools" aria-label={text.reader.articleActions}>
         {onTargetLanguageChange ? (
           <select
             className="translation-lang-select"
             value={targetLanguage}
             onChange={(event) => onTargetLanguageChange(event.target.value)}
             disabled={translateDisabled}
-            aria-label="Translation language"
+            aria-label={text.reader.translationLanguage}
           >
             {translationLanguageOptions.map((language) => (
               <option key={language.value} value={language.value}>
@@ -178,7 +183,7 @@ export function ReaderToolbar({
         <button
           className={`tool-button${bilingualOpen ? " active" : ""}`}
           type="button"
-          title={bilingualOpen ? "Show original" : "Translate article"}
+          title={bilingualOpen ? text.reader.showOriginal : text.reader.translateArticle}
           disabled={translateDisabled}
           onClick={onTranslate}
         >
@@ -188,7 +193,7 @@ export function ReaderToolbar({
           <button
             className="tool-button"
             type="button"
-            title="Try again (regenerate translation)"
+            title={text.reader.retryTranslation}
             disabled={translateDisabled}
             onClick={onRetryTranslation}
           >
@@ -198,7 +203,7 @@ export function ReaderToolbar({
         <button
           className={`tool-button${activePanel === "tag" ? " active" : ""}`}
           type="button"
-          title="Tag"
+          title={text.reader.tag}
           data-reader-panel-trigger
           onClick={() => onTogglePanel?.("tag")}
         >
@@ -207,7 +212,7 @@ export function ReaderToolbar({
         <button
           className={`tool-button${activePanel === "note" ? " active" : ""}`}
           type="button"
-          title="Note"
+          title={text.reader.note}
           data-reader-panel-trigger
           onClick={() => onTogglePanel?.("note")}
         >
@@ -217,7 +222,7 @@ export function ReaderToolbar({
           <button
             className={`tool-button${showThemePanel ? " active" : ""}`}
             type="button"
-            title="Theme"
+            title={text.reader.theme}
             onClick={onToggleThemePanel}
           >
             <Palette size={17} />
@@ -225,6 +230,7 @@ export function ReaderToolbar({
           {showThemePanel && (
             <ThemePanel
               ref={themePanelRef}
+              appLanguage={appLanguage}
               themeBg={themeBg}
               onThemeBgChange={onThemeBgChange}
               fontSize={fontSize}
@@ -236,25 +242,25 @@ export function ReaderToolbar({
           <button
             className={`tool-button${showSharePanel ? " active" : ""}`}
             type="button"
-            title="Share"
+            title={text.reader.share}
             disabled={!article}
             onClick={() => setShowSharePanel((current) => !current)}
           >
             <Share2 size={17} />
           </button>
           {showSharePanel && article ? (
-            <div className="share-popover" role="menu" aria-label="Share article">
+            <div className="share-popover" role="menu" aria-label={text.reader.shareArticle}>
               <div className="share-popover-header">
-                <strong>Share Article</strong>
-                <span>{shareStatus ?? "Copy details or open the source."}</span>
+                <strong>{text.reader.shareArticle}</strong>
+                <span>{shareStatus ?? text.reader.copyDetailsOrOpen}</span>
               </div>
               <button
                 type="button"
                 role="menuitem"
-                onClick={() => void handleCopyShare(article.url, "Link copied")}
+                onClick={() => void handleCopyShare(article.url, text.reader.linkCopied)}
               >
-                {shareStatus === "Link copied" ? <Check size={15} /> : <Share2 size={15} />}
-                <span>Copy Link</span>
+                {shareStatus === text.reader.linkCopied ? <Check size={15} /> : <Share2 size={15} />}
+                <span>{text.reader.copyLink}</span>
               </button>
               <button
                 type="button"
@@ -262,16 +268,16 @@ export function ReaderToolbar({
                 onClick={() =>
                   void handleCopyShare(
                     shareMarkdown || `[${article.title}](${article.url})`,
-                    "Markdown copied",
+                    text.reader.markdownCopied,
                   )
                 }
               >
                 <FileText size={15} />
-                <span>Copy Markdown</span>
+                <span>{text.reader.copyMarkdown}</span>
               </button>
               <a href={article.url} target="_blank" rel="noreferrer" role="menuitem">
                 <ExternalLink size={15} />
-                <span>Open Original</span>
+                <span>{text.reader.openOriginal}</span>
               </a>
               <a
                 href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title)}&url=${encodeURIComponent(article.url)}`}
@@ -280,14 +286,14 @@ export function ReaderToolbar({
                 role="menuitem"
               >
                 <Share2 size={15} />
-                <span>Share to X</span>
+                <span>{text.reader.shareToX}</span>
               </a>
             </div>
           ) : null}
         </div>
       </div>
 
-      <div className="tool-group search-group open" aria-label="Search">
+      <div className="tool-group search-group open" aria-label={text.reader.search}>
         <div className="reader-search-bar" role="search" aria-disabled={!onSearchQueryChange}>
           <Search size={16} />
           <input
@@ -320,13 +326,13 @@ export function ReaderToolbar({
                 onSearchQueryChange?.("");
               }
             }}
-            placeholder="Search articles"
-            aria-label="Search articles by title, author, and content"
+            placeholder={text.reader.searchArticles}
+            aria-label={text.reader.searchArticlesAria}
           />
           <button
             className="tool-button reader-search-clear"
             type="button"
-            title="Clear search"
+            title={text.reader.closeFind}
             disabled={!onSearchQueryChange || !searchQuery}
             onClick={() => onSearchQueryChange?.("")}
           >
@@ -336,7 +342,7 @@ export function ReaderToolbar({
           <button
             className="tool-button"
             type="button"
-            title="Previous match"
+            title={text.reader.previousMatch}
             disabled={!onSearchStep || searchMatchCount === 0}
             onClick={() => onSearchStep?.(-1)}
           >
@@ -345,7 +351,7 @@ export function ReaderToolbar({
           <button
             className="tool-button"
             type="button"
-            title="Next match"
+            title={text.reader.nextMatch}
             disabled={!onSearchStep || searchMatchCount === 0}
             onClick={() => onSearchStep?.(1)}
           >
@@ -355,8 +361,8 @@ export function ReaderToolbar({
         <button
           className="tool-button ai-toolbar-button"
           type="button"
-          title="Settings"
-          aria-label="Settings"
+          title={text.common.settings}
+          aria-label={text.common.settings}
           onClick={onOpenAiSettings}
         >
           <Settings size={17} />

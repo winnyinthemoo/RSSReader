@@ -4,6 +4,7 @@ import type {
   TagMatchMode,
   TagSummary,
 } from "../../../../shared/feed";
+import type { AppLanguage } from "../../i18n";
 
 export type SidebarMode = "feeds" | "tags";
 export type FeedSyncMode = "manual" | "launch" | "timer";
@@ -14,6 +15,7 @@ export type SidebarSelection =
   | { type: "tag"; tagIds: string[]; tagMatch: TagMatchMode };
 
 export interface FeedSidebarProps {
+  appLanguage: AppLanguage;
   feeds: FeedSummary[];
   tags: TagSummary[];
   starredCount: number;

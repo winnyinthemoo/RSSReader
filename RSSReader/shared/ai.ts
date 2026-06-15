@@ -12,6 +12,7 @@ export interface AiProvider {
   id: string;
   displayName: string;
   baseUrl: string;
+  apiKeyHint?: string;
   isEnabled: boolean;
   createdAt: string;
   updatedAt: string;

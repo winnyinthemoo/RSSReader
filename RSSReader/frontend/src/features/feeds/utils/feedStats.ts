@@ -1,4 +1,6 @@
 import type { FeedSummary } from "../../../../../shared/feed";
+import type { AppLanguage } from "../../../i18n";
+import { appLocale, getAppText } from "../../../i18n";
 
 export function getFeedStats(feeds: FeedSummary[]) {
   return {
@@ -9,13 +11,13 @@ export function getFeedStats(feeds: FeedSummary[]) {
   };
 }
 
-export function formatLastFetchedAt(value?: string) {
+export function formatLastFetchedAt(value: string | undefined, language: AppLanguage) {
   const date = toFetchedAtDate(value);
   if (!date) {
-    return "Never";
+    return getAppText(language).common.never;
   }
 
-  return date.toLocaleString([], {
+  return date.toLocaleString(appLocale(language), {
     month: "short",
     day: "numeric",
     hour: "2-digit",

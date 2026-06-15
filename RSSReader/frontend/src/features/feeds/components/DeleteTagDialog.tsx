@@ -3,21 +3,21 @@ import { X } from "lucide-react";
 import { getAppText } from "../../../i18n";
 import type { AppLanguage } from "../../../i18n";
 
-interface DeleteFeedDialogProps {
+interface DeleteTagDialogProps {
   appLanguage: AppLanguage;
-  feedTitle?: string;
+  tagName?: string;
   isDeleting: boolean;
   onClose: () => void;
   onConfirm: () => void;
 }
 
-export function DeleteFeedDialog({
+export function DeleteTagDialog({
   appLanguage,
-  feedTitle,
+  tagName,
   isDeleting,
   onClose,
   onConfirm,
-}: DeleteFeedDialogProps) {
+}: DeleteTagDialogProps) {
   const text = getAppText(appLanguage);
 
   return (
@@ -26,24 +26,34 @@ export function DeleteFeedDialog({
         className="add-feed-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label={text.deleteFeedDialog.aria}
+        aria-label={text.deleteTagDialog.aria}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="dialog-header">
-          <h2>{text.deleteFeedDialog.title}</h2>
-          <button type="button" onClick={onClose}>
+          <h2>{text.deleteTagDialog.title}</h2>
+          <button type="button" title={text.common.close} onClick={onClose}>
             <X size={17} />
           </button>
         </div>
         <div className="confirm-body">
-          <p>{text.deleteFeedDialog.message(feedTitle)}</p>
+          <p>{text.deleteTagDialog.message(tagName)}</p>
         </div>
         <div className="dialog-actions">
-          <button className="secondary-button" onClick={onClose}>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={onClose}
+            disabled={isDeleting}
+          >
             {text.common.cancel}
           </button>
-          <button className="primary-button" onClick={onConfirm} disabled={isDeleting}>
-            {isDeleting ? text.deleteFeedDialog.deleting : text.common.delete}
+          <button
+            className="primary-button delete-button"
+            type="button"
+            onClick={onConfirm}
+            disabled={isDeleting}
+          >
+            {isDeleting ? text.deleteTagDialog.deleting : text.common.delete}
           </button>
         </div>
       </div>

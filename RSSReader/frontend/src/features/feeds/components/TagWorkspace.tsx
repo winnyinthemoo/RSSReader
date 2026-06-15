@@ -3,8 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
 import type { TagMatchMode, TagSummary } from "../../../../../shared/feed";
+import { getAppText } from "../../../i18n";
+import type { AppLanguage } from "../../../i18n";
 
 interface TagWorkspaceProps {
+  appLanguage: AppLanguage;
   tags: TagSummary[];
   visibleTags: TagSummary[];
   selectedTagIds: string[];
@@ -25,6 +28,7 @@ interface TagWorkspaceProps {
 }
 
 export function TagWorkspace({
+  appLanguage,
   tags,
   visibleTags,
   selectedTagIds,
@@ -43,6 +47,8 @@ export function TagWorkspace({
   onMergeTag,
   onDeleteTag,
 }: TagWorkspaceProps) {
+  const text = getAppText(appLanguage);
+  const tagText = text.tagWorkspace;
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [renameHint, setRenameHint] = useState<string | undefined>();
@@ -76,7 +82,7 @@ export function TagWorkspace({
   async function submitRename(tag: TagSummary) {
     const nextName = editingName.trim();
     if (!nextName) {
-      setRenameHint("Name cannot be empty.");
+      setRenameHint(tagText.nameCannotBeEmpty);
       return;
     }
     if (nextName === tag.name) {
@@ -114,19 +120,19 @@ export function TagWorkspace({
         <input
           value={tagSearch}
           onChange={(event) => onTagSearchChange(event.target.value)}
-          placeholder="Search tags"
+          placeholder={tagText.searchTags}
         />
       </label>
 
       <div className="tag-filter-toolbar">
-        <div className="tag-match-toggle" aria-label="Tag match mode">
+        <div className="tag-match-toggle" aria-label={tagText.tagMatchMode}>
           <button
             className={!isTagSelection || tagMatch === "any" ? "active" : ""}
             type="button"
             disabled={selectedTagIds.length <= 1}
             onClick={() => onTagMatchChange("any")}
           >
-            Any
+            {tagText.any}
           </button>
           <button
             className={isTagSelection && tagMatch === "all" ? "active" : ""}
@@ -134,21 +140,21 @@ export function TagWorkspace({
             disabled={selectedTagIds.length <= 1}
             onClick={() => onTagMatchChange("all")}
           >
-            All
+            {tagText.all}
           </button>
         </div>
         <select
           value={tagSort}
           onChange={(event) => onTagSortChange(event.target.value as "name" | "count")}
-          aria-label="Sort tags"
+          aria-label={tagText.sortTags}
         >
-          <option value="count">Usage</option>
-          <option value="name">Name</option>
+          <option value="count">{tagText.usage}</option>
+          <option value="name">{tagText.name}</option>
         </select>
       </div>
 
       {selectedTags.length > 0 ? (
-        <div className="selected-tag-strip" aria-label="Selected tags">
+        <div className="selected-tag-strip" aria-label={tagText.selectedTags}>
           {selectedTags.map((tag) => (
             <button type="button" key={tag.id} onClick={() => onToggleTag(tag.id)}>
               {tag.name}
@@ -156,16 +162,16 @@ export function TagWorkspace({
             </button>
           ))}
           <button className="clear-tags-button" type="button" onClick={onClearTags}>
-            Clear
+            {tagText.clear}
           </button>
         </div>
       ) : null}
 
       <div className="feed-list tag-list">
         {tags.length === 0 ? (
-          <div className="sidebar-empty">No tags yet.</div>
+          <div className="sidebar-empty">{tagText.noTagsYet}</div>
         ) : visibleTags.length === 0 ? (
-          <div className="sidebar-empty">No matching tags.</div>
+          <div className="sidebar-empty">{tagText.noMatchingTags}</div>
         ) : (
           visibleTags.map((tag) => {
             const isSelected = selectedTagSet.has(tag.id);
@@ -183,7 +189,7 @@ export function TagWorkspace({
                       <input
                         ref={editInputRef}
                         value={editingName}
-                        aria-label="Tag name"
+                        aria-label={tagText.tagName}
                         disabled={isRenaming}
                         onChange={(event) => {
                           setEditingName(event.target.value);
@@ -198,8 +204,8 @@ export function TagWorkspace({
                       <button
                         className="tag-rename-save"
                         type="button"
-                        title="Save tag name"
-                        aria-label={`Save ${tag.name} name`}
+                        title={tagText.saveTagName}
+                        aria-label={tagText.saveTagNameAria(tag.name)}
                         disabled={isRenaming}
                         onClick={() => void submitRename(tag)}
                       >
@@ -208,8 +214,8 @@ export function TagWorkspace({
                       <button
                         className="tag-rename-cancel"
                         type="button"
-                        title="Cancel rename"
-                        aria-label={`Cancel renaming ${tag.name}`}
+                        title={tagText.cancelRename}
+                        aria-label={tagText.cancelRenameAria(tag.name)}
                         disabled={isRenaming}
                         onClick={cancelRename}
                       >
@@ -232,24 +238,28 @@ export function TagWorkspace({
                       <span className="feed-main">
                         <span className="feed-title">{tag.name}</span>
                         <span className="feed-url">
-                          {isSelected ? "Selected" : isDisabled ? "Limit reached" : "Tagged articles"}
+                          {isSelected
+                            ? tagText.selected
+                            : isDisabled
+                              ? tagText.limitReached
+                              : tagText.taggedArticles}
                         </span>
                       </span>
                       <span className="unread-count">{tag.articleCount}</span>
                     </button>
-                    <div className="tag-row-actions" aria-label={`${tag.name} tag actions`}>
-                      <button type="button" title="Rename tag" onClick={() => startRename(tag)}>
+                    <div className="tag-row-actions" aria-label={tagText.tagActions(tag.name)}>
+                      <button type="button" title={tagText.renameTag} onClick={() => startRename(tag)}>
                         <Pencil size={12} />
                       </button>
                       <button
                         type="button"
-                        title="Merge tag"
+                        title={tagText.mergeTag}
                         disabled={tags.length < 2}
                         onClick={() => onMergeTag(tag)}
                       >
                         <GitMerge size={12} />
                       </button>
-                      <button type="button" title="Delete tag" onClick={() => onDeleteTag(tag)}>
+                      <button type="button" title={tagText.deleteTag} onClick={() => onDeleteTag(tag)}>
                         <Trash2 size={12} />
                       </button>
                     </div>

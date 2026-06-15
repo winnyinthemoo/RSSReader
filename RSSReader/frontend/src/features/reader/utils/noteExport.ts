@@ -1,12 +1,18 @@
 import type { ArticleDetail, ArticleNoteExportRequest } from "../../../../../shared/feed";
+import type { AppLanguage } from "../../../i18n";
+import { getAppText } from "../../../i18n";
 import { formatFullDate } from "./date";
 
 export function buildArticleNoteExport(
   article: ArticleDetail,
   noteContent: string,
+  appLanguage: AppLanguage,
 ): ArticleNoteExportRequest {
+  const text = getAppText(appLanguage);
   const title = article.title.trim() || "Untitled article";
-  const publishedAt = article.publishedAt ? formatFullDate(article.publishedAt) : "No date";
+  const publishedAt = article.publishedAt
+    ? formatFullDate(article.publishedAt, appLanguage)
+    : text.common.noDate;
   const content = [
     `# ${title}`,
     "",

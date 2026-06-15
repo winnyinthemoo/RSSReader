@@ -1,8 +1,11 @@
 import { X } from "lucide-react";
 
 import type { TagSummary } from "../../../../../shared/feed";
+import { getAppText } from "../../../i18n";
+import type { AppLanguage } from "../../../i18n";
 
 interface MergeTagDialogProps {
+  appLanguage: AppLanguage;
   sourceTag: TagSummary;
   targetTags: TagSummary[];
   targetTagId: string;
@@ -14,6 +17,7 @@ interface MergeTagDialogProps {
 }
 
 export function MergeTagDialog({
+  appLanguage,
   sourceTag,
   targetTags,
   targetTagId,
@@ -23,28 +27,30 @@ export function MergeTagDialog({
   onClose,
   onConfirm,
 }: MergeTagDialogProps) {
+  const text = getAppText(appLanguage);
+
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <div
         className="add-feed-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="Merge tag"
+        aria-label={text.mergeTagDialog.aria}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="dialog-header">
-          <h2>Merge Tag</h2>
-          <button type="button" title="Close" onClick={onClose}>
+          <h2>{text.mergeTagDialog.title}</h2>
+          <button type="button" title={text.common.close} onClick={onClose}>
             <X size={17} />
           </button>
         </div>
 
         <p className="merge-tag-summary">
-          Merge <strong>{sourceTag.name}</strong> into another tag.
+          {text.mergeTagDialog.summary(sourceTag.name)}
         </p>
 
         <label className="dialog-field">
-          <span>Target tag</span>
+          <span>{text.mergeTagDialog.target}</span>
           <select
             value={targetTagId}
             onChange={(event) => onTargetTagChange(event.target.value)}
@@ -67,7 +73,7 @@ export function MergeTagDialog({
             onClick={onClose}
             disabled={isMerging}
           >
-            Cancel
+            {text.common.cancel}
           </button>
           <button
             className="primary-button"
@@ -75,7 +81,7 @@ export function MergeTagDialog({
             onClick={onConfirm}
             disabled={isMerging || targetTags.length === 0}
           >
-            {isMerging ? "Merging..." : "Merge"}
+            {isMerging ? text.mergeTagDialog.merging : text.mergeTagDialog.merge}
           </button>
         </div>
       </div>
