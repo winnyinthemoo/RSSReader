@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
-import { ChevronDown, ChevronUp, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, X } from "lucide-react";
 
 import type { TranslationView } from "../../../../../shared/ai";
-import type { ArticleDetail, ArticleTag } from "../../../../../shared/feed";
+import type { ArticleDetail, ArticleTag, TagSummary } from "../../../../../shared/feed";
 import type { AppLanguage } from "../../../i18n";
 import { getAppText } from "../../../i18n";
 import { BilingualTranslationView } from "../../ai/components/BilingualTranslationView";
 import { SelectionTranslationPanel } from "../../ai/components/SelectionTranslationPanel";
 import { SummaryPanel } from "../../ai/components/SummaryPanel";
-import { getArticleTranslation, startTranslation } from "../../../services/aiService";
+import { getAiAgentSettings, startTranslation } from "../../../services/aiService";
 import {
   deleteArticleTag,
   exportArticleNote,
@@ -30,6 +30,13 @@ import { markdownForCopy, normalizeMarkdown } from "../utils/markdown";
 import { buildArticleNoteExport } from "../utils/noteExport";
 import { getReaderSelectedText } from "../utils/selection";
 import {
+  cancelArticleTranslationTask,
+  retryTranslationSegmentTask,
+  startArticleTranslationTask,
+  subscribeTranslationTask,
+  translationTaskKey,
+} from "../utils/translationTasks";
+import {
   detectContentLanguage,
   isSameLanguageTarget,
   selectionTranslationText,
@@ -39,6 +46,7 @@ import {
 interface ReaderViewProps {
   appLanguage: AppLanguage;
   article?: ArticleDetail;
+  availableTags?: TagSummary[];
   isLoading?: boolean;
   onTagsChanged?: () => void;
   onOpenAiSettings?: () => void;
@@ -60,6 +68,7 @@ interface ReaderViewProps {
 export function ReaderView({
   appLanguage,
   article,
+  availableTags = [],
   isLoading = false,
   onTagsChanged,
   onOpenAiSettings,
@@ -79,6 +88,7 @@ export function ReaderView({
 }: ReaderViewProps) {
   const text = getAppText(appLanguage);
   const [viewMode, setViewMode] = useState<ViewMode>("markdown");
+  const [openedReaderUrl, setOpenedReaderUrl] = useState<string | undefined>();
   const [sourceIframeError, setSourceIframeError] = useState(false);
   const [sourceUseRender, setSourceUseRender] = useState(false);
   const sourceIframeLoaded = useRef(false);
@@ -123,7 +133,8 @@ export function ReaderView({
   const [translationLoading, setTranslationLoading] = useState(false);
   const [translationError, setTranslationError] = useState<string | undefined>();
   const [translationSkipped, setTranslationSkipped] = useState(false);
-  const translationRequestTokenRef = useRef(0);
+  const [retryingSegmentIndexes, setRetryingSegmentIndexes] = useState<Set<number>>(() => new Set());
+  const openTranslationKeysRef = useRef<Set<string>>(new Set());
   const selectionTranslationRequestTokenRef = useRef(0);
   const [selectionTranslation, setSelectionTranslation] = useState<SelectionTranslationState>({
     selectedText: "",
@@ -133,9 +144,23 @@ export function ReaderView({
   const proxyBase = `http://${
     window.location.hostname === "127.0.0.1" ? "127.0.0.1:5181" : window.location.host
   }/api`;
-  const renderUrl = article?.url
+  const activeSourceUrl = openedReaderUrl ?? article?.url ?? "";
+  const sourceRenderUrl = activeSourceUrl
+    ? `${proxyBase}/render?url=${encodeURIComponent(activeSourceUrl)}`
+    : "";
+  const compareRenderUrl = article?.url
     ? `${proxyBase}/render?url=${encodeURIComponent(article.url)}`
     : "";
+  const openedSourceText =
+    appLanguage === "zh-Hans"
+      ? {
+          back: "\u8fd4\u56de\u6587\u7ae0",
+          label: "\u6b63\u5728\u9605\u8bfb\u5916\u90e8\u9875\u9762",
+        }
+      : {
+          back: "Back to article",
+          label: "Reading external page",
+        };
 
   useEffect(() => {
     onThemeChange?.(themeBg);
@@ -144,29 +169,32 @@ export function ReaderView({
   const readerLayoutStyle = {
     "--reader-layout-width": `${layoutWidth || defaultReaderLayoutWidth}px`,
   } as CSSProperties;
+  useEffect(() => {
+    let isActive = true;
+    void getAiAgentSettings("translation")
+      .then((settings) => {
+        const defaultTargetLanguage = settings.translation?.defaultTargetLanguage;
+        if (isActive && defaultTargetLanguage) {
+          setTargetLanguage(defaultTargetLanguage);
+        }
+      })
+      .catch(() => undefined);
 
-  const loadCachedTranslation = useCallback(async () => {
-    if (!article?.id) {
-      setTranslation(undefined);
-      return;
-    }
-    try {
-      const cached = await getArticleTranslation(article.id, targetLanguage);
-      setTranslation(cached ?? undefined);
-      setTranslationError(undefined);
-    } catch (error) {
-      setTranslation(undefined);
-      setTranslationError(error instanceof Error ? error.message : String(error));
-    }
-  }, [article?.id, targetLanguage]);
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   useEffect(() => {
-    translationRequestTokenRef.current += 1;
     selectionTranslationRequestTokenRef.current += 1;
-    setBilingualOpen(false);
+    const currentTranslationKey = article?.id
+      ? translationTaskKey(article.id, targetLanguage)
+      : undefined;
+    setBilingualOpen(Boolean(currentTranslationKey && openTranslationKeysRef.current.has(currentTranslationKey)));
     setTranslation(undefined);
     setTranslationLoading(false);
     setTranslationError(undefined);
+    setRetryingSegmentIndexes(new Set());
     setActivePanel(undefined);
     setTags([]);
     setTagInput("");
@@ -174,12 +202,31 @@ export function ReaderView({
     setShareStatus(undefined);
     setTranslationSkipped(false);
     setSelectionTranslation({ selectedText: "", status: "idle" });
-  }, [article?.id]);
+    setOpenedReaderUrl(undefined);
+  }, [article?.id, targetLanguage]);
 
   useEffect(() => {
     selectionTranslationRequestTokenRef.current += 1;
     setSelectionTranslation({ selectedText: "", status: "idle" });
   }, [article?.id, bilingualOpen, viewMode]);
+  useEffect(() => {
+    if (!article?.id) {
+      setTranslation(undefined);
+      setTranslationLoading(false);
+      setTranslationError(undefined);
+      return;
+    }
+
+    const currentTranslationKey = translationTaskKey(article.id, targetLanguage);
+    return subscribeTranslationTask(article.id, targetLanguage, (snapshot) => {
+      setTranslation(snapshot?.translation);
+      setTranslationLoading(Boolean(snapshot?.isLoading));
+      setTranslationError(snapshot?.errorMessage);
+      if (snapshot?.isLoading && openTranslationKeysRef.current.has(currentTranslationKey)) {
+        setBilingualOpen(true);
+      }
+    });
+  }, [article?.id, targetLanguage]);
 
   useEffect(() => {
     if (!selectionTranslation.selectedText) {
@@ -200,12 +247,6 @@ export function ReaderView({
     document.addEventListener("selectionchange", handleSelectionChange);
     return () => document.removeEventListener("selectionchange", handleSelectionChange);
   }, [selectionTranslation.selectedText]);
-
-  useEffect(() => {
-    if (bilingualOpen && article?.id) {
-      void loadCachedTranslation();
-    }
-  }, [bilingualOpen, loadCachedTranslation, article?.id, targetLanguage]);
 
   useEffect(() => {
     const html = article?.sanitizedHtml ?? "";
@@ -312,7 +353,7 @@ export function ReaderView({
   }, [activePanel]);
 
   useEffect(() => {
-    if (viewMode === "source" && article?.url) {
+    if (viewMode === "source" && activeSourceUrl) {
       startSourceIframe();
     }
     if (viewMode === "compare" && article?.url) {
@@ -323,7 +364,13 @@ export function ReaderView({
       clearTimeout(sourceTimerRef.current);
       clearTimeout(compareTimerRef.current);
     };
-  }, [article?.url, viewMode]);
+  }, [activeSourceUrl, article?.url, viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== "source" && openedReaderUrl) {
+      setOpenedReaderUrl(undefined);
+    }
+  }, [openedReaderUrl, viewMode]);
 
   useEffect(() => {
     if (!isDragging) return;
@@ -348,16 +395,8 @@ export function ReaderView({
     };
   }, [isDragging]);
 
-  function handleTargetLanguageChange(value: string) {
-    selectionTranslationRequestTokenRef.current += 1;
-    setTargetLanguage(value);
-    setTranslation(undefined);
-    setTranslationError(undefined);
-    setTranslationSkipped(false);
-    setSelectionTranslation({ selectedText: "", status: "idle" });
-  }
-
   function handleViewModeChange(mode: ViewMode) {
+    setOpenedReaderUrl(undefined);
     setViewMode(mode);
     if (mode !== "markdown") {
       setBilingualOpen(false);
@@ -368,6 +407,49 @@ export function ReaderView({
     setCompareIframeError(false);
     setSourceUseRender(false);
     setCompareUseRender(false);
+  }
+
+  function handleOpenUrlInReader(url: string) {
+    if (!url) {
+      return;
+    }
+    setOpenedReaderUrl(url);
+    setViewMode("source");
+    setBilingualOpen(false);
+    setSelectionTranslation({ selectedText: "", status: "idle" });
+    sourceIframeLoaded.current = false;
+    setSourceIframeError(false);
+    setSourceUseRender(false);
+  }
+
+  function handleReturnFromOpenedUrl() {
+    setOpenedReaderUrl(undefined);
+    setViewMode("markdown");
+    sourceIframeLoaded.current = false;
+    setSourceIframeError(false);
+    setSourceUseRender(false);
+  }
+
+  function handleArticleContentClick(event: ReactMouseEvent<HTMLDivElement>) {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const anchor = target.closest<HTMLAnchorElement>("a[href]");
+    if (!anchor) {
+      return;
+    }
+
+    const href = anchor.getAttribute("href") ?? "";
+    const resolvedUrl = resolveReaderUrl(href, article?.url);
+    if (!resolvedUrl || !isWebUrl(resolvedUrl)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    handleOpenUrlInReader(resolvedUrl);
   }
 
   function handleReaderSearchQueryChange(value: string) {
@@ -420,12 +502,11 @@ export function ReaderView({
     }, 0);
   }
 
-  async function runArticleTranslation(forceRefresh = false) {
+  function runArticleTranslation(forceRefresh = false) {
     if (!article?.id) {
       return;
     }
 
-    const requestToken = ++translationRequestTokenRef.current;
     setSelectionTranslation({ selectedText: "", status: "idle" });
     const detectionText = `${article.title}\n${
       markdown || article.sanitizedHtml.replace(/<[^>]+>/g, " ")
@@ -436,86 +517,83 @@ export function ReaderView({
     setViewMode("markdown");
     setBilingualOpen(true);
     setTranslationError(undefined);
-    setTranslationLoading(false);
 
     if (shouldSkipSameLanguage) {
       setTranslation(undefined);
+      setTranslationLoading(false);
       return;
     }
 
-    setTranslation(undefined);
-
-    try {
-      setTranslationLoading(true);
-
-      if (!forceRefresh) {
-        const cached = await getArticleTranslation(article.id, targetLanguage).catch((error) => {
-          if (translationRequestTokenRef.current === requestToken) {
-            setTranslationError(error instanceof Error ? error.message : String(error));
-          }
-          return null;
-        });
-
-        if (translationRequestTokenRef.current !== requestToken) {
-          return;
-        }
-
-        if (cached && cached.segments.length > 0 && cached.status !== "failed") {
-          setTranslation(cached);
-          return;
-        }
-      }
-
-      const result = await startTranslation(
-        {
-          articleId: article.id,
-          targetLanguage,
-        },
-        (view) => {
-          if (translationRequestTokenRef.current !== requestToken) {
-            return;
-          }
-          setTranslation(view);
-          setTranslationError(undefined);
-        },
-      );
-
-      if (translationRequestTokenRef.current !== requestToken) {
-        return;
-      }
-      setTranslation(result);
-      setTranslationError(undefined);
-    } catch (error) {
-      if (translationRequestTokenRef.current !== requestToken) {
-        return;
-      }
-      setTranslationError(error instanceof Error ? error.message : String(error));
-    } finally {
-      if (translationRequestTokenRef.current === requestToken) {
-        setTranslationLoading(false);
-      }
-    }
+    const currentTranslationKey = translationTaskKey(article.id, targetLanguage);
+    openTranslationKeysRef.current.add(currentTranslationKey);
+    startArticleTranslationTask(
+      {
+        articleId: article.id,
+        targetLanguage,
+      },
+      { forceRefresh },
+    );
   }
 
-  async function handleTranslate() {
+  function handleTranslate() {
     if (!article?.id) {
       return;
     }
 
+    const currentTranslationKey = translationTaskKey(article.id, targetLanguage);
+    if (translationLoading) {
+      cancelArticleTranslationTask(article.id, targetLanguage);
+      openTranslationKeysRef.current.delete(currentTranslationKey);
+      setBilingualOpen(false);
+      setTranslationLoading(false);
+      return;
+    }
+
     if (bilingualOpen) {
+      openTranslationKeysRef.current.delete(currentTranslationKey);
       setBilingualOpen(false);
       return;
     }
 
-    await runArticleTranslation(false);
+    runArticleTranslation(false);
   }
 
-  async function handleRetryTranslation() {
-    if (!article?.id || !bilingualOpen || translationSkipped) {
+  function handleRetryTranslation() {
+    if (!article?.id || !bilingualOpen || translationSkipped || translationLoading) {
       return;
     }
 
-    await runArticleTranslation(true);
+    runArticleTranslation(true);
+  }
+
+  async function handleRetryTranslationSegment(segmentIndex: number) {
+    if (!article?.id || translationSkipped || translationLoading) {
+      return;
+    }
+
+    setRetryingSegmentIndexes((currentIndexes) => {
+      const nextIndexes = new Set(currentIndexes);
+      nextIndexes.add(segmentIndex);
+      return nextIndexes;
+    });
+
+    try {
+      const result = await retryTranslationSegmentTask({
+        articleId: article.id,
+        targetLanguage,
+        segmentIndex,
+      });
+      setTranslation(result);
+      setTranslationError(undefined);
+    } catch (error) {
+      setTranslationError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRetryingSegmentIndexes((currentIndexes) => {
+        const nextIndexes = new Set(currentIndexes);
+        nextIndexes.delete(segmentIndex);
+        return nextIndexes;
+      });
+    }
   }
 
   async function handleTranslateSelection() {
@@ -802,11 +880,9 @@ export function ReaderView({
       fontSize={fontSize}
       onFontSizeChange={onFontSizeChange}
       bilingualOpen={bilingualOpen}
-      targetLanguage={targetLanguage}
-      onTargetLanguageChange={handleTargetLanguageChange}
-      onTranslate={() => void handleTranslate()}
-      onRetryTranslation={() => void handleRetryTranslation()}
-      translateDisabled={translationLoading}
+      onTranslate={handleTranslate}
+      onRetryTranslation={handleRetryTranslation}
+      isTranslating={translationLoading}
       activePanel={activePanel}
       searchQuery={articleSearchQuery}
       searchMatchCount={articleSearchResultCount}
@@ -821,6 +897,7 @@ export function ReaderView({
       shareStatus={shareStatus}
       onShareStatusChange={setShareStatus}
       shareMarkdown={copyMarkdown}
+      onOpenInReader={handleOpenUrlInReader}
     />
   );
 
@@ -851,6 +928,7 @@ export function ReaderView({
           activePanel={activePanel}
           articleId={article.id}
           tags={tags}
+          availableTags={availableTags}
           tagInput={tagInput}
           tagStatus={tagStatus}
           noteContent={noteContent}
@@ -936,9 +1014,10 @@ export function ReaderView({
             translationTargetLanguage={targetLanguage}
             onTranslateSelection={() => void handleTranslateSelection()}
           />
-          <ReaderHeader appLanguage={appLanguage} article={article} />
+          <ReaderHeader appLanguage={appLanguage} article={article} onOpenOriginal={handleOpenUrlInReader} />
           <div
             ref={articleContentRef}
+            onClick={handleArticleContentClick}
             onMouseUp={refreshSelectionPopover}
             onKeyUp={refreshSelectionPopover}
           >
@@ -955,6 +1034,8 @@ export function ReaderView({
                 errorMessage={translationError}
                 showEmptyMessage={!translationSkipped}
                 isSelection={false}
+                retryingSegmentIndexes={retryingSegmentIndexes}
+                onRetrySegment={(segmentIndex) => void handleRetryTranslationSegment(segmentIndex)}
               />
             ) : markdownLoading ? (
               <div className="reader-content reader-content-md">
@@ -965,16 +1046,28 @@ export function ReaderView({
                 markdown={markdown}
                 searchMatches={readerSearchMatches}
                 activeSearchIndex={activeSearchIndex}
+                baseUrl={article.url}
+                onOpenLink={handleOpenUrlInReader}
               />
             )}
           </div>
         </div>
       ) : viewMode === "source" ? (
-        <OriginalPageView
-          url={article.url}
+        <div className="reader-source-shell">
+          {openedReaderUrl ? (
+            <div className="reader-web-return-bar">
+              <button className="secondary-button" type="button" onClick={handleReturnFromOpenedUrl}>
+                <ArrowLeft size={15} />
+                <span>{openedSourceText.back}</span>
+              </button>
+              <span title={openedReaderUrl}>{`${openedSourceText.label}: ${openedReaderUrl}`}</span>
+            </div>
+          ) : null}
+          <OriginalPageView
+          url={activeSourceUrl}
           iframeError={sourceIframeError}
           useRender={sourceUseRender}
-          renderUrl={renderUrl}
+          renderUrl={sourceRenderUrl}
           onToggleProxy={() => {
             setSourceUseRender((value) => !value);
             setSourceIframeError(false);
@@ -989,7 +1082,8 @@ export function ReaderView({
             sourceIframeLoaded.current = true;
             setSourceIframeError(false);
           }}
-        />
+          />
+        </div>
       ) : (
         <CompareView
           appLanguage={appLanguage}
@@ -1002,7 +1096,7 @@ export function ReaderView({
           compareRef={compareRef}
           compareIframeError={compareIframeError}
           compareUseRender={compareUseRender}
-          renderUrl={renderUrl}
+          renderUrl={compareRenderUrl}
           searchMatches={readerSearchMatches}
           activeSearchIndex={activeSearchIndex}
           onDividerMouseDown={handleDividerMouseDown}
@@ -1022,9 +1116,25 @@ export function ReaderView({
           }}
         />
       )}
-      <SummaryPanel articleId={article.id} />
+      <SummaryPanel appLanguage={appLanguage} articleId={article.id} />
     </article>
   );
+}
+
+function resolveReaderUrl(href: string, baseUrl: string | undefined) {
+  if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) {
+    return undefined;
+  }
+
+  try {
+    return new URL(href, baseUrl || window.location.href).toString();
+  } catch {
+    return href;
+  }
+}
+
+function isWebUrl(value: string) {
+  return /^https?:\/\//i.test(value);
 }
 
 function findTextMatches(markdown: string, query: string) {

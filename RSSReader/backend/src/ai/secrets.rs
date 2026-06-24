@@ -22,9 +22,7 @@ impl SecretStore {
 
         let trimmed = api_key.trim();
         if trimmed.is_empty() {
-            return Err(AiError::InvalidInput(
-                "API key cannot be empty".to_string(),
-            ));
+            return Err(AiError::InvalidInput("API key cannot be empty".to_string()));
         }
 
         keyring_entry(provider_id)?
@@ -228,13 +226,11 @@ fn migration_marker_valid(root: &Path) -> bool {
 
 fn write_migration_marker(root: &Path) -> AiResult<()> {
     if let Some(parent) = root.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            AiError::Provider(format!("Failed to create secrets dir: {error}"))
-        })?;
+        fs::create_dir_all(parent)
+            .map_err(|error| AiError::Provider(format!("Failed to create secrets dir: {error}")))?;
     }
-    fs::create_dir_all(root).map_err(|error| {
-        AiError::Provider(format!("Failed to create secrets dir: {error}"))
-    })?;
+    fs::create_dir_all(root)
+        .map_err(|error| AiError::Provider(format!("Failed to create secrets dir: {error}")))?;
     fs::write(migration_marker_path(root), MIGRATION_MARKER_CONTENT).map_err(|error| {
         AiError::Provider(format!("Failed to write keyring migration marker: {error}"))
     })?;

@@ -94,6 +94,17 @@ pub fn ai_start_summary(request: StartSummaryRequest) -> Result<SummaryStreamChu
     with_service(|service| service.start_summary(request).map_err(|e| e.into_message()))
 }
 
+pub fn ai_start_summary_stream(
+    request: StartSummaryRequest,
+    emit: impl FnMut(&SummaryStreamChunk),
+) -> Result<SummaryStreamChunk, String> {
+    with_service(|service| {
+        service
+            .stream_summary(request, emit)
+            .map_err(|e| e.into_message())
+    })
+}
+
 pub fn ai_get_translation(
     article_id: String,
     target_language: String,
@@ -120,6 +131,15 @@ pub fn ai_start_translation_stream(
     with_service(|service| {
         service
             .stream_translation(request, emit)
+            .map_err(|e| e.into_message())
+    })
+}
+pub fn ai_retry_translation_segment(
+    request: RetryTranslationSegmentRequest,
+) -> Result<TranslationView, String> {
+    with_service(|service| {
+        service
+            .retry_translation_segment(request)
             .map_err(|e| e.into_message())
     })
 }

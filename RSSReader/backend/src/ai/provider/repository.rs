@@ -1,4 +1,4 @@
-use std::time::Duration;
+﻿use std::time::Duration;
 
 use rusqlite::{params, Connection, OptionalExtension};
 
@@ -524,6 +524,26 @@ impl AiRepository {
         Ok(())
     }
 
+    pub fn update_translation_segment(
+        &self,
+        run_id: &str,
+        segment_index: i32,
+        translated_text: Option<&str>,
+        status: &str,
+    ) -> AiResult<()> {
+        let updated = self.connection.execute(
+            "UPDATE article_translation_segments
+             SET translated_text = ?3, status = ?4
+             WHERE run_id = ?1 AND segment_index = ?2",
+            params![run_id, segment_index, translated_text, status],
+        )?;
+        if updated == 0 {
+            return Err(AiError::NotFound(format!(
+                "Translation segment not found: {run_id}#{segment_index}"
+            )));
+        }
+        Ok(())
+    }
     pub fn get_translation(
         &self,
         article_id: &str,

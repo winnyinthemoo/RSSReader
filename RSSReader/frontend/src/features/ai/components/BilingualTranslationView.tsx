@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+﻿import { useMemo } from "react";
+import type { MouseEvent } from "react";
 
-import type { TranslationView } from "../../../../../shared/ai";
+import type { TranslationSegmentView, TranslationView } from "../../../../../shared/ai";
 import { getAppText } from "../../../i18n";
 import type { AppLanguage } from "../../../i18n";
 import { buildBilingualArticleHtml } from "../utils/buildBilingualArticleHtml";
@@ -13,6 +14,8 @@ interface BilingualTranslationViewProps {
   errorMessage?: string;
   showEmptyMessage?: boolean;
   isSelection?: boolean;
+  retryingSegmentIndexes?: Set<number>;
+  onRetrySegment?: (segmentIndex: number) => void;
 }
 
 export function BilingualTranslationView({
@@ -23,6 +26,8 @@ export function BilingualTranslationView({
   errorMessage,
   showEmptyMessage = true,
   isSelection = false,
+  retryingSegmentIndexes,
+  onRetrySegment,
 }: BilingualTranslationViewProps) {
   const text = getAppText(appLanguage);
   const translationText = text.reader.translationUi;
@@ -46,6 +51,32 @@ export function BilingualTranslationView({
     }
     return buildBilingualArticleHtml(articleHtml, translation.segments);
   }, [articleHtml, translation]);
+
+  const htmlWithRetryControls = useMemo(
+    () =>
+      addRetryControls(
+        built.html,
+        translation?.segments ?? [],
+        retryingSegmentIndexes,
+        appLanguage,
+        Boolean(onRetrySegment),
+      ),
+    [appLanguage, built.html, onRetrySegment, retryingSegmentIndexes, translation?.segments],
+  );
+
+  function handleContentClick(event: MouseEvent<HTMLDivElement>) {
+    if (!onRetrySegment || !(event.target instanceof Element)) {
+      return;
+    }
+    const button = event.target.closest<HTMLButtonElement>("[data-retry-segment-index]");
+    if (!button || button.disabled) {
+      return;
+    }
+    const segmentIndex = Number(button.dataset.retrySegmentIndex);
+    if (Number.isFinite(segmentIndex)) {
+      onRetrySegment(segmentIndex);
+    }
+  }
 
   return (
     <div className="bilingual-translation">
@@ -76,10 +107,68 @@ export function BilingualTranslationView({
       ) : null}
       <div
         className="reader-content reader-content-md bilingual-content"
-        dangerouslySetInnerHTML={{ __html: built.html }}
+        dangerouslySetInnerHTML={{ __html: htmlWithRetryControls }}
+        onClick={handleContentClick}
       />
     </div>
   );
+}
+
+function addRetryControls(
+  html: string,
+  segments: TranslationSegmentView[],
+  retryingSegmentIndexes: Set<number> | undefined,
+  appLanguage: AppLanguage,
+  canRetry: boolean,
+) {
+  if (!canRetry || segments.every((segment) => segment.status !== "failed")) {
+    return html;
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html;
+  const labels = retryLabels(appLanguage);
+
+  for (const segment of segments) {
+    if (segment.status !== "failed") {
+      continue;
+    }
+
+    const isRetrying = retryingSegmentIndexes?.has(segment.segmentIndex) ?? false;
+    const actions = document.createElement("div");
+    actions.className = "translation-segment-actions";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "translation-segment-retry";
+    button.dataset.retrySegmentIndex = String(segment.segmentIndex);
+    button.textContent = isRetrying ? labels.retrying : labels.retry;
+    button.disabled = isRetrying;
+    actions.append(button);
+
+    const block = wrapper.querySelector(
+      `.translation-block[data-segment-index="${segment.segmentIndex}"]`,
+    );
+    if (block) {
+      block.insertAdjacentElement("afterend", actions);
+    } else {
+      wrapper.append(actions);
+    }
+  }
+
+  return wrapper.innerHTML;
+}
+
+function retryLabels(appLanguage: AppLanguage) {
+  if (appLanguage === "zh-Hans") {
+    return {
+      retry: "重试此段",
+      retrying: "重试中...",
+    };
+  }
+  return {
+    retry: "Retry segment",
+    retrying: "Retrying...",
+  };
 }
 
 function formatTranslationError(message: string, appLanguage: AppLanguage) {

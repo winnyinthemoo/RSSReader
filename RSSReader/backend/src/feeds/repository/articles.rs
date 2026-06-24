@@ -1,4 +1,4 @@
-﻿use std::collections::HashSet;
+use std::collections::HashSet;
 
 use rusqlite::{params, OptionalExtension};
 
@@ -281,7 +281,8 @@ impl FeedRepository {
                     a.excerpt,
                     a.is_read,
                     a.is_favorite,
-                    a.sanitized_html
+                    a.sanitized_html,
+                    f.url AS feed_url
                 FROM articles a
                 JOIN feeds f ON f.id = a.feed_id
                 WHERE a.id = ?1",
@@ -341,7 +342,9 @@ impl FeedRepository {
                 .prepare(&query)
                 .map_err(|error| format!("Failed to prepare existing article lookup: {error}"))?;
             let rows = statement
-                .query_map(rusqlite::params_from_iter(chunk.iter()), |row| row.get::<_, String>(0))
+                .query_map(rusqlite::params_from_iter(chunk.iter()), |row| {
+                    row.get::<_, String>(0)
+                })
                 .map_err(|error| format!("Failed to query existing articles: {error}"))?;
 
             for row in rows {
@@ -354,4 +357,3 @@ impl FeedRepository {
         Ok(existing_article_ids)
     }
 }
-

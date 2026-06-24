@@ -355,7 +355,7 @@ export function AiSettingsPage({
       setProviderApiKey("");
       await loadAll();
       setSelectedProviderId(provider.id);
-      setStatusMessage(text.settings.providers.saved(provider.displayName));
+      setStatusMessage(`${text.settings.providers.saved(provider.displayName)} ${text.settings.providers.secretStorageNotice}`);
       setErrorMessage(undefined);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));

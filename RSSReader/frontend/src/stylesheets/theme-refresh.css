@@ -1095,3 +1095,65 @@ h2 {
   }
 }
 
+
+/* Reader toolbar single-row override. */
+.app-shell {
+  grid-template-columns:
+    minmax(220px, var(--sidebar-width))
+    4px
+    minmax(320px, var(--article-list-width))
+    4px
+    minmax(50vw, 1fr);
+}
+
+.app-shell[data-sidebar-hidden="true"] {
+  grid-template-columns:
+    minmax(320px, var(--article-list-width))
+    4px
+    minmax(50vw, 1fr);
+}
+
+.reader-toolbar {
+  grid-template-columns: max-content max-content minmax(240px, 1fr);
+  grid-auto-rows: 1fr;
+  align-items: center;
+  align-content: center;
+  min-height: 62px;
+  gap: 10px;
+}
+
+.reader-toolbar .tool-group {
+  flex-wrap: nowrap;
+}
+
+.reader-action-tools {
+  justify-self: start;
+  min-width: max-content;
+}
+
+.search-group.open {
+  grid-column: auto;
+  justify-self: stretch;
+  width: auto;
+}
+
+.search-group.open .reader-search-bar {
+  min-width: 220px;
+}
+
+@media (max-width: 1220px) {
+  .reader-toolbar {
+    grid-template-columns: max-content max-content minmax(220px, 1fr);
+    grid-auto-rows: 1fr;
+    align-items: center;
+  }
+
+  .reader-action-tools {
+    justify-self: start;
+  }
+
+  .search-group.open {
+    grid-column: auto;
+    width: auto;
+  }
+}

@@ -11,9 +11,10 @@ use rssreader_backend::ai::{
     AiAgentSettings, AiModel, AiModelListResult, AiProvider, AiProviderListResult,
     ArticleSummaryRecord, AssignTagsRequest, CreateAiModelRequest, CreateAiProviderRequest,
     GetSummaryRequest, PromptRevealResult, ProviderTestRequest, ProviderTestResult,
-    StartSummaryRequest, StartTranslationRequest, SummaryStreamChunk, TaggingSuggestRequest,
-    TaggingSuggestResult, TranslationStreamChunk, TranslationView, UpdateAiModelRequest,
-    UpdateAiProviderRequest, UsageCleanupResult, UsageReportResult,
+    RetryTranslationSegmentRequest, StartSummaryRequest, StartTranslationRequest,
+    SummaryStreamChunk, TaggingSuggestRequest, TaggingSuggestResult, TranslationStreamChunk,
+    TranslationView, UpdateAiModelRequest, UpdateAiProviderRequest, UsageCleanupResult,
+    UsageReportResult,
 };
 use rssreader_backend::{
     ArticleDetail, ArticleListFilter, ArticleListResult, ArticleNote, ArticleTagsResult,
@@ -359,8 +360,36 @@ fn ai_get_summary(request: GetSummaryRequest) -> Result<Option<ArticleSummaryRec
 }
 
 #[tauri::command]
-async fn ai_start_summary(request: StartSummaryRequest) -> Result<SummaryStreamChunk, String> {
-    run_blocking(move || backend::ai::ai_start_summary(request)).await
+async fn ai_start_summary(
+    app_handle: tauri::AppHandle,
+    request: StartSummaryRequest,
+    event_id: Option<String>,
+) -> Result<SummaryStreamChunk, String> {
+    run_blocking(move || {
+        let Some(event_id) = event_id else {
+            return backend::ai::ai_start_summary(request);
+        };
+
+        let event_name = summary_stream_event_name(&event_id);
+        let emit_handle = app_handle.clone();
+        let result = backend::ai::ai_start_summary_stream(request, |chunk| {
+            if let Err(error) = emit_handle.emit(&event_name, chunk.clone()) {
+                eprintln!("summary stream emit failed: {error}");
+            }
+        });
+
+        if let Err(message) = &result {
+            let chunk = SummaryStreamChunk {
+                delta: String::new(),
+                done: true,
+                error_message: Some(message.clone()),
+            };
+            let _ = app_handle.emit(&event_name, chunk);
+        }
+
+        result
+    })
+    .await
 }
 
 #[tauri::command]
@@ -371,6 +400,12 @@ fn ai_get_translation(
     backend::ai::ai_get_translation(article_id, target_language)
 }
 
+#[tauri::command]
+async fn ai_retry_translation_segment(
+    request: RetryTranslationSegmentRequest,
+) -> Result<TranslationView, String> {
+    run_blocking(move || backend::ai::ai_retry_translation_segment(request)).await
+}
 #[tauri::command]
 async fn ai_start_translation(
     app_handle: tauri::AppHandle,
@@ -449,6 +484,9 @@ fn configure_data_dir(app: &mut tauri::App) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn summary_stream_event_name(event_id: &str) -> String {
+    format!("ai-summary-stream-{event_id}")
+}
 fn translation_stream_event_name(event_id: &str) -> String {
     format!("ai-translation-stream-{event_id}")
 }
@@ -497,6 +535,7 @@ fn main() {
             ai_start_summary,
             ai_get_translation,
             ai_start_translation,
+            ai_retry_translation_segment,
             ai_suggest_tags,
             ai_assign_tags,
             ai_usage_report,

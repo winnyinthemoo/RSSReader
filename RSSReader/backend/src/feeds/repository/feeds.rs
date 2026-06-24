@@ -1,4 +1,4 @@
-﻿use rusqlite::{params, OptionalExtension};
+use rusqlite::{params, OptionalExtension};
 
 use super::*;
 
@@ -154,7 +154,12 @@ impl FeedRepository {
                 FROM articles
                 WHERE feed_id = ?1",
                 params![feed_id],
-                |row| Ok((row.get::<_, i64>(0)? as usize, row.get::<_, i64>(1)? as usize)),
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)? as usize,
+                        row.get::<_, i64>(1)? as usize,
+                    ))
+                },
             )
             .map_err(|error| format!("Failed to count feed articles: {error}"))
     }
@@ -195,5 +200,4 @@ impl FeedRepository {
 
         Ok(())
     }
-
 }

@@ -1,11 +1,10 @@
 use super::{
     fetch_and_parse_feed, host_from_url, stable_id, ArticleDetail, ArticleListFilter,
-    ArticleListItem,
-    ArticleMarkFavoriteRequest, ArticleMarkReadRequest, ArticleNote, ArticleNoteSaveRequest,
-    ArticleTagDeleteRequest, ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest,
-    FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedRenameRequest,
-    FeedRepository, FeedStatus, FeedSummary, FeedWithArticles, TagDeleteRequest, TagListResult,
-    TagMergeRequest, TagRenameRequest,
+    ArticleListItem, ArticleMarkFavoriteRequest, ArticleMarkReadRequest, ArticleNote,
+    ArticleNoteSaveRequest, ArticleTagDeleteRequest, ArticleTagsResult, ArticleTagsSaveRequest,
+    FeedAddRequest, FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult,
+    FeedRenameRequest, FeedRepository, FeedStatus, FeedSummary, FeedWithArticles, TagDeleteRequest,
+    TagListResult, TagMergeRequest, TagRenameRequest,
 };
 
 pub struct FeedService {

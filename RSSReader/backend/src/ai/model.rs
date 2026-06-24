@@ -209,9 +209,11 @@ pub struct StartSummaryRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SummaryStreamChunk {
     pub delta: String,
     pub done: bool,
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -254,6 +256,14 @@ pub struct StartTranslationRequest {
     pub article_id: String,
     pub target_language: String,
     pub selected_text: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RetryTranslationSegmentRequest {
+    pub article_id: String,
+    pub target_language: String,
+    pub segment_index: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

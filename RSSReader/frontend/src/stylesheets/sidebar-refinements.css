@@ -259,3 +259,182 @@ body:has(.app-shell[data-reader-theme="dark"]) .dialog-field select {
   color: #f4f4f6;
   background: rgba(37, 39, 45, 0.92);
 }
+
+/* Reader follow-up layout fixes. */
+.reader-view-tools {
+  margin-right: 8px;
+  padding-right: 12px;
+  border-right: 1px solid var(--line-soft);
+}
+
+.reader-themed-page .reader-header,
+.reader-themed-page .reader-content {
+  width: min(100%, var(--reader-layout-width, 1280px));
+}
+
+.reader-themed-page .bilingual-translation {
+  --reader-content-max-width: var(--reader-layout-width, 1280px);
+  --reader-content-padding-x: 0px;
+  width: min(100%, var(--reader-layout-width, 1280px));
+  max-width: min(100%, var(--reader-layout-width, 1280px));
+  padding: 12px 0 76px;
+}
+
+.reader-themed-page .bilingual-title,
+.reader-themed-page .bilingual-status,
+.reader-themed-page .bilingual-align-warning,
+.reader-themed-page .bilingual-translation > .summary-error {
+  width: 100%;
+  max-width: 100%;
+}
+
+.reader-themed-page .bilingual-content.reader-content {
+  width: 100%;
+  max-width: 100%;
+  padding: 16px 0 0;
+}
+
+.reader-themed-page .bilingual-content .translation-block {
+  margin: 0.45em 0 0.95em;
+  padding: 0.68em 0.9em;
+}
+
+.feed-list.feed-list-with-footer {
+  overflow: hidden;
+  padding-right: 0;
+}
+
+.feed-list-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: inherit;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.feed-collapse-button {
+  flex: 0 0 auto;
+  margin-top: 8px;
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 -10px 22px rgba(24, 27, 32, 0.06);
+}
+
+.feed-collapse-button:hover {
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.reader-source-shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  background: #ffffff;
+}
+
+.reader-source-shell .reader-web-view {
+  height: auto;
+}
+
+.reader-web-return-bar {
+  position: sticky;
+  top: 62px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--line-soft);
+  padding: 6px 16px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+
+.reader-web-return-bar .secondary-button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.reader-web-return-bar > span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-tertiary);
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell[data-reader-theme="dark"] .feed-collapse-button,
+.app-shell[data-reader-theme="dark"] .reader-web-return-bar {
+  border-color: rgba(235, 235, 245, 0.14);
+  background: rgba(36, 39, 43, 0.92);
+}
+
+.app-shell[data-reader-theme="dark"] .reader-source-shell {
+  background: #1f2125;
+}
+
+/* Reader gutters stay readable when the pane is narrow. */
+.reader-themed-page {
+  --reader-content-gutter: clamp(18px, 4vw, 52px);
+  box-sizing: border-box;
+  padding-right: var(--reader-content-gutter);
+  padding-left: var(--reader-content-gutter);
+}
+
+.reader-themed-page .reader-header,
+.reader-themed-page .reader-content,
+.reader-themed-page .bilingual-translation {
+  width: min(100%, var(--reader-layout-width, 1280px));
+}
+/* Tag picker and feed dialog refinements. */
+.existing-tags-panel {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 10px;
+}
+
+.reader-panel-subtitle {
+  color: var(--ink-tertiary);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.tag-existing-chip {
+  cursor: pointer;
+  border-color: var(--line-soft);
+  color: var(--ink-secondary);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.tag-existing-chip:hover {
+  border-color: var(--line-strong);
+  color: var(--accent-blue);
+  background: rgba(0, 122, 255, 0.08);
+}
+
+.tag-existing-chip > span {
+  color: var(--ink-tertiary);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.dialog-field input[aria-invalid="true"] {
+  border-color: rgba(191, 90, 54, 0.5);
+  box-shadow: 0 0 0 4px rgba(191, 90, 54, 0.12);
+}
+
+.feed-form-hint[role="alert"] {
+  border-left: 3px solid #bf5a36;
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: rgba(191, 90, 54, 0.08);
+}

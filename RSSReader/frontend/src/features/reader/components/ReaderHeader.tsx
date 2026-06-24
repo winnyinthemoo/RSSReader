@@ -9,9 +9,10 @@ interface ReaderHeaderProps {
   appLanguage: AppLanguage;
   article: ArticleDetail;
   variant?: "default" | "compact";
+  onOpenOriginal?: (url: string) => void;
 }
 
-export function ReaderHeader({ appLanguage, article, variant = "default" }: ReaderHeaderProps) {
+export function ReaderHeader({ appLanguage, article, variant = "default", onOpenOriginal }: ReaderHeaderProps) {
   const text = getAppText(appLanguage);
 
   return (
@@ -26,7 +27,19 @@ export function ReaderHeader({ appLanguage, article, variant = "default" }: Read
             {text.common.saved}
           </span>
         ) : null}
-        <a href={article.url} target="_blank" rel="noreferrer" title={text.reader.openOriginalArticle}>
+        <a
+          href={article.url}
+          target={onOpenOriginal ? undefined : "_blank"}
+          rel={onOpenOriginal ? undefined : "noreferrer"}
+          title={text.reader.openOriginalArticle}
+          onClick={(event) => {
+            if (!onOpenOriginal) {
+              return;
+            }
+            event.preventDefault();
+            onOpenOriginal(article.url);
+          }}
+        >
           <ExternalLink size={16} />
         </a>
       </div>

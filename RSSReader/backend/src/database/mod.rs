@@ -103,8 +103,14 @@ mod tests {
             .collect::<Result<Vec<_>, _>>()
             .expect("collect indexes");
 
-        assert!(indexes.iter().any(|index| index == "idx_articles_feed_read_published"));
-        assert!(indexes.iter().any(|index| index == "idx_articles_favorite_published"));
-        assert!(indexes.iter().any(|index| index == "idx_articles_read_published"));
+        assert!(indexes
+            .iter()
+            .any(|index| index == "idx_articles_feed_read_published"));
+        assert!(indexes
+            .iter()
+            .any(|index| index == "idx_articles_favorite_published"));
+        assert!(indexes
+            .iter()
+            .any(|index| index == "idx_articles_read_published"));
     }
 }

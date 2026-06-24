@@ -109,6 +109,14 @@ impl AiService {
         self.summary.start_summary(request)
     }
 
+    pub fn stream_summary(
+        &self,
+        request: StartSummaryRequest,
+        emit: impl FnMut(&SummaryStreamChunk),
+    ) -> AiResult<SummaryStreamChunk> {
+        self.summary.stream_summary(request, emit)
+    }
+
     pub fn get_translation(
         &self,
         article_id: &str,
@@ -128,6 +136,12 @@ impl AiService {
         emit: impl FnMut(&TranslationView),
     ) -> AiResult<TranslationView> {
         self.translation.stream_translation(request, emit)
+    }
+    pub fn retry_translation_segment(
+        &self,
+        request: RetryTranslationSegmentRequest,
+    ) -> AiResult<TranslationView> {
+        self.translation.retry_translation_segment(request)
     }
 
     pub fn suggest_tags(&self, request: TaggingSuggestRequest) -> AiResult<TaggingSuggestResult> {

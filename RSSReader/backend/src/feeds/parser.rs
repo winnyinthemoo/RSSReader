@@ -44,7 +44,7 @@ fn feed_to_domain(feed_url: &str, feed: Feed) -> ParsedFeed {
         .links
         .iter()
         .find(|link| link.rel.as_deref().unwrap_or("alternate") == "alternate")
-        .map(|link| link.href.clone())
+        .map(|link| resolve_url(&link.href, feed_url))
         .or_else(|| Some(site_url_from_feed_url(feed_url)));
     let description = feed
         .description
@@ -386,11 +386,12 @@ fn entry_to_article(
         .filter(|title| !title.is_empty())
         .unwrap_or_else(|| "Untitled article".to_string());
     let entry_id = entry.id.trim();
-    let article_url = entry
+    let raw_article_url = entry
         .links
         .first()
         .map(|link| link.href.clone())
         .unwrap_or_else(|| fallback_article_url(feed_url, entry_id, &title));
+    let article_url = resolve_url(&raw_article_url, feed_url);
     let author = entry.authors.first().map(|author| author.name.clone());
     let published_at = entry
         .published
@@ -421,7 +422,7 @@ fn entry_to_article(
     let source_id = if entry.links.is_empty() && !entry_id.is_empty() {
         entry_id
     } else {
-        article_url.as_str()
+        raw_article_url.as_str()
     };
 
     ArticleDetail {
@@ -545,29 +546,22 @@ fn extract_hero_banner_img(raw_html: &str, article_url: &str) -> Option<String> 
 
 /// Resolve a potentially relative URL against the article base URL.
 fn resolve_url(url: &str, article_url: &str) -> String {
-    if url.starts_with("http://") || url.starts_with("https://") {
-        return url.to_string();
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return String::new();
     }
-    if url.starts_with("//") {
-        return format!("https:{}", url);
+    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        return trimmed.to_string();
     }
-    if url.starts_with('/') {
-        if url::Url::parse(article_url).is_ok() {
-            let parsed = url::Url::parse(article_url).unwrap();
-            let base = parsed.origin().ascii_serialization();
-            if !base.is_empty() {
-                return format!("{}{}", base, url);
-            }
-        }
-        // Fallback manual parsing
-        if let Some(scheme_end) = article_url.find("://") {
-            let after_scheme = &article_url[scheme_end + 3..];
-            let host_end = after_scheme.find('/').unwrap_or(after_scheme.len());
-            let base = &article_url[..scheme_end + 3 + host_end];
-            return format!("{}{}", base, url);
+    if trimmed.starts_with("//") {
+        return format!("https:{}", trimmed);
+    }
+    if let Ok(base) = Url::parse(article_url) {
+        if let Ok(resolved) = base.join(trimmed) {
+            return resolved.to_string();
         }
     }
-    url.to_string()
+    trimmed.to_string()
 }
 
 pub fn stable_id(prefix: &str, value: &str) -> String {
@@ -623,6 +617,42 @@ mod tests {
         assert_eq!(parsed.feed.title, "Vortex Test Feed");
         assert_eq!(parsed.articles.len(), 1);
         assert_eq!(parsed.articles[0].title, "Hello RSS");
+    }
+
+    #[test]
+    fn parse_feed_resolves_relative_feed_and_article_links() {
+        let xml = br#"
+            <rss version="2.0">
+              <channel>
+                <title>Relative Link Feed</title>
+                <link>/</link>
+                <item>
+                  <title>Relative Article</title>
+                  <guid>/posts/relative/</guid>
+                  <link>/posts/relative/</link>
+                  <description>Relative body</description>
+                </item>
+              </channel>
+            </rss>
+        "#;
+
+        let parsed = parse_feed_bytes("https://example.com/index.xml", xml).expect("feed parses");
+
+        assert_eq!(
+            parsed.feed.site_url.as_deref(),
+            Some("https://example.com/")
+        );
+        assert_eq!(
+            parsed.articles[0].url,
+            "https://example.com/posts/relative/"
+        );
+        assert_eq!(
+            parsed.articles[0].id,
+            stable_id(
+                "article",
+                &format!("{}:{}", parsed.feed.id, "/posts/relative/")
+            )
+        );
     }
 
     #[test]

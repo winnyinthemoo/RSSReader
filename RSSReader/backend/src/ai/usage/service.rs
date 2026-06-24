@@ -1,8 +1,6 @@
 use super::super::client::openai_compat::ChatUsage;
 use super::super::error::AiResult;
-use super::super::model::{
-    AgentType, UsageCleanupResult, UsageEventRecord, UsageReportResult,
-};
+use super::super::model::{AgentType, UsageCleanupResult, UsageEventRecord, UsageReportResult};
 use super::super::provider::AiRepository;
 
 pub struct UsageService {

@@ -21,7 +21,6 @@ import {
 import type { ArticleDetail } from "../../../../../shared/feed";
 import type { AppLanguage } from "../../../i18n";
 import { getAppText } from "../../../i18n";
-import { translationLanguageOptions } from "../options";
 import type { FontSize, ReaderPanel, ThemeBg, ViewMode } from "../types";
 import { ThemePanel } from "./ThemePanel";
 
@@ -36,11 +35,9 @@ interface ReaderToolbarProps {
   fontSize: FontSize;
   onFontSizeChange: (size: FontSize) => void;
   bilingualOpen: boolean;
-  targetLanguage?: string;
-  onTargetLanguageChange?: (value: string) => void;
   onTranslate: () => void;
   onRetryTranslation?: () => void;
-  translateDisabled?: boolean;
+  isTranslating?: boolean;
   activePanel?: ReaderPanel;
   searchQuery?: string;
   searchMatchCount?: number;
@@ -55,6 +52,7 @@ interface ReaderToolbarProps {
   shareStatus?: string;
   onShareStatusChange?: (status: string | undefined) => void;
   shareMarkdown?: string;
+  onOpenInReader?: (url: string) => void;
 }
 
 export function ReaderToolbar({
@@ -68,11 +66,9 @@ export function ReaderToolbar({
   fontSize,
   onFontSizeChange,
   bilingualOpen,
-  targetLanguage = "zh-Hans",
-  onTargetLanguageChange,
   onTranslate,
   onRetryTranslation,
-  translateDisabled,
+  isTranslating = false,
   activePanel,
   searchQuery = "",
   searchMatchCount = 0,
@@ -87,6 +83,7 @@ export function ReaderToolbar({
   shareStatus,
   onShareStatusChange,
   shareMarkdown = "",
+  onOpenInReader,
 }: ReaderToolbarProps) {
   const text = getAppText(appLanguage);
   const themePanelRef = useRef<HTMLDivElement>(null);
@@ -99,10 +96,20 @@ export function ReaderToolbar({
         ? `${Math.min(activeSearchIndex + 1, searchMatchCount)} / ${searchMatchCount}`
         : "0 / 0"
     : "";
+  const translateButtonTitle = isTranslating
+    ? appLanguage === "zh-Hans"
+      ? "\u505c\u6b62\u7ffb\u8bd1"
+      : "Stop translation"
+    : bilingualOpen
+      ? text.reader.showOriginal
+      : text.reader.translateArticle;
 
   useEffect(() => {
     if (!showThemePanel) return;
     function handleClick(e: MouseEvent) {
+      if (e.target instanceof Element && e.target.closest("[data-theme-panel-trigger]")) {
+        return;
+      }
       if (themePanelRef.current && !themePanelRef.current.contains(e.target as Node)) {
         onToggleThemePanel();
       }
@@ -135,6 +142,15 @@ export function ReaderToolbar({
     }
   }
 
+  function handleOpenInReader(url: string) {
+    if (onOpenInReader) {
+      onOpenInReader(url);
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+    setShowSharePanel(false);
+  }
+
   return (
     <div className="reader-toolbar" aria-label={text.reader.readerTools}>
       <div className="tool-group reader-view-tools" aria-label={text.reader.displayMode}>
@@ -165,36 +181,20 @@ export function ReaderToolbar({
       </div>
 
       <div className="tool-group reader-action-tools" aria-label={text.reader.articleActions}>
-        {onTargetLanguageChange ? (
-          <select
-            className="translation-lang-select"
-            value={targetLanguage}
-            onChange={(event) => onTargetLanguageChange(event.target.value)}
-            disabled={translateDisabled}
-            aria-label={text.reader.translationLanguage}
-          >
-            {translationLanguageOptions.map((language) => (
-              <option key={language.value} value={language.value}>
-                {language.label}
-              </option>
-            ))}
-          </select>
-        ) : null}
         <button
           className={`tool-button${bilingualOpen ? " active" : ""}`}
           type="button"
-          title={bilingualOpen ? text.reader.showOriginal : text.reader.translateArticle}
-          disabled={translateDisabled}
+          title={translateButtonTitle}
           onClick={onTranslate}
         >
-          <Languages size={17} />
+          {isTranslating ? <X size={17} /> : <Languages size={17} />}
         </button>
         {bilingualOpen && onRetryTranslation ? (
           <button
             className="tool-button"
             type="button"
             title={text.reader.retryTranslation}
-            disabled={translateDisabled}
+            disabled={isTranslating}
             onClick={onRetryTranslation}
           >
             <RotateCw size={17} />
@@ -223,6 +223,7 @@ export function ReaderToolbar({
             className={`tool-button${showThemePanel ? " active" : ""}`}
             type="button"
             title={text.reader.theme}
+            data-theme-panel-trigger="true"
             onClick={onToggleThemePanel}
           >
             <Palette size={17} />
@@ -275,19 +276,10 @@ export function ReaderToolbar({
                 <FileText size={15} />
                 <span>{text.reader.copyMarkdown}</span>
               </button>
-              <a href={article.url} target="_blank" rel="noreferrer" role="menuitem">
+              <button type="button" role="menuitem" onClick={() => handleOpenInReader(article.url)}>
                 <ExternalLink size={15} />
                 <span>{text.reader.openOriginal}</span>
-              </a>
-              <a
-                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title)}&url=${encodeURIComponent(article.url)}`}
-                target="_blank"
-                rel="noreferrer"
-                role="menuitem"
-              >
-                <Share2 size={15} />
-                <span>{text.reader.shareToX}</span>
-              </a>
+              </button>
             </div>
           ) : null}
         </div>

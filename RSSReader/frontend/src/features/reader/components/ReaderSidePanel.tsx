@@ -1,7 +1,7 @@
 import { forwardRef } from "react";
 import { Download, Share2, X } from "lucide-react";
 
-import type { ArticleTag } from "../../../../../shared/feed";
+import type { ArticleTag, TagSummary } from "../../../../../shared/feed";
 import type { AppLanguage } from "../../../i18n";
 import { getAppText } from "../../../i18n";
 import { TaggingPanel } from "../../ai/components/TaggingPanel";
@@ -12,6 +12,7 @@ interface ReaderSidePanelProps {
   activePanel: ReaderPanel;
   articleId?: string;
   tags: ArticleTag[];
+  availableTags: TagSummary[];
   tagInput: string;
   tagStatus?: string;
   noteContent: string;
@@ -34,6 +35,7 @@ export const ReaderSidePanel = forwardRef<HTMLElement, ReaderSidePanelProps>(
       activePanel,
       articleId,
       tags,
+      availableTags,
       tagInput,
       tagStatus,
       noteContent,
@@ -51,7 +53,24 @@ export const ReaderSidePanel = forwardRef<HTMLElement, ReaderSidePanelProps>(
     ref,
   ) {
     const text = getAppText(appLanguage);
+    const localText = readerSidePanelLocalText(appLanguage);
     const title = activePanel === "tag" ? text.reader.tags : text.reader.note;
+    const currentTagNames = new Set(tags.map((tag) => normalizeTagName(tag.name)));
+    const inputTagNames = new Set(parseTagInput(tagInput).map(normalizeTagName));
+    const existingTags = availableTags
+      .filter((tag) => {
+        const name = normalizeTagName(tag.name);
+        return name && !currentTagNames.has(name) && !inputTagNames.has(name);
+      })
+      .slice(0, 18);
+
+    function appendExistingTag(name: string) {
+      const nextTags = parseTagInput(tagInput);
+      if (!nextTags.map(normalizeTagName).includes(normalizeTagName(name))) {
+        nextTags.push(name);
+      }
+      onTagInputChange(nextTags.join(", "));
+    }
 
     return (
       <aside className="reader-side-panel" aria-label={title} ref={ref}>
@@ -90,7 +109,31 @@ export const ReaderSidePanel = forwardRef<HTMLElement, ReaderSidePanelProps>(
             <button className="secondary-button" type="button" onClick={onSaveTags}>
               {text.reader.saveTags}
             </button>
+            {availableTags.length > 0 ? (
+              <section className="existing-tags-panel" aria-label={localText.existingTags}>
+                <div className="reader-panel-subtitle">{localText.existingTags}</div>
+                {existingTags.length > 0 ? (
+                  <div className="tag-chip-list">
+                    {existingTags.map((tag) => (
+                      <button
+                        className="tag-chip tag-existing-chip"
+                        type="button"
+                        key={tag.id}
+                        title={localText.addExistingTag(tag.name)}
+                        onClick={() => appendExistingTag(tag.name)}
+                      >
+                        {tag.name}
+                        <span>{tag.articleCount}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="reader-panel-status">{localText.noMoreTags}</p>
+                )}
+              </section>
+            ) : null}
             <TaggingPanel
+              appLanguage={appLanguage}
               articleId={articleId}
               onApplied={onAiTagsApplied}
               onTagsChanged={onTagsChanged}
@@ -137,3 +180,30 @@ export const ReaderSidePanel = forwardRef<HTMLElement, ReaderSidePanelProps>(
     );
   },
 );
+
+function parseTagInput(value: string) {
+  return value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function normalizeTagName(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
+
+function readerSidePanelLocalText(appLanguage: AppLanguage) {
+  if (appLanguage === "zh-Hans") {
+    return {
+      existingTags: "\u5df2\u6709\u6807\u7b7e",
+      noMoreTags: "\u6ca1\u6709\u66f4\u591a\u53ef\u9009\u6807\u7b7e\u3002",
+      addExistingTag: (name: string) => `\u6dfb\u52a0\u6807\u7b7e\u201c${name}\u201d`,
+    };
+  }
+
+  return {
+    existingTags: "Existing tags",
+    noMoreTags: "No more tags available.",
+    addExistingTag: (name: string) => `Add tag ${name}`,
+  };
+}

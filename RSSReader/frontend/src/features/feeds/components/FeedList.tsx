@@ -96,112 +96,120 @@ export function FeedList({
     }
   }
 
+  function renderMoreFeedsButton(className = "more-feeds-button") {
+    return (
+      <button
+        className={className}
+        type="button"
+        onClick={() => onShowMoreFeedsChange(!showMoreFeeds)}
+      >
+        <span>{showMoreFeeds ? text.feedList.showLess : text.feedList.moreFeeds}</span>
+        {showMoreFeeds ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      </button>
+    );
+  }
+
   const visibleFeeds = buildVisibleFeeds(feeds, showMoreFeeds, feedsToShow, selectedFeedId);
+  const hasOverflowFeeds = feeds.length > feedsToShow;
 
   return (
-    <div className="feed-list">
-      {visibleFeeds.map((feed) => {
-        const isEditing = editingFeedId === feed.id;
+    <div className={`feed-list feed-list-with-footer${showMoreFeeds ? " expanded" : ""}`}>
+      <div className="feed-list-scroll">
+        {visibleFeeds.map((feed) => {
+          const isEditing = editingFeedId === feed.id;
 
-        return (
-          <div className={`feed-item-row ${isEditing ? "editing" : ""}`} key={feed.id}>
-            {isEditing ? (
-              <div className={`feed-item feed-rename-form ${selectedFeedId === feed.id ? "selected" : ""}`}>
-                <span className="feed-icon-custom">{feed.title.charAt(0).toUpperCase()}</span>
-                <label className="feed-rename-field">
-                  <input
-                    ref={editInputRef}
-                    value={editingTitle}
-                    aria-label={text.feedList.feedName}
-                    disabled={isRenaming}
-                    onChange={(event) => {
-                      setEditingTitle(event.target.value);
-                      if (renameHint) {
-                        setRenameHint(undefined);
-                      }
-                    }}
-                    onKeyDown={(event) => handleRenameKeyDown(event, feed)}
-                  />
-                </label>
-                <div className="feed-rename-actions">
-                  <button
-                    className="feed-rename-save"
-                    type="button"
-                    title={text.feedList.saveFeedName}
-                    aria-label={`${text.feedList.saveFeedName}: ${feed.title}`}
-                    disabled={isRenaming}
-                    onClick={() => void submitRename(feed)}
-                  >
-                    <Check size={13} />
-                  </button>
-                  <button
-                    className="feed-rename-cancel"
-                    type="button"
-                    title={text.feedList.cancelRename}
-                    aria-label={`${text.feedList.cancelRename}: ${feed.title}`}
-                    disabled={isRenaming}
-                    onClick={cancelRename}
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
-                {renameHint ? <span className="feed-rename-hint">{renameHint}</span> : null}
-              </div>
-            ) : (
-              <>
-                <button
-                  className={`feed-item ${selectedFeedId === feed.id ? "selected" : ""}`}
-                  type="button"
-                  onClick={() => onSelectFeed(feed.id)}
-                >
+          return (
+            <div className={`feed-item-row ${isEditing ? "editing" : ""}`} key={feed.id}>
+              {isEditing ? (
+                <div className={`feed-item feed-rename-form ${selectedFeedId === feed.id ? "selected" : ""}`}>
                   <span className="feed-icon-custom">{feed.title.charAt(0).toUpperCase()}</span>
-                  <span className="feed-main">
-                    <span className="feed-title">{feed.title}</span>
-                  </span>
-                  <span className="unread-count">{feed.unreadCount}</span>
-                </button>
-                <div className="feed-row-actions">
-                  <button
-                    className="feed-edit-button"
-                    type="button"
-                    title={text.feedList.renameFeed}
-                    aria-label={`${text.feedList.renameFeed}: ${feed.title}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      startRename(feed);
-                    }}
-                  >
-                    <Pencil size={13} />
-                  </button>
-                  <button
-                    className="feed-delete-button"
-                    type="button"
-                    title={text.feedList.deleteFeed}
-                    aria-label={`${text.feedList.deleteFeed}: ${feed.title}`}
-                    disabled={isDeleting}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onRequestDeleteFeed(feed.id);
-                    }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  <label className="feed-rename-field">
+                    <input
+                      ref={editInputRef}
+                      value={editingTitle}
+                      aria-label={text.feedList.feedName}
+                      disabled={isRenaming}
+                      onChange={(event) => {
+                        setEditingTitle(event.target.value);
+                        if (renameHint) {
+                          setRenameHint(undefined);
+                        }
+                      }}
+                      onKeyDown={(event) => handleRenameKeyDown(event, feed)}
+                    />
+                  </label>
+                  <div className="feed-rename-actions">
+                    <button
+                      className="feed-rename-save"
+                      type="button"
+                      title={text.feedList.saveFeedName}
+                      aria-label={`${text.feedList.saveFeedName}: ${feed.title}`}
+                      disabled={isRenaming}
+                      onClick={() => void submitRename(feed)}
+                    >
+                      <Check size={13} />
+                    </button>
+                    <button
+                      className="feed-rename-cancel"
+                      type="button"
+                      title={text.feedList.cancelRename}
+                      aria-label={`${text.feedList.cancelRename}: ${feed.title}`}
+                      disabled={isRenaming}
+                      onClick={cancelRename}
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                  {renameHint ? <span className="feed-rename-hint">{renameHint}</span> : null}
                 </div>
-              </>
-            )}
-          </div>
-        );
-      })}
-      {feeds.length > feedsToShow ? (
-        <button
-          className="more-feeds-button"
-          type="button"
-          onClick={() => onShowMoreFeedsChange(!showMoreFeeds)}
-        >
-          <span>{showMoreFeeds ? text.feedList.showLess : text.feedList.moreFeeds}</span>
-          {showMoreFeeds ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </button>
-      ) : null}
+              ) : (
+                <>
+                  <button
+                    className={`feed-item ${selectedFeedId === feed.id ? "selected" : ""}`}
+                    type="button"
+                    onClick={() => onSelectFeed(feed.id)}
+                  >
+                    <span className="feed-icon-custom">{feed.title.charAt(0).toUpperCase()}</span>
+                    <span className="feed-main">
+                      <span className="feed-title">{feed.title}</span>
+                    </span>
+                    <span className="unread-count">{feed.unreadCount}</span>
+                  </button>
+                  <div className="feed-row-actions">
+                    <button
+                      className="feed-edit-button"
+                      type="button"
+                      title={text.feedList.renameFeed}
+                      aria-label={`${text.feedList.renameFeed}: ${feed.title}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        startRename(feed);
+                      }}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      className="feed-delete-button"
+                      type="button"
+                      title={text.feedList.deleteFeed}
+                      aria-label={`${text.feedList.deleteFeed}: ${feed.title}`}
+                      disabled={isDeleting}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onRequestDeleteFeed(feed.id);
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+        {hasOverflowFeeds && !showMoreFeeds ? renderMoreFeedsButton() : null}
+      </div>
+      {hasOverflowFeeds && showMoreFeeds ? renderMoreFeedsButton("more-feeds-button feed-collapse-button") : null}
     </div>
   );
 }

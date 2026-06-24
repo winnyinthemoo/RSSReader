@@ -1,6 +1,7 @@
-﻿use std::time::Duration;
+use std::time::Duration;
 
 use rusqlite::{params, Connection};
+use url::Url;
 
 use crate::database::run_migrations;
 
@@ -88,12 +89,19 @@ fn article_item_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArticleLis
 }
 
 fn article_detail_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArticleDetail> {
+    let raw_url: String = row.get(4)?;
+    let feed_url = row.get::<_, String>(11).ok();
+    let url = feed_url
+        .as_deref()
+        .map(|base| resolve_relative_url(&raw_url, base))
+        .unwrap_or(raw_url);
+
     Ok(ArticleDetail {
         id: row.get(0)?,
         feed_id: row.get(1)?,
         feed_title: row.get(2)?,
         title: row.get(3)?,
-        url: row.get(4)?,
+        url,
         author: row.get(5)?,
         published_at: row.get(6)?,
         excerpt: row.get(7)?,
@@ -103,6 +111,20 @@ fn article_detail_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArticleD
     })
 }
 
+fn resolve_relative_url(value: &str, base_url: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        return trimmed.to_string();
+    }
+    if trimmed.starts_with("//") {
+        return format!("https:{}", trimmed);
+    }
+    Url::parse(base_url)
+        .ok()
+        .and_then(|base| base.join(trimmed).ok())
+        .map(|url| url.to_string())
+        .unwrap_or_else(|| trimmed.to_string())
+}
 fn tag_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TagSummary> {
     Ok(TagSummary {
         id: row.get(0)?,

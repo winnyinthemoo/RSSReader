@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import vortexLogo from "../../../assets/vortex-logo.png";
 import type { FeedAddRequest, TagSummary } from "../../../../../shared/feed";
 import { getAppText } from "../../../i18n";
+import type { AppLanguage } from "../../../i18n";
 import type { FeedSidebarProps } from "../types";
 import { AddFeedDialog } from "./AddFeedDialog";
 import { DeleteFeedDialog } from "./DeleteFeedDialog";
@@ -51,7 +52,7 @@ export function FeedSidebar({
   const [formHint, setFormHint] = useState<string | undefined>();
   const [tagSearch, setTagSearch] = useState("");
   const [tagSort, setTagSort] = useState<"name" | "count">("count");
-  const nameInputRef = useRef<HTMLInputElement>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
   const [deleteConfirmFeedId, setDeleteConfirmFeedId] = useState<string | null>(null);
   const [deleteConfirmTagId, setDeleteConfirmTagId] = useState<string | null>(null);
   const [isDeletingTag, setIsDeletingTag] = useState(false);
@@ -62,7 +63,7 @@ export function FeedSidebar({
 
   useEffect(() => {
     if (isAddDialogOpen) {
-      window.setTimeout(() => nameInputRef.current?.focus(), 0);
+      window.setTimeout(() => urlInputRef.current?.focus(), 0);
     }
   }, [isAddDialogOpen]);
 
@@ -76,15 +77,25 @@ export function FeedSidebar({
       return;
     }
 
+    if (!isHttpUrl(trimmedUrl)) {
+      setFormHint(addFeedLocalText(appLanguage).invalidUrl);
+      return;
+    }
+
     setFormHint(undefined);
     const request: FeedAddRequest = {
       url: trimmedUrl,
       name: trimmedName || undefined,
     };
-    await onAddFeed(request);
-    setName("");
-    setUrl("");
-    setIsAddDialogOpen(false);
+
+    try {
+      await onAddFeed(request);
+      setName("");
+      setUrl("");
+      setIsAddDialogOpen(false);
+    } catch (error) {
+      setFormHint(formatAddFeedError(error, appLanguage));
+    }
   }
 
   function handleCloseDialog() {
@@ -333,7 +344,7 @@ export function FeedSidebar({
               url={url}
               formHint={formHint}
               isAdding={isAdding}
-              nameInputRef={nameInputRef}
+              urlInputRef={urlInputRef}
               onSubmit={(event) => void handleSubmit(event)}
               onClose={handleCloseDialog}
               onNameChange={setName}
@@ -372,3 +383,31 @@ export function FeedSidebar({
 }
 
 export type { FeedSyncMode } from "../types";
+
+function isHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function formatAddFeedError(error: unknown, appLanguage: AppLanguage) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.trim() || addFeedLocalText(appLanguage).failed;
+}
+
+function addFeedLocalText(appLanguage: AppLanguage) {
+  if (appLanguage === "zh-Hans") {
+    return {
+      invalidUrl: "\u8bf7\u8f93\u5165\u4ee5 http:// \u6216 https:// \u5f00\u5934\u7684 RSS / Atom \u94fe\u63a5\u3002",
+      failed: "\u6dfb\u52a0\u8ba2\u9605\u6e90\u5931\u8d25\u3002",
+    };
+  }
+
+  return {
+    invalidUrl: "Enter an RSS or Atom URL that starts with http:// or https://.",
+    failed: "Failed to add feed.",
+  };
+}

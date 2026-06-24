@@ -102,13 +102,14 @@ pub fn try_handle(method: &str, path: &str, body: &str, stream: &mut TcpStream) 
                 }),
             );
         }
-        ("POST", "/api/ai/summary/stream") => {
-            let payload = parse_json_body::<StartSummaryRequest>(body);
-            respond(
-                stream,
-                payload.and_then(|request| ai_start_summary(request)),
-            );
-        }
+        ("POST", "/api/ai/summary/stream") => match parse_json_body::<StartSummaryRequest>(body) {
+            Ok(request) => {
+                if let Err(error) = write_summary_stream(stream, request) {
+                    eprintln!("summary stream write failed: {error}");
+                }
+            }
+            Err(message) => write_json(stream, 400, &error_json(&message)),
+        },
         ("GET", "/api/ai/translation") => {
             let article_id = query_param(path_with_query, "articleId").unwrap_or_default();
             let target_language = query_param(path_with_query, "targetLanguage")
@@ -131,6 +132,13 @@ pub fn try_handle(method: &str, path: &str, body: &str, stream: &mut TcpStream) 
                 }
                 Err(message) => write_json(stream, 400, &error_json(&message)),
             }
+        }
+        ("POST", "/api/ai/translation/retry-segment") => {
+            let payload = parse_json_body::<RetryTranslationSegmentRequest>(body);
+            respond(
+                stream,
+                payload.and_then(|request| ai_retry_translation_segment(request)),
+            );
         }
         ("POST", "/api/ai/tagging/suggest") => {
             let payload = parse_json_body::<TaggingSuggestRequest>(body);
@@ -262,6 +270,33 @@ fn write_json(stream: &mut TcpStream, status: u16, body: &str) {
     let _ = stream.write_all(response.as_bytes());
 }
 
+fn write_summary_stream(
+    stream: &mut TcpStream,
+    request: StartSummaryRequest,
+) -> std::io::Result<()> {
+    let header = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/x-ndjson\r\nCache-Control: no-cache\r\nConnection: close\r\n{CORS_RESPONSE_HEADERS}\r\n"
+    );
+    stream.write_all(header.as_bytes())?;
+    stream.flush()?;
+
+    let result = ai_start_summary_stream(request, |chunk| {
+        let _ = write_json_line(stream, chunk);
+        let _ = stream.flush();
+    });
+
+    if let Err(message) = result {
+        let chunk = SummaryStreamChunk {
+            delta: String::new(),
+            done: true,
+            error_message: Some(message),
+        };
+        let _ = write_json_line(stream, &chunk);
+        let _ = stream.flush();
+    }
+
+    Ok(())
+}
 fn write_translation_stream(
     stream: &mut TcpStream,
     request: StartTranslationRequest,
@@ -301,4 +336,3 @@ fn write_json_line<T: serde::Serialize>(stream: &mut TcpStream, value: &T) -> st
     stream.write_all(b"\n")?;
     Ok(())
 }
-

@@ -142,7 +142,11 @@ fn handle_connection(mut stream: TcpStream) {
             match feed_rename(feed_id, title) {
                 Ok(result) => write_json(&mut stream, 200, &feed_list_json(&result)),
                 Err(message) => {
-                    let status = if message == "Feed not found" { 404 } else { 400 };
+                    let status = if message == "Feed not found" {
+                        404
+                    } else {
+                        400
+                    };
                     write_json(&mut stream, status, &error_json(&message));
                 }
             }

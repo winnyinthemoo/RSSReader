@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 
 import type { ArticleTag } from "../../../../../shared/feed";
+import type { AppLanguage } from "../../../i18n";
 import { assignTags, suggestTags } from "../../../services/aiService";
 
 interface TaggingPanelProps {
+  appLanguage: AppLanguage;
   articleId?: string;
   onApplied: (tags: ArticleTag[]) => void;
   onTagsChanged?: () => void;
@@ -14,7 +16,34 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function TaggingPanel({ articleId, onApplied, onTagsChanged }: TaggingPanelProps) {
+function taggingText(appLanguage: AppLanguage) {
+  if (appLanguage === "zh-Hans") {
+    return {
+      aria: "AI \u6807\u7b7e\u63a8\u8350\u7ed3\u679c",
+      suggest: "AI \u63a8\u8350\u6807\u7b7e",
+      suggesting: "\u63a8\u8350\u4e2d...",
+      suggestionsReady: "AI \u6807\u7b7e\u5df2\u5c31\u7eea",
+      noSuggestions: "\u6682\u65e0\u660e\u786e\u7684\u6807\u7b7e\u63a8\u8350",
+      applying: "\u5e94\u7528\u4e2d...",
+      applySelected: "\u5e94\u7528\u5df2\u9009\u6807\u7b7e",
+      tagsApplied: "AI \u6807\u7b7e\u5df2\u5e94\u7528",
+    };
+  }
+
+  return {
+    aria: "AI tagging result",
+    suggest: "Suggest with AI",
+    suggesting: "Suggesting...",
+    suggestionsReady: "AI suggestions ready",
+    noSuggestions: "No strong tag suggestions",
+    applying: "Applying...",
+    applySelected: "Apply selected",
+    tagsApplied: "AI tags applied",
+  };
+}
+
+export function TaggingPanel({ appLanguage, articleId, onApplied, onTagsChanged }: TaggingPanelProps) {
+  const text = taggingText(appLanguage);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
   const [assignedTags, setAssignedTags] = useState<ArticleTag[]>([]);
@@ -47,7 +76,7 @@ export function TaggingPanel({ articleId, onApplied, onTagsChanged }: TaggingPan
       setSuggestions(result.tags);
       setSelectedSuggestions(result.tags);
       setNotice(result.fallbackNotice);
-      setStatus(result.tags.length > 0 ? "AI suggestions ready" : "No strong tag suggestions");
+      setStatus(result.tags.length > 0 ? text.suggestionsReady : text.noSuggestions);
     } catch (error) {
       setSuggestions([]);
       setSelectedSuggestions([]);
@@ -75,7 +104,7 @@ export function TaggingPanel({ articleId, onApplied, onTagsChanged }: TaggingPan
       onTagsChanged?.();
       setSuggestions([]);
       setSelectedSuggestions([]);
-      setStatus("AI tags applied");
+      setStatus(text.tagsApplied);
     } catch (error) {
       setStatus(getErrorMessage(error));
     } finally {
@@ -90,14 +119,14 @@ export function TaggingPanel({ articleId, onApplied, onTagsChanged }: TaggingPan
   }
 
   return (
-    <div className="reader-ai-tagging-panel" aria-label="AI tagging result">
+    <div className="reader-ai-tagging-panel" aria-label={text.aria}>
       <button
         className="secondary-button"
         type="button"
         onClick={() => void handleSuggestTags()}
         disabled={!articleId || isSuggesting}
       >
-        {isSuggesting ? "Suggesting..." : "Suggest with AI"}
+        {isSuggesting ? text.suggesting : text.suggest}
       </button>
 
       {suggestions.length > 0 ? (
@@ -123,7 +152,7 @@ export function TaggingPanel({ articleId, onApplied, onTagsChanged }: TaggingPan
             onClick={() => void handleApplyTags()}
             disabled={selectedSuggestions.length === 0 || isApplying}
           >
-            {isApplying ? "Applying..." : "Apply selected"}
+            {isApplying ? text.applying : text.applySelected}
           </button>
         </div>
       ) : null}

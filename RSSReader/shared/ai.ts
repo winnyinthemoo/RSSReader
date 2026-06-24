@@ -120,6 +120,7 @@ export interface StartSummaryRequest {
 export interface SummaryStreamChunk {
   delta: string;
   done: boolean;
+  errorMessage?: string | null;
 }
 
 export interface TranslationStreamChunk {
@@ -154,6 +155,12 @@ export interface StartTranslationRequest {
   articleId: string;
   targetLanguage: string;
   selectedText?: string;
+}
+
+export interface RetryTranslationSegmentRequest {
+  articleId: string;
+  targetLanguage: string;
+  segmentIndex: number;
 }
 
 export interface TaggingSuggestRequest {

@@ -13,6 +13,7 @@ import type {
   PromptRevealResult,
   ProviderTestRequest,
   ProviderTestResult,
+  RetryTranslationSegmentRequest,
   StartSummaryRequest,
   StartTranslationRequest,
   SummaryStreamChunk,
@@ -53,6 +54,7 @@ declare global {
 }
 
 const backendBaseUrl = import.meta.env.VITE_BACKEND_URL ?? "http://127.0.0.1:5181";
+const summaryStreamEventPrefix = "ai-summary-stream-";
 const translationStreamEventPrefix = "ai-translation-stream-";
 
 function getInvoke(): TauriInvoke | undefined {
@@ -234,16 +236,27 @@ export async function getArticleSummary(
 
 export async function startArticleSummary(
   request: StartSummaryRequest,
+  onChunk?: (chunk: SummaryStreamChunk) => void,
+  options: { signal?: AbortSignal } = {},
 ): Promise<SummaryStreamChunk> {
   const invoke = getInvoke();
   if (invoke) {
-    return invoke<SummaryStreamChunk>("ai_start_summary", { request });
+    const listen = getEventListen();
+    if (onChunk && listen) {
+      return streamTauriSummaryRequest(invoke, listen, request, onChunk, options.signal);
+    }
+    if (options.signal?.aborted) {
+      throw createAbortError();
+    }
+    const result = await invoke<SummaryStreamChunk>("ai_start_summary", { request });
+    if (options.signal?.aborted) {
+      throw createAbortError();
+    }
+    onChunk?.(result);
+    return result;
   }
 
-  return requestJson<SummaryStreamChunk>("/api/ai/summary/stream", {
-    method: "POST",
-    body: JSON.stringify(request),
-  });
+  return streamSummaryRequest(request, onChunk, options.signal);
 }
 
 export async function suggestTags(
@@ -291,22 +304,43 @@ export async function getArticleTranslation(
   return requestJson<TranslationView | null>(`/api/ai/translation?${params.toString()}`);
 }
 
+export async function retryTranslationSegment(
+  request: RetryTranslationSegmentRequest,
+): Promise<TranslationView> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<TranslationView>("ai_retry_translation_segment", { request });
+  }
+
+  return requestJson<TranslationView>("/api/ai/translation/retry-segment", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
 export async function startTranslation(
   request: StartTranslationRequest,
   onChunk?: (view: TranslationView) => void,
+  options: { signal?: AbortSignal } = {},
 ): Promise<TranslationView> {
   const invoke = getInvoke();
   if (invoke) {
     const listen = getEventListen();
     if (onChunk && listen) {
-      return streamTauriTranslationRequest(invoke, listen, request, onChunk);
+      return streamTauriTranslationRequest(invoke, listen, request, onChunk, options.signal);
+    }
+    if (options.signal?.aborted) {
+      throw createAbortError();
     }
     const result = await invoke<TranslationView>("ai_start_translation", { request });
+    if (options.signal?.aborted) {
+      throw createAbortError();
+    }
     onChunk?.(result);
     return result;
   }
 
-  return streamTranslationRequest(request, onChunk);
+  return streamTranslationRequest(request, onChunk, options.signal);
 }
 
 async function streamTauriTranslationRequest(
@@ -314,8 +348,9 @@ async function streamTauriTranslationRequest(
   listen: TauriListen,
   request: StartTranslationRequest,
   onChunk: (view: TranslationView) => void,
+  signal?: AbortSignal,
 ): Promise<TranslationView> {
-  const eventId = createTranslationEventId();
+  const eventId = createStreamEventId();
   const eventName = `${translationStreamEventPrefix}${eventId}`;
   let latestView: TranslationView | undefined;
   const unlisten = await listen<TranslationStreamChunk>(eventName, (event) => {
@@ -325,6 +360,11 @@ async function streamTauriTranslationRequest(
       onChunk(chunk.translation);
     }
   });
+
+  if (signal?.aborted) {
+    unlisten();
+    throw createAbortError();
+  }
 
   try {
     const result = await invoke<TranslationView>("ai_start_translation", {
@@ -340,7 +380,63 @@ async function streamTauriTranslationRequest(
   }
 }
 
-function createTranslationEventId() {
+async function streamTauriSummaryRequest(
+  invoke: TauriInvoke,
+  listen: TauriListen,
+  request: StartSummaryRequest,
+  onChunk: (chunk: SummaryStreamChunk) => void,
+  signal?: AbortSignal,
+): Promise<SummaryStreamChunk> {
+  const eventId = createStreamEventId();
+  const eventName = `${summaryStreamEventPrefix}${eventId}`;
+  let streamedContent = "";
+  let sawDone = false;
+  let streamError: string | undefined;
+  const unlisten = await listen<SummaryStreamChunk>(eventName, (event) => {
+    const chunk = event.payload;
+    if (chunk.errorMessage) {
+      streamError = chunk.errorMessage;
+      return;
+    }
+    if (chunk.delta) {
+      streamedContent += chunk.delta;
+    }
+    if (chunk.done) {
+      sawDone = true;
+    }
+    onChunk(chunk);
+  });
+
+  if (signal?.aborted) {
+    unlisten();
+    throw createAbortError();
+  }
+
+  try {
+    const result = await invoke<SummaryStreamChunk>("ai_start_summary", {
+      request,
+      eventId,
+    });
+    if (streamError) {
+      throw new Error(streamError);
+    }
+    if (!streamedContent && result.delta) {
+      streamedContent = result.delta;
+      onChunk(result);
+    } else if (!sawDone && result.done) {
+      onChunk({ ...result, delta: "" });
+    }
+    return streamedContent ? { ...result, delta: streamedContent } : result;
+  } finally {
+    unlisten();
+  }
+}
+
+function createAbortError() {
+  return new DOMException("AI request was canceled.", "AbortError");
+}
+
+function createStreamEventId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
   }
@@ -413,12 +509,91 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
   return response.json() as Promise<T>;
 }
 
+async function streamSummaryRequest(
+  request: StartSummaryRequest,
+  onChunk?: (chunk: SummaryStreamChunk) => void,
+  signal?: AbortSignal,
+): Promise<SummaryStreamChunk> {
+  const response = await fetch(`${backendBaseUrl}/api/ai/summary/stream`, {
+    method: "POST",
+    signal,
+    body: JSON.stringify(request),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new Error(message);
+  }
+
+  if (!response.body) {
+    throw new Error("Streaming response is not available in this browser.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let content = "";
+
+  const handleChunk = (chunk: SummaryStreamChunk) => {
+    if (chunk.errorMessage) {
+      throw new Error(chunk.errorMessage);
+    }
+    if (chunk.delta) {
+      content += chunk.delta;
+    }
+    onChunk?.(chunk);
+    if (chunk.done) {
+      return { ...chunk, delta: content || chunk.delta };
+    }
+    return undefined;
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    let newlineIndex = buffer.indexOf("\n");
+    while (newlineIndex >= 0) {
+      const rawLine = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+      if (rawLine) {
+        const result = handleChunk(JSON.parse(rawLine) as SummaryStreamChunk);
+        if (result) {
+          return result;
+        }
+      }
+      newlineIndex = buffer.indexOf("\n");
+    }
+  }
+
+  const tail = buffer.trim();
+  if (tail) {
+    const result = handleChunk(JSON.parse(tail) as SummaryStreamChunk);
+    if (result) {
+      return result;
+    }
+  }
+
+  if (content) {
+    return { delta: content, done: true, errorMessage: null };
+  }
+
+  throw new Error("Summary stream ended without a result.");
+}
 async function streamTranslationRequest(
   request: StartTranslationRequest,
   onChunk?: (view: TranslationView) => void,
+  signal?: AbortSignal,
 ): Promise<TranslationView> {
   const response = await fetch(`${backendBaseUrl}/api/ai/translation/stream`, {
     method: "POST",
+    signal,
     body: JSON.stringify(request),
     headers: {
       "Content-Type": "application/json",

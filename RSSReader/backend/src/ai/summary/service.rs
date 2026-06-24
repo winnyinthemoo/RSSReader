@@ -38,7 +38,15 @@ impl SummaryService {
     }
 
     pub fn start_summary(&self, request: StartSummaryRequest) -> AiResult<SummaryStreamChunk> {
-        let feeds = FeedRepository::open_default().map_err(|error| AiError::Database(error))?;
+        self.stream_summary(request, |_| {})
+    }
+
+    pub fn stream_summary(
+        &self,
+        request: StartSummaryRequest,
+        mut emit: impl FnMut(&SummaryStreamChunk),
+    ) -> AiResult<SummaryStreamChunk> {
+        let feeds = FeedRepository::open_default().map_err(AiError::Database)?;
         let article = feeds.get_article(&request.article_id)?.ok_or_else(|| {
             AiError::NotFound(format!("Article not found: {}", request.article_id))
         })?;
@@ -58,9 +66,16 @@ impl SummaryService {
         let provider = AiProviderService::new()?;
         let route = provider.openai_agent_client(AgentType::Summary)?;
         let started_at = now_marker();
-        let completion = route
-            .client
-            .chat_completion_with_usage(&route.model_name, &messages);
+        let completion =
+            route
+                .client
+                .stream_chat_completion(&route.model_name, &messages, |delta| {
+                    emit(&SummaryStreamChunk {
+                        delta: delta.to_string(),
+                        done: false,
+                        error_message: None,
+                    });
+                });
         let finished_at = now_marker();
         let completion = match completion {
             Ok(completion) => {
@@ -109,9 +124,16 @@ impl SummaryService {
         };
         self.repository.upsert_summary(&record)?;
 
+        emit(&SummaryStreamChunk {
+            delta: String::new(),
+            done: true,
+            error_message: None,
+        });
+
         Ok(SummaryStreamChunk {
             delta: content,
             done: true,
+            error_message: None,
         })
     }
 }

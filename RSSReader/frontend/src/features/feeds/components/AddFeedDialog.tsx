@@ -10,7 +10,7 @@ interface AddFeedDialogProps {
   url: string;
   formHint?: string;
   isAdding: boolean;
-  nameInputRef: RefObject<HTMLInputElement | null>;
+  urlInputRef: RefObject<HTMLInputElement | null>;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
   onNameChange: (value: string) => void;
@@ -23,7 +23,7 @@ export function AddFeedDialog({
   url,
   formHint,
   isAdding,
-  nameInputRef,
+  urlInputRef,
   onSubmit,
   onClose,
   onNameChange,
@@ -49,9 +49,20 @@ export function AddFeedDialog({
         </div>
 
         <label className="dialog-field">
+          <span>{text.addFeedDialog.url}</span>
+          <input
+            ref={urlInputRef}
+            value={url}
+            onChange={(event) => onUrlChange(event.target.value)}
+            placeholder="https://example.com/feed.xml"
+            disabled={isAdding}
+            aria-invalid={Boolean(formHint)}
+          />
+        </label>
+
+        <label className="dialog-field">
           <span>{text.addFeedDialog.name}</span>
           <input
-            ref={nameInputRef}
             value={name}
             onChange={(event) => onNameChange(event.target.value)}
             placeholder={text.addFeedDialog.optionalName}
@@ -59,20 +70,10 @@ export function AddFeedDialog({
           />
         </label>
 
-        <label className="dialog-field">
-          <span>{text.addFeedDialog.url}</span>
-          <input
-            value={url}
-            onChange={(event) => onUrlChange(event.target.value)}
-            placeholder="https://example.com/feed.xml"
-            disabled={isAdding}
-          />
-        </label>
-
-        {formHint ? <p className="feed-form-hint">{formHint}</p> : null}
+        {formHint ? <p className="feed-form-hint" role="alert">{formHint}</p> : null}
 
         <div className="dialog-actions">
-          <button className="secondary-button" type="button" onClick={onClose}>
+          <button className="secondary-button" type="button" onClick={onClose} disabled={isAdding}>
             {text.common.cancel}
           </button>
           <button className="primary-button" type="submit" disabled={isAdding}>

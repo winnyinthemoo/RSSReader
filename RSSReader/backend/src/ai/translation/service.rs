@@ -4,8 +4,8 @@ use crate::feeds::FeedRepository;
 
 use super::super::error::{AiError, AiResult};
 use super::super::model::{
-    AgentType, StartTranslationRequest, TranslationPromptStrategy, TranslationSegmentView,
-    TranslationView,
+    AgentType, RetryTranslationSegmentRequest, StartTranslationRequest, TranslationPromptStrategy,
+    TranslationSegmentView, TranslationView,
 };
 use super::super::prompt::{
     chat_messages_from_rendered, translation_parameters, AgentPromptKind, PromptCustomization,
@@ -66,6 +66,88 @@ impl TranslationService {
         emit: impl FnMut(&TranslationView),
     ) -> AiResult<TranslationView> {
         self.translate_article(request, emit)
+    }
+    pub fn retry_translation_segment(
+        &self,
+        request: RetryTranslationSegmentRequest,
+    ) -> AiResult<TranslationView> {
+        let feeds = FeedRepository::open_default().map_err(|error| AiError::Database(error))?;
+        let article = feeds.get_article(&request.article_id)?.ok_or_else(|| {
+            AiError::NotFound(format!("Article not found: {}", request.article_id))
+        })?;
+        let mut translation = self
+            .repository
+            .get_translation(&request.article_id, &request.target_language)?
+            .ok_or_else(|| {
+                AiError::NotFound(format!(
+                    "Translation not found: {} {}",
+                    request.article_id, request.target_language
+                ))
+            })?;
+        let segment_position = translation
+            .segments
+            .iter()
+            .position(|segment| segment.segment_index == request.segment_index)
+            .ok_or_else(|| {
+                AiError::NotFound(format!(
+                    "Translation segment not found: {}#{}",
+                    translation.run_id, request.segment_index
+                ))
+            })?;
+
+        let provider = AiProviderService::new()?;
+        let settings = provider.get_agent_settings(AgentType::Translation)?;
+        let strategy = settings
+            .translation
+            .map(|value| value.prompt_strategy)
+            .unwrap_or(TranslationPromptStrategy::Standard);
+        let kind = PromptResolver::for_agent(AgentType::Translation, strategy);
+        let route = provider.openai_agent_client(AgentType::Translation)?;
+        let previous_plain = translation
+            .segments
+            .iter()
+            .filter(|segment| segment.segment_index < request.segment_index)
+            .max_by_key(|segment| segment.segment_index)
+            .map(|segment| strip_html_tags(&segment.source_html));
+        let source_plain = strip_html_tags(&translation.segments[segment_position].source_html);
+        let segment_result = translate_text(
+            &route,
+            &request.article_id,
+            kind,
+            &request.target_language,
+            &source_plain,
+            previous_plain.as_deref(),
+        );
+        let (translated_text, status) = match segment_result {
+            Ok(text) => (Some(text), "succeeded"),
+            Err(error) => (Some(format!("[Translation failed: {error}]")), "failed"),
+        };
+
+        self.repository.update_translation_segment(
+            &translation.run_id,
+            request.segment_index,
+            translated_text.as_deref(),
+            status,
+        )?;
+        translation.segments[segment_position].translated_text = translated_text;
+        translation.segments[segment_position].status = status.to_string();
+
+        let run_status = translation_run_status(&translation.segments);
+        self.repository.update_translation_run_status(
+            &translation.run_id,
+            run_status,
+            &now_marker(),
+        )?;
+
+        Ok(build_translation_view(
+            &article.sanitized_html,
+            &request.article_id,
+            &request.target_language,
+            &translation.run_id,
+            translation.translated_title,
+            run_status,
+            &translation.segments,
+        ))
     }
 
     fn translate_article(
@@ -225,9 +307,24 @@ impl TranslationService {
 
         Ok(final_view)
     }
-
 }
 
+fn translation_run_status(segments: &[TranslationSegmentView]) -> &'static str {
+    if segments.iter().any(|segment| segment.status == "running") {
+        return "running";
+    }
+    let failed_count = segments
+        .iter()
+        .filter(|segment| segment.status == "failed")
+        .count();
+    if failed_count == 0 {
+        "completed"
+    } else if failed_count < segments.len() {
+        "partial"
+    } else {
+        "failed"
+    }
+}
 fn translate_selection(
     route: &AgentClient,
     article_id: &str,

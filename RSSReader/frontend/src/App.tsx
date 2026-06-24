@@ -721,7 +721,7 @@ export default function App() {
     const shellWidth = appShellRef.current?.getBoundingClientRect().width ?? window.innerWidth;
     const minSidebarWidth = 240;
     const minArticleWidth = 320;
-    const minReaderWidth = 520;
+    const minReaderWidth = Math.max(520, shellWidth * 0.5);
     const reservedSpace = 44;
 
     document.body.classList.add("pane-resizing");
@@ -852,6 +852,7 @@ export default function App() {
       <ReaderView
         appLanguage={appLanguage}
         article={selectedArticle}
+        availableTags={tags}
         isLoading={isArticleLoading}
         onTagsChanged={() => void handleTagsChanged()}
         onOpenAiSettings={() => setShowAiSettings(true)}
@@ -920,16 +921,16 @@ function readPaneLayout(): PaneLayout {
   try {
     const rawLayout = window.localStorage.getItem(paneLayoutKey);
     if (!rawLayout) {
-      return defaultPaneLayout;
+      return constrainPaneLayout(defaultPaneLayout);
     }
 
     const parsedLayout = JSON.parse(rawLayout) as Partial<PaneLayout>;
-    return {
-      sidebarWidth: sanitizePaneWidth(parsedLayout.sidebarWidth, defaultPaneLayout.sidebarWidth),
-      articleWidth: sanitizePaneWidth(parsedLayout.articleWidth, defaultPaneLayout.articleWidth),
-    };
+    return constrainPaneLayout({
+      sidebarWidth: sanitizePaneWidth(parsedLayout.sidebarWidth, defaultPaneLayout.sidebarWidth, 240),
+      articleWidth: sanitizePaneWidth(parsedLayout.articleWidth, defaultPaneLayout.articleWidth, 320),
+    });
   } catch {
-    return defaultPaneLayout;
+    return constrainPaneLayout(defaultPaneLayout);
   }
 }
 
@@ -968,10 +969,40 @@ function readAppLanguage(): AppLanguage {
   return normalizeAppLanguage(language);
 }
 
-function sanitizePaneWidth(width: unknown, fallback: number) {
+function sanitizePaneWidth(width: unknown, fallback: number, minWidth = 220) {
   return typeof width === "number" && Number.isFinite(width)
-    ? clamp(width, 220, 760)
+    ? clamp(width, minWidth, 760)
     : fallback;
+}
+
+function constrainPaneLayout(layout: PaneLayout): PaneLayout {
+  const minSidebarWidth = 240;
+  const minArticleWidth = 320;
+  const reservedSpace = 52;
+  const shellWidth = typeof window === "undefined" ? 0 : window.innerWidth;
+  if (!shellWidth) {
+    return layout;
+  }
+
+  const maxLeftWidth = Math.max(
+    minSidebarWidth + minArticleWidth,
+    shellWidth * 0.5 - reservedSpace,
+  );
+  let sidebarWidth = clamp(layout.sidebarWidth, minSidebarWidth, 760);
+  let articleWidth = clamp(layout.articleWidth, minArticleWidth, 760);
+  let overflow = sidebarWidth + articleWidth - maxLeftWidth;
+
+  if (overflow > 0) {
+    const articleShrink = Math.min(overflow, articleWidth - minArticleWidth);
+    articleWidth -= articleShrink;
+    overflow -= articleShrink;
+  }
+  if (overflow > 0) {
+    const sidebarShrink = Math.min(overflow, sidebarWidth - minSidebarWidth);
+    sidebarWidth -= sidebarShrink;
+  }
+
+  return { sidebarWidth, articleWidth };
 }
 
 const readerLayoutWidthOptions = [680, 760, 820, 900, 1040];

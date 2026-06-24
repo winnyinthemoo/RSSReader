@@ -1407,3 +1407,43 @@ body:has(.app-shell[data-reader-theme="dark"]) .usage-point {
   }
 }
 
+
+/* Failed translation segment retry controls. */
+.translation-segment-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin: -0.78em 0 1.15em;
+}
+
+.translation-segment-retry {
+  min-height: 30px;
+  border: 1px solid rgba(61, 143, 122, 0.24);
+  border-radius: 999px;
+  padding: 0 12px;
+  color: #276757;
+  background: rgba(61, 143, 122, 0.08);
+  font-size: 0.78rem;
+  font-weight: 720;
+}
+
+.translation-segment-retry:hover:not(:disabled) {
+  color: #164b3f;
+  background: rgba(61, 143, 122, 0.14);
+}
+
+.translation-segment-retry:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.reader-themed-page[data-theme="dark"] .translation-segment-retry {
+  border-color: rgba(123, 208, 181, 0.28);
+  color: #bde7d6;
+  background: rgba(123, 208, 181, 0.1);
+}
+
+.reader-themed-page[data-theme="sepia"] .translation-segment-retry {
+  border-color: rgba(154, 106, 54, 0.24);
+  color: #6d4a25;
+  background: rgba(154, 106, 54, 0.08);
+}

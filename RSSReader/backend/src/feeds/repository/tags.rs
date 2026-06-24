@@ -1,4 +1,4 @@
-﻿use rusqlite::{params, OptionalExtension};
+use rusqlite::{params, OptionalExtension};
 
 use super::*;
 
@@ -208,5 +208,4 @@ impl FeedRepository {
             .map(|_| ())
             .map_err(|error| format!("Failed to refresh tag usage: {error}"))
     }
-
 }
