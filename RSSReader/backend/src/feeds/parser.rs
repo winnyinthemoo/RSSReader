@@ -167,21 +167,34 @@ fn extract_img_tags(html: &str) -> String {
 
 fn narrow_to_content(html: &str) -> &str {
     for marker in [
+        "<section class=body",
+        "<section class=\"body\"",
+        "<section class='body'",
+        "<div class=post-content",
+        "<div class=\"post-content\"",
+        "<div class='post-content'",
         "<article",
         "class=\"article\"",
         "class=\"article ",
+        "class=article",
         "class=\"article-content\"",
         "class=\"article-content ",
+        "class=article-content",
         "class=\"post-content\"",
         "class=\"post-content ",
+        "class=post-content",
         "class=\"entry-content\"",
         "class=\"entry-content ",
+        "class=entry-content",
         "class=\"post-body\"",
         "class=\"post-body ",
+        "class=post-body",
         "class=\"content\"",
         "class=\"content ",
+        "class=content",
         "class=\"main\"",
         "class=\"main ",
+        "class=main",
     ] {
         if let Some(start) = html.find(marker) {
             let after_open = &html[start..];
@@ -290,6 +303,10 @@ pub fn try_fetch_full_content(article_url: &str) -> Option<String> {
     // Short timeout — if the page is slow, we'd rather show RSS content quickly.
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
+        .user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+             (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 VortexRSSReader/0.1",
+        )
         .build()
         .ok()?;
     let response = client.get(article_url).send().ok()?;
@@ -300,8 +317,10 @@ pub fn try_fetch_full_content(article_url: &str) -> Option<String> {
     let url = Url::parse(article_url).ok()?;
     let cleaned = strip_non_content(&html);
     let focused = narrow_to_content(&cleaned);
-    let product = extractor::extract(&mut focused.as_bytes(), &url).ok()?;
-    let mut content = product.content.trim().to_string();
+    let mut content = extractor::extract(&mut focused.as_bytes(), &url)
+        .ok()
+        .map(|product| product.content.trim().to_string())
+        .unwrap_or_else(|| focused.trim().to_string());
     if content.is_empty() {
         return None;
     }
@@ -309,7 +328,11 @@ pub fn try_fetch_full_content(article_url: &str) -> Option<String> {
     // the result is likely garbage (JS SPA shell, CSS-only layout, etc.).
     // Fall back to the RSS summary/description instead.
     if plain_text(&content).chars().count() < 100 {
-        return None;
+        let focused_plain_len = plain_text(focused).chars().count();
+        if focused_plain_len < 100 {
+            return None;
+        }
+        content = focused.trim().to_string();
     }
     if !content.contains("<img") {
         let page_images = extract_img_tags(&html);
@@ -680,5 +703,24 @@ mod tests {
 
         assert_eq!(parsed.articles.len(), 2);
         assert_ne!(parsed.articles[0].url, parsed.articles[1].url);
+    }
+
+    #[test]
+    fn narrow_to_content_prefers_unquoted_body_section() {
+        let html = r#"
+            <main>
+              <article>
+                <div class=post-content>
+                  <section class=body><p>Main body</p><img src=/image.jpg></section>
+                  <section class=comments><p>Comment body</p></section>
+                </div>
+              </article>
+            </main>
+        "#;
+
+        let focused = narrow_to_content(html);
+
+        assert!(focused.contains("Main body"));
+        assert!(!focused.contains("Comment body"));
     }
 }

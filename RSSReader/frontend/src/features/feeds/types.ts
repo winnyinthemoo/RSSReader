@@ -31,7 +31,6 @@ export interface FeedSidebarProps {
   onSelectStarred: () => void;
   onToggleTag: (tagId: string) => void;
   onClearTags: () => void;
-  onTagMatchChange: (mode: TagMatchMode) => void;
   onRenameTag: (tagId: string, name: string) => Promise<void>;
   onMergeTags: (sourceTagId: string, targetTagId: string) => Promise<void>;
   onDeleteTag: (tagId: string) => Promise<void>;

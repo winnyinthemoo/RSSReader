@@ -1,0 +1,23 @@
+# 2026-06-24 Jeff Feed 阅读显示与设置样式修复
+
+- 日期：2026-06-24
+- 负责人：Codex
+- 使用工具：Codex shell、apply_patch、web
+- 对应 Issue / PR：暂无
+- 任务目标：修复 Jeff Geerling RSS 源正文不完整和相对图片显示失败问题；调整左侧订阅源“收起”按钮样式；优化 AI 服务商保存后的提示布局；标签展示仅做方案思考，不直接改动。
+- 关键 Prompt 摘要：用户反馈 `https://www.jeffgeerling.com/blog.xml` 内容展示不完整、图片经常失败，并要求两个 UI 小调整；标签展示需要先考虑重构方案。
+- Agent 修改内容摘要：
+  - 在文章详情读取时，对明显较短的 RSS 摘要按需调用正文补全并回写数据库。
+  - 增强正文补全对 Jeff Hugo 页面中未加引号的 `class=body` / `class=post-content` 容器识别，并为抓取原文请求增加浏览器 UA。
+  - Reader Markdown 渲染补全图片 `src` / `srcSet` 的相对 URL，Compare 视图同步传入文章 URL。
+  - 将订阅源“收起”按钮恢复为与“更多订阅源”一致的无框样式。
+  - 将 AI 设置操作反馈改成独立换行提示，避免长文案挤在按钮旁。
+- 人工检查结果：已确认 Jeff RSS 本身只提供摘要，原文页图片使用相对路径；代码路径与问题吻合。
+- 是否运行测试：
+  - `npm run build`：通过，保留 Vite chunk size 警告。
+  - `npm run dev -- --host 127.0.0.1 --port 5177`：启动通过，验证后已停止进程。
+  - `cargo check`：通过。
+  - `cargo test --target-dir %TEMP%/rssreader-codex-cargo-test-target`：通过，33 个库测试和 2 个 dev server 测试通过。
+- 未解决问题：
+  - 默认 `backend/target/debug/deps` 下运行 `cargo test` 时，MSVC 链接器遇到 `LNK1104 cannot open file ...exe`，疑似 Windows 文件锁或本地安全软件拦截；临时 target 目录可正常通过。
+  - 标签展示本轮未改代码，建议另开重构子任务处理。

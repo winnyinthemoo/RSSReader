@@ -58,6 +58,7 @@ export function CompareView({
             variant="compare"
             searchMatches={searchMatches}
             activeSearchIndex={activeSearchIndex}
+            baseUrl={article.url}
           />
         </div>
       </div>

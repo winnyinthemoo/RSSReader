@@ -37,6 +37,19 @@ function buildMarkdownComponents(onOpenLink?: (url: string) => void, baseUrl?: s
         </a>
       );
     },
+    img({ node: _node, src, srcSet, alt, ...props }) {
+      return (
+        <img
+          {...props}
+          src={resolveReaderUrl(src, baseUrl) ?? src}
+          srcSet={resolveSrcSet(srcSet, baseUrl)}
+          alt={alt ?? ""}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+        />
+      );
+    },
   };
 }
 
@@ -105,6 +118,26 @@ function resolveReaderUrl(href: string | undefined, baseUrl: string | undefined)
 
 function isWebUrl(value: string) {
   return /^https?:\/\//i.test(value);
+}
+
+function resolveSrcSet(srcSet: string | undefined, baseUrl: string | undefined) {
+  if (!srcSet) {
+    return undefined;
+  }
+
+  return srcSet
+    .split(",")
+    .map((candidate) => {
+      const parts = candidate.trim().split(/\s+/);
+      const url = parts.shift();
+      if (!url) {
+        return "";
+      }
+      const resolvedUrl = resolveReaderUrl(url, baseUrl) ?? url;
+      return [resolvedUrl, ...parts].join(" ");
+    })
+    .filter(Boolean)
+    .join(", ");
 }
 
 function highlightMarkdown(

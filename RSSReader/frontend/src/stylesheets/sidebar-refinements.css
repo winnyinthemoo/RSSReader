@@ -181,9 +181,9 @@
 .app-shell[data-reader-theme="dark"] .sidebar-hide-button,
 .app-shell[data-reader-theme="dark"] .sidebar-reveal-button,
 .app-shell[data-reader-theme="dark"] .tag-search-field,
-.app-shell[data-reader-theme="dark"] .tag-filter-toolbar select,
-.app-shell[data-reader-theme="dark"] .tag-match-toggle button.active,
-.app-shell[data-reader-theme="dark"] .selected-tag-strip .clear-tags-button,
+.app-shell[data-reader-theme="dark"] .tag-manage-button,
+.app-shell[data-reader-theme="dark"] .article-tag-add-button,
+.app-shell[data-reader-theme="dark"] .article-tag-search,
 .app-shell[data-reader-theme="dark"] .tag-row-actions button,
 .app-shell[data-reader-theme="dark"] .feed-sync-panel,
 .app-shell[data-reader-theme="dark"] .feed-sync-interval select,
@@ -198,34 +198,75 @@
   color: var(--ink-primary);
 }
 
+.app-shell[data-reader-theme="dark"] .article-tag-search input {
+  color: var(--ink-primary);
+}
+
 .app-shell[data-reader-theme="dark"] .tag-search-field input::placeholder {
   color: var(--ink-tertiary);
 }
 
-.app-shell[data-reader-theme="dark"] .tag-match-toggle,
+.app-shell[data-reader-theme="dark"] .article-tag-search input::placeholder {
+  color: var(--ink-tertiary);
+}
+
+.app-shell[data-reader-theme="dark"] .article-tag-chip {
+  border-color: rgba(10, 132, 255, 0.24);
+  color: #8ecbff;
+  background: rgba(10, 132, 255, 0.14);
+}
+
+.app-shell[data-reader-theme="dark"] .article-tag-match-toggle {
+  border-color: var(--line-soft);
+  background: rgba(235, 235, 245, 0.08);
+}
+
+.app-shell[data-reader-theme="dark"] .article-tag-match-toggle button.active {
+  color: var(--ink-primary);
+  background: rgba(235, 235, 245, 0.14);
+  box-shadow: none;
+}
+
+.app-shell[data-reader-theme="dark"] .article-tag-picker {
+  border-color: rgba(235, 235, 245, 0.14);
+  background: rgba(43, 45, 51, 0.96);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.28);
+}
+
+.app-shell[data-reader-theme="dark"] .article-tag-option:hover {
+  color: #8ecbff;
+  background: rgba(10, 132, 255, 0.16);
+}
+
+.app-shell[data-reader-theme="dark"] .article-tag-clear-button:hover {
+  color: var(--ink-primary);
+  background: rgba(235, 235, 245, 0.08);
+}
+
 .app-shell[data-reader-theme="dark"] .feed-sync-mode,
 .app-shell[data-reader-theme="dark"] .sidebar-mode-tabs {
   border-color: var(--line-soft);
   background: rgba(235, 235, 245, 0.08);
 }
 
-.app-shell[data-reader-theme="dark"] .tag-match-toggle button,
 .app-shell[data-reader-theme="dark"] .feed-sync-mode button,
 .app-shell[data-reader-theme="dark"] .sidebar-mode-tabs button {
   color: var(--ink-secondary);
 }
 
-.app-shell[data-reader-theme="dark"] .tag-match-toggle button.active,
 .app-shell[data-reader-theme="dark"] .feed-sync-mode button.active,
 .app-shell[data-reader-theme="dark"] .sidebar-mode-tabs button.active {
   color: var(--ink-primary);
   background: rgba(235, 235, 245, 0.14);
 }
 
-.app-shell[data-reader-theme="dark"] .selected-tag-strip button {
-  border-color: rgba(52, 199, 89, 0.28);
-  color: #d8f5df;
-  background: rgba(52, 199, 89, 0.16);
+.app-shell[data-reader-theme="dark"] .clear-tag-filter-button {
+  color: var(--ink-tertiary);
+}
+
+.app-shell[data-reader-theme="dark"] .clear-tag-filter-button:hover {
+  color: var(--ink-primary);
+  background: rgba(235, 235, 245, 0.08);
 }
 
 body:has(.app-shell[data-reader-theme="dark"]) .add-feed-dialog {
@@ -317,13 +358,13 @@ body:has(.app-shell[data-reader-theme="dark"]) .dialog-field select {
 .feed-collapse-button {
   flex: 0 0 auto;
   margin-top: 8px;
-  border: 1px solid var(--line-soft);
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 -10px 22px rgba(24, 27, 32, 0.06);
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 .feed-collapse-button:hover {
-  background: rgba(255, 255, 255, 0.94);
+  background: #f3f4f6;
 }
 
 .reader-source-shell {
@@ -371,7 +412,6 @@ body:has(.app-shell[data-reader-theme="dark"]) .dialog-field select {
   white-space: nowrap;
 }
 
-.app-shell[data-reader-theme="dark"] .feed-collapse-button,
 .app-shell[data-reader-theme="dark"] .reader-web-return-bar {
   border-color: rgba(235, 235, 245, 0.14);
   background: rgba(36, 39, 43, 0.92);

@@ -472,31 +472,57 @@ export default function App() {
   function handleToggleTag(tagId: string) {
     setSelection((currentSelection) => {
       const currentTagIds = currentSelection.type === "tag" ? currentSelection.tagIds : [];
-      const nextTagIds = currentTagIds.includes(tagId)
-        ? currentTagIds.filter((currentTagId) => currentTagId !== tagId)
-        : [...currentTagIds, tagId].slice(0, 5);
-
-      if (nextTagIds.length === 0) {
+      if (currentTagIds.length === 1 && currentTagIds[0] === tagId) {
         return { type: "all" };
       }
 
       return {
         type: "tag",
-        tagIds: nextTagIds,
+        tagIds: [tagId],
+        tagMatch: "any",
+      };
+    });
+    setSidebarMode("tags");
+  }
+
+  function handleAddTagFilter(tagId: string) {
+    setSelection((currentSelection) => {
+      const currentTagIds = currentSelection.type === "tag" ? currentSelection.tagIds : [];
+      if (currentTagIds.includes(tagId)) {
+        return currentSelection.type === "tag"
+          ? currentSelection
+          : { type: "tag", tagIds: [tagId], tagMatch: "any" };
+      }
+
+      return {
+        type: "tag",
+        tagIds: [...currentTagIds, tagId],
         tagMatch: currentSelection.type === "tag" ? currentSelection.tagMatch : "any",
       };
     });
     setSidebarMode("tags");
   }
 
-  function handleTagMatchChange(tagMatch: TagMatchMode) {
+  function handleRemoveTagFilter(tagId: string) {
     setSelection((currentSelection) => {
       if (currentSelection.type !== "tag") {
         return currentSelection;
       }
 
-      return { ...currentSelection, tagMatch };
+      const nextTagIds = currentSelection.tagIds.filter((currentTagId) => currentTagId !== tagId);
+      if (nextTagIds.length === 0) {
+        return { type: "all" };
+      }
+
+      return { ...currentSelection, tagIds: nextTagIds };
     });
+  }
+
+  function handleTagMatchChange(tagMatch: TagMatchMode) {
+    setSelection((currentSelection) =>
+      currentSelection.type === "tag" ? { ...currentSelection, tagMatch } : currentSelection,
+    );
+    setSidebarMode("tags");
   }
 
   async function handleRenameTag(tagId: string, name: string) {
@@ -810,7 +836,6 @@ export default function App() {
             onSelectStarred={() => setSelection({ type: "starred" })}
             onToggleTag={handleToggleTag}
             onClearTags={() => setSelection({ type: "all" })}
-            onTagMatchChange={handleTagMatchChange}
             onRenameTag={handleRenameTag}
             onMergeTags={handleMergeTags}
             onDeleteTag={handleDeleteTag}
@@ -840,6 +865,10 @@ export default function App() {
         searchQuery={articleSearchQuery}
         onSelectArticle={handleSelectArticle}
         onToggleFavorite={handleToggleFavorite}
+        onAddTagFilter={handleAddTagFilter}
+        onRemoveTagFilter={handleRemoveTagFilter}
+        onClearTagFilters={() => setSelection({ type: "all" })}
+        onTagMatchChange={handleTagMatchChange}
       />
 
       <button

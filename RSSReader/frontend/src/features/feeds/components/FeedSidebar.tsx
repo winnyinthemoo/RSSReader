@@ -34,7 +34,6 @@ export function FeedSidebar({
   onSelectStarred,
   onToggleTag,
   onClearTags,
-  onTagMatchChange,
   onRenameTag,
   onMergeTags,
   onDeleteTag,
@@ -51,7 +50,6 @@ export function FeedSidebar({
   const [url, setUrl] = useState("");
   const [formHint, setFormHint] = useState<string | undefined>();
   const [tagSearch, setTagSearch] = useState("");
-  const [tagSort, setTagSort] = useState<"name" | "count">("count");
   const urlInputRef = useRef<HTMLInputElement>(null);
   const [deleteConfirmFeedId, setDeleteConfirmFeedId] = useState<string | null>(null);
   const [deleteConfirmTagId, setDeleteConfirmTagId] = useState<string | null>(null);
@@ -156,9 +154,6 @@ export function FeedSidebar({
   const selectedFeedId = selection.type === "feed" ? selection.feedId : undefined;
   const selectedTagIds = selection.type === "tag" ? selection.tagIds : [];
   const selectedTagSet = useMemo(() => new Set(selectedTagIds), [selectedTagIds]);
-  const selectedTags = selectedTagIds
-    .map((tagId) => tags.find((tag) => tag.id === tagId))
-    .filter((tag): tag is TagSummary => Boolean(tag));
   const mergeSourceTag = tags.find((tag) => tag.id === mergeSourceTagId);
   const mergeTargetTags = tags.filter((tag) => tag.id !== mergeSourceTagId);
   const deleteConfirmTag = tags.find((tag) => tag.id === deleteConfirmTagId);
@@ -167,12 +162,9 @@ export function FeedSidebar({
     return tags
       .filter((tag) => tag.name.toLowerCase().includes(normalizedSearch))
       .sort((first, second) => {
-        if (tagSort === "count") {
-          return second.articleCount - first.articleCount || first.name.localeCompare(second.name);
-        }
-        return first.name.localeCompare(second.name);
+        return second.articleCount - first.articleCount || first.name.localeCompare(second.name);
       });
-  }, [tagSearch, tagSort, tags]);
+  }, [tagSearch, tags]);
   const totalUnread = feeds.reduce((total, feed) => total + feed.unreadCount, 0);
   const deleteConfirmFeed = feeds.find((feed) => feed.id === deleteConfirmFeedId);
 
@@ -282,15 +274,9 @@ export function FeedSidebar({
           tags={tags}
           visibleTags={visibleTags}
           selectedTagIds={selectedTagIds}
-          selectedTags={selectedTags}
           selectedTagSet={selectedTagSet}
           tagSearch={tagSearch}
-          tagSort={tagSort}
-          tagMatch={selection.type === "tag" ? selection.tagMatch : "any"}
-          isTagSelection={selection.type === "tag"}
           onTagSearchChange={setTagSearch}
-          onTagSortChange={setTagSort}
-          onTagMatchChange={onTagMatchChange}
           onToggleTag={onToggleTag}
           onClearTags={onClearTags}
           onRenameTag={onRenameTag}

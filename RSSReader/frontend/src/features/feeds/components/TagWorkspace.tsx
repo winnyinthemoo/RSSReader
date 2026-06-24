@@ -1,8 +1,8 @@
-import { Check, GitMerge, Pencil, Search, Tags, Trash2, X } from "lucide-react";
+import { Check, GitMerge, Pencil, Search, SlidersHorizontal, Tags, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
-import type { TagMatchMode, TagSummary } from "../../../../../shared/feed";
+import type { TagSummary } from "../../../../../shared/feed";
 import { getAppText } from "../../../i18n";
 import type { AppLanguage } from "../../../i18n";
 
@@ -11,15 +11,9 @@ interface TagWorkspaceProps {
   tags: TagSummary[];
   visibleTags: TagSummary[];
   selectedTagIds: string[];
-  selectedTags: TagSummary[];
   selectedTagSet: Set<string>;
   tagSearch: string;
-  tagSort: "name" | "count";
-  tagMatch: TagMatchMode;
-  isTagSelection: boolean;
   onTagSearchChange: (value: string) => void;
-  onTagSortChange: (value: "name" | "count") => void;
-  onTagMatchChange: (mode: TagMatchMode) => void;
   onToggleTag: (tagId: string) => void;
   onClearTags: () => void;
   onRenameTag: (tagId: string, name: string) => Promise<void>;
@@ -32,15 +26,9 @@ export function TagWorkspace({
   tags,
   visibleTags,
   selectedTagIds,
-  selectedTags,
   selectedTagSet,
   tagSearch,
-  tagSort,
-  tagMatch,
-  isTagSelection,
   onTagSearchChange,
-  onTagSortChange,
-  onTagMatchChange,
   onToggleTag,
   onClearTags,
   onRenameTag,
@@ -49,6 +37,8 @@ export function TagWorkspace({
 }: TagWorkspaceProps) {
   const text = getAppText(appLanguage);
   const tagText = text.tagWorkspace;
+  const localText = tagWorkspaceLocalText(appLanguage);
+  const [isManagingTags, setIsManagingTags] = useState(false);
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [renameHint, setRenameHint] = useState<string | undefined>();
@@ -113,8 +103,31 @@ export function TagWorkspace({
     }
   }
 
+  function handleManageToggle() {
+    setIsManagingTags((value) => !value);
+    cancelRename();
+  }
+
+  const workspaceTitle = isManagingTags ? localText.manageTitle : localText.quickTitle;
+  const manageButtonTitle = isManagingTags ? localText.backToFilter : localText.manageTags;
+
   return (
     <div className="tag-workspace">
+      <div className="tag-workspace-header">
+        <div className="tag-workspace-heading">
+          <span>{workspaceTitle}</span>
+        </div>
+        <button
+          className="tag-manage-button"
+          type="button"
+          title={manageButtonTitle}
+          aria-label={manageButtonTitle}
+          onClick={handleManageToggle}
+        >
+          {isManagingTags ? <X size={15} /> : <SlidersHorizontal size={15} />}
+        </button>
+      </div>
+
       <label className="tag-search-field">
         <Search size={15} />
         <input
@@ -124,64 +137,19 @@ export function TagWorkspace({
         />
       </label>
 
-      <div className="tag-filter-toolbar">
-        <div className="tag-match-toggle" aria-label={tagText.tagMatchMode}>
-          <button
-            className={!isTagSelection || tagMatch === "any" ? "active" : ""}
-            type="button"
-            disabled={selectedTagIds.length <= 1}
-            onClick={() => onTagMatchChange("any")}
-          >
-            {tagText.any}
-          </button>
-          <button
-            className={isTagSelection && tagMatch === "all" ? "active" : ""}
-            type="button"
-            disabled={selectedTagIds.length <= 1}
-            onClick={() => onTagMatchChange("all")}
-          >
-            {tagText.all}
-          </button>
-        </div>
-        <select
-          value={tagSort}
-          onChange={(event) => onTagSortChange(event.target.value as "name" | "count")}
-          aria-label={tagText.sortTags}
-        >
-          <option value="count">{tagText.usage}</option>
-          <option value="name">{tagText.name}</option>
-        </select>
-      </div>
-
-      {selectedTags.length > 0 ? (
-        <div className="selected-tag-strip" aria-label={tagText.selectedTags}>
-          {selectedTags.map((tag) => (
-            <button type="button" key={tag.id} onClick={() => onToggleTag(tag.id)}>
-              {tag.name}
-              <X size={12} />
-            </button>
-          ))}
-          <button className="clear-tags-button" type="button" onClick={onClearTags}>
-            {tagText.clear}
-          </button>
-        </div>
-      ) : null}
-
-      <div className="feed-list tag-list">
+      <div className={`feed-list tag-list ${isManagingTags ? "tag-management-list" : ""}`}>
         {tags.length === 0 ? (
           <div className="sidebar-empty">{tagText.noTagsYet}</div>
         ) : visibleTags.length === 0 ? (
           <div className="sidebar-empty">{tagText.noMatchingTags}</div>
-        ) : (
+        ) : isManagingTags ? (
           visibleTags.map((tag) => {
-            const isSelected = selectedTagSet.has(tag.id);
-            const isDisabled = !isSelected && selectedTagIds.length >= 5;
             const isEditing = editingTagId === tag.id;
 
             return (
               <div className={`feed-item-row tag-item-row ${isEditing ? "editing" : ""}`} key={tag.id}>
                 {isEditing ? (
-                  <div className={`feed-item tag-rename-form ${isSelected ? "selected" : ""}`}>
+                  <div className="feed-item tag-rename-form">
                     <span className="feed-icon tag-icon">
                       <Tags size={17} />
                     </span>
@@ -225,28 +193,14 @@ export function TagWorkspace({
                     {renameHint ? <span className="tag-rename-hint">{renameHint}</span> : null}
                   </div>
                 ) : (
-                  <>
-                    <button
-                      className={`feed-item ${isSelected ? "selected" : ""}`}
-                      type="button"
-                      disabled={isDisabled}
-                      onClick={() => onToggleTag(tag.id)}
-                    >
-                      <span className="feed-icon tag-icon">
-                        <Tags size={17} />
-                      </span>
-                      <span className="feed-main">
-                        <span className="feed-title">{tag.name}</span>
-                        <span className="feed-url">
-                          {isSelected
-                            ? tagText.selected
-                            : isDisabled
-                              ? tagText.limitReached
-                              : tagText.taggedArticles}
-                        </span>
-                      </span>
-                      <span className="unread-count">{tag.articleCount}</span>
-                    </button>
+                  <div className="feed-item tag-management-item">
+                    <span className="feed-icon tag-icon">
+                      <Tags size={17} />
+                    </span>
+                    <span className="feed-main">
+                      <span className="feed-title">{tag.name}</span>
+                      <span className="feed-url">{localText.articleCount(tag.articleCount)}</span>
+                    </span>
                     <div className="tag-row-actions" aria-label={tagText.tagActions(tag.name)}>
                       <button type="button" title={tagText.renameTag} onClick={() => startRename(tag)}>
                         <Pencil size={12} />
@@ -263,13 +217,67 @@ export function TagWorkspace({
                         <Trash2 size={12} />
                       </button>
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
             );
           })
+        ) : (
+          visibleTags.map((tag) => {
+            const isSelected = selectedTagSet.has(tag.id);
+
+            return (
+              <button
+                className={`feed-item tag-filter-item ${isSelected ? "selected" : ""}`}
+                type="button"
+                key={tag.id}
+                aria-pressed={isSelected}
+                onClick={() => onToggleTag(tag.id)}
+              >
+                <span className="feed-icon tag-icon">
+                  <Tags size={17} />
+                </span>
+                <span className="feed-main">
+                  <span className="feed-title">{tag.name}</span>
+                  <span className="feed-url">
+                    {isSelected ? localText.selected : localText.articleCount(tag.articleCount)}
+                  </span>
+                </span>
+                <span className="unread-count">{tag.articleCount}</span>
+              </button>
+            );
+          })
         )}
       </div>
+
+      {!isManagingTags && selectedTagIds.length > 0 ? (
+        <button className="clear-tag-filter-button" type="button" onClick={onClearTags}>
+          <X size={13} />
+          <span>{tagText.clear}</span>
+        </button>
+      ) : null}
     </div>
   );
+}
+
+function tagWorkspaceLocalText(appLanguage: AppLanguage) {
+  if (appLanguage === "zh-Hans") {
+    return {
+      articleCount: (count: number) => `${count} \u7bc7`,
+      backToFilter: "\u8fd4\u56de\u7b5b\u9009",
+      manageTags: "\u7ba1\u7406\u6807\u7b7e",
+      manageTitle: "\u7ba1\u7406\u6807\u7b7e",
+      quickTitle: "\u6807\u7b7e\u7b5b\u9009",
+      selected: "\u6b63\u5728\u7b5b\u9009",
+    };
+  }
+
+  return {
+    articleCount: (count: number) => `${count} articles`,
+    backToFilter: "Back to filter",
+    manageTags: "Manage tags",
+    manageTitle: "Manage tags",
+    quickTitle: "Tag filter",
+    selected: "Filtering",
+  };
 }
