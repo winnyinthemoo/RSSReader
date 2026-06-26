@@ -49,6 +49,7 @@ import {
   listArticles,
   listFeeds,
   listTags,
+  listenArticleContentUpdated,
   listenOpmlBackgroundRefresh,
   markArticleFavorite,
   markArticleRead,
@@ -118,6 +119,7 @@ export default function App() {
   const articleSelectionTokenRef = useRef(0);
   const appShellRef = useRef<HTMLElement>(null);
   const selectionRef = useRef(selection);
+  const selectedArticleIdRef = useRef(selectedArticleId);
   const articleSearchQueryRef = useRef(articleSearchQuery);
 
   useEffect(() => {
@@ -128,6 +130,35 @@ export default function App() {
     selectionRef.current = selection;
     articleSearchQueryRef.current = articleSearchQuery;
   }, [selection, articleSearchQuery]);
+
+  useEffect(() => {
+    selectedArticleIdRef.current = selectedArticleId;
+  }, [selectedArticleId]);
+
+  useEffect(() => {
+    let active = true;
+    let unlisten: (() => void) | undefined;
+
+    void listenArticleContentUpdated((event) => {
+      if (!active || selectedArticleIdRef.current !== event.articleId) {
+        return;
+      }
+
+      void refreshSelectedArticleDetail(event.articleId);
+    }).then((nextUnlisten) => {
+      if (!active) {
+        nextUnlisten?.();
+        return;
+      }
+
+      unlisten = nextUnlisten;
+    });
+
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -276,6 +307,7 @@ export default function App() {
 
       if (result.articles.length === 0) {
         setSelectedArticle(undefined);
+        selectedArticleIdRef.current = undefined;
         setSelectedArticleId(undefined);
         return;
       }
@@ -362,6 +394,7 @@ export default function App() {
 
   async function handleSelectArticle(articleId: string) {
     const requestToken = ++articleSelectionTokenRef.current;
+    selectedArticleIdRef.current = articleId;
     setSelectedArticleId(articleId);
     setIsArticleLoading(true);
 
@@ -372,6 +405,7 @@ export default function App() {
       }
 
       setSelectedArticle({ ...article, isRead: true });
+      selectedArticleIdRef.current = article.id;
       setSelectedArticleId(article.id);
       setArticles((currentArticles) =>
         currentArticles.map((item) =>
@@ -397,6 +431,30 @@ export default function App() {
       if (articleSelectionTokenRef.current === requestToken) {
         setIsArticleLoading(false);
       }
+    }
+  }
+
+  async function refreshSelectedArticleDetail(articleId: string) {
+    const requestToken = articleSelectionTokenRef.current;
+
+    try {
+      const article = await getArticle(articleId);
+      if (
+        articleSelectionTokenRef.current !== requestToken ||
+        selectedArticleIdRef.current !== articleId
+      ) {
+        return;
+      }
+
+      setSelectedArticle((currentArticle) => {
+        if (!currentArticle || currentArticle.id !== article.id) {
+          return currentArticle;
+        }
+
+        return { ...article, isRead: currentArticle.isRead };
+      });
+    } catch {
+      // The original article is already visible; a failed enrichment refresh should stay quiet.
     }
   }
 
@@ -441,6 +499,7 @@ export default function App() {
 
       if (articleResult.articles.length === 0) {
         setSelectedArticle(undefined);
+        selectedArticleIdRef.current = undefined;
         setSelectedArticleId(undefined);
       } else if (!articleResult.articles.some((article) => article.id === selectedArticleId)) {
         await handleSelectArticle(articleResult.articles[0].id);

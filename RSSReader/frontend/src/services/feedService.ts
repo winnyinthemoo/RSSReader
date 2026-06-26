@@ -1,5 +1,6 @@
 import type {
   ArticleDetail,
+  ArticleContentUpdatedEvent,
   ArticleListFilter,
   ArticleListResult,
   ArticleMarkFavoriteRequest,
@@ -424,6 +425,19 @@ export async function listenOpmlBackgroundRefresh(
   }
 
   return listen<OpmlBackgroundRefreshEvent>("opml-import-refresh", (event) => {
+    handler(event.payload);
+  });
+}
+
+export async function listenArticleContentUpdated(
+  handler: (event: ArticleContentUpdatedEvent) => void,
+): Promise<TauriUnlisten | undefined> {
+  const listen = getEventListen();
+  if (!listen) {
+    return undefined;
+  }
+
+  return listen<ArticleContentUpdatedEvent>("article-content-updated", (event) => {
     handler(event.payload);
   });
 }

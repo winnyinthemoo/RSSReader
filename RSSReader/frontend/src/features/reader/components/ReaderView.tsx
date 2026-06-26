@@ -683,15 +683,17 @@ export function ReaderView({
     }, durationMs);
   }
 
-  async function handleSaveTags() {
-    if (!article?.id || !tagInput.trim()) {
+  async function handleSaveTags(nextTagNames?: string[]) {
+    const nextTags =
+      nextTagNames ??
+      tagInput
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+
+    if (!article?.id || nextTags.length === 0) {
       return;
     }
-
-    const nextTags = tagInput
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean);
 
     try {
       const result = await saveArticleTags({
@@ -945,7 +947,7 @@ export function ReaderView({
           noteStatus={noteStatus}
           onClose={() => setActivePanel(undefined)}
           onTagInputChange={setTagInput}
-          onSaveTags={() => void handleSaveTags()}
+          onSaveTags={(nextTags) => void handleSaveTags(nextTags)}
           onAiTagsApplied={setTags}
           onTagsChanged={onTagsChanged}
           onDeleteTag={(tagId) => void handleDeleteTag(tagId)}

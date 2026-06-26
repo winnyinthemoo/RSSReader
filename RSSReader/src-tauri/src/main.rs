@@ -34,6 +34,12 @@ where
         .map_err(|error| format!("Background task failed: {error}"))?
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ArticleContentUpdatedEvent {
+    article_id: String,
+}
+
 #[tauri::command]
 fn feed_list() -> FeedListResult {
     backend::feeds::feed_list()
@@ -85,8 +91,13 @@ fn article_list(filter: ArticleListFilter) -> ArticleListResult {
 }
 
 #[tauri::command]
-fn article_get(article_id: String) -> Result<ArticleDetail, String> {
-    backend::feeds::article_get(article_id)
+fn article_get(app_handle: tauri::AppHandle, article_id: String) -> Result<ArticleDetail, String> {
+    backend::feeds::article_get_with_update_callback(article_id, move |article_id| {
+        let _ = app_handle.emit(
+            "article-content-updated",
+            ArticleContentUpdatedEvent { article_id },
+        );
+    })
 }
 
 #[tauri::command]

@@ -448,6 +448,47 @@ body:has(.app-shell[data-reader-theme="dark"]) .dialog-field select {
   font-weight: 700;
 }
 
+.tag-compose-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag-add-button {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--accent-blue);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.tag-add-button:hover {
+  border-color: rgba(0, 122, 255, 0.28);
+  background: rgba(0, 122, 255, 0.1);
+}
+
+.tag-add-button:disabled {
+  cursor: not-allowed;
+  color: var(--ink-tertiary);
+  opacity: 0.58;
+  background: rgba(118, 118, 128, 0.08);
+}
+
+.tag-pending-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.tag-pending-chip {
+  border-color: rgba(0, 122, 255, 0.22);
+  color: var(--accent-blue);
+  background: rgba(0, 122, 255, 0.1);
+}
+
 .tag-existing-chip {
   cursor: pointer;
   border-color: var(--line-soft);
@@ -477,4 +518,335 @@ body:has(.app-shell[data-reader-theme="dark"]) .dialog-field select {
   border-radius: 6px;
   padding: 7px 10px;
   background: rgba(191, 90, 54, 0.08);
+}
+
+.summary-panel {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.summary-floating {
+  border-top-color: transparent;
+}
+
+.sidebar-reveal-button:active:not(:disabled) {
+  transform: translateY(-50%);
+}
+
+/* Dark reader theme contrast fixes for floating panels and settings. */
+.app-shell[data-reader-theme="dark"] .summary-floating {
+  border-top-color: transparent;
+  background: rgba(32, 34, 39, 0.9);
+}
+
+.app-shell[data-reader-theme="dark"] .summary-floating.collapsed {
+  background: rgba(32, 34, 39, 0.9);
+}
+
+.app-shell[data-reader-theme="dark"] .summary-panel {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.app-shell[data-reader-theme="dark"] .summary-panel .summary-toolbar {
+  border-bottom-color: rgba(235, 235, 245, 0.09);
+  color: var(--ink-secondary);
+  background: rgba(36, 38, 44, 0.92);
+}
+
+.app-shell[data-reader-theme="dark"] .summary-title-group strong,
+.app-shell[data-reader-theme="dark"] .summary-markdown,
+.app-shell[data-reader-theme="dark"] .summary-markdown p,
+.app-shell[data-reader-theme="dark"] .summary-markdown li,
+.app-shell[data-reader-theme="dark"] .summary-markdown strong,
+.app-shell[data-reader-theme="dark"] .summary-markdown b {
+  color: var(--ink-primary);
+}
+
+.app-shell[data-reader-theme="dark"] .summary-title-group span,
+.app-shell[data-reader-theme="dark"] .summary-panel .summary-toolbar label,
+.app-shell[data-reader-theme="dark"] .summary-content > .muted {
+  color: var(--ink-secondary);
+}
+
+.app-shell[data-reader-theme="dark"] .summary-content {
+  color: var(--ink-primary);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(10, 132, 255, 0.1), transparent 34%),
+    rgba(34, 36, 41, 0.74);
+}
+
+.app-shell[data-reader-theme="dark"] .summary-toolbar select {
+  border-color: var(--line-soft);
+  color: var(--ink-primary);
+  background: rgba(24, 26, 31, 0.92);
+}
+
+.app-shell[data-reader-theme="dark"] .summary-content-copy {
+  border-color: var(--line-soft);
+  color: var(--ink-secondary);
+  background: rgba(52, 54, 61, 0.88);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.app-shell[data-reader-theme="dark"] .summary-content-copy:hover {
+  color: #8cc8ff;
+  background: rgba(63, 66, 75, 0.94);
+}
+
+.app-shell[data-reader-theme="dark"] .summary-error {
+  border: 1px solid rgba(255, 99, 87, 0.24);
+  color: #ffb4a8;
+  background: rgba(255, 99, 87, 0.12);
+}
+
+.app-shell[data-reader-theme="dark"] .reader-side-panel {
+  border-color: rgba(235, 235, 245, 0.13);
+  color: var(--ink-primary);
+  background: rgba(43, 45, 51, 0.97);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.34);
+}
+
+.app-shell[data-reader-theme="dark"] .reader-side-panel-header {
+  border-bottom-color: var(--line-soft);
+}
+
+.app-shell[data-reader-theme="dark"] .reader-side-panel-header strong,
+.app-shell[data-reader-theme="dark"] .reader-panel-field span {
+  color: var(--ink-primary);
+}
+
+.app-shell[data-reader-theme="dark"] .reader-panel-status,
+.app-shell[data-reader-theme="dark"] .reader-panel-subtitle,
+.app-shell[data-reader-theme="dark"] .reader-side-panel .muted {
+  color: var(--ink-tertiary);
+}
+
+.app-shell[data-reader-theme="dark"] .reader-panel-field input,
+.app-shell[data-reader-theme="dark"] .reader-panel-field textarea {
+  border-color: var(--line-soft);
+  color: var(--ink-primary);
+  caret-color: var(--ink-primary);
+  background: rgba(24, 26, 31, 0.92);
+}
+
+.app-shell[data-reader-theme="dark"] .reader-panel-field input::placeholder,
+.app-shell[data-reader-theme="dark"] .reader-panel-field textarea::placeholder {
+  color: rgba(235, 235, 245, 0.42);
+}
+
+.app-shell[data-reader-theme="dark"] .existing-tags-panel {
+  border-top-color: var(--line-soft);
+}
+
+.app-shell[data-reader-theme="dark"] .tag-chip {
+  border-color: rgba(10, 132, 255, 0.26);
+  color: #8cc8ff;
+  background: rgba(10, 132, 255, 0.14);
+}
+
+.app-shell[data-reader-theme="dark"] .tag-chip button {
+  color: var(--ink-tertiary);
+}
+
+.app-shell[data-reader-theme="dark"] .tag-chip button:hover {
+  color: #ffb4a8;
+  background: rgba(255, 99, 87, 0.16);
+}
+
+.app-shell[data-reader-theme="dark"] .tag-add-button {
+  border-color: var(--line-soft);
+  color: #8cc8ff;
+  background: rgba(52, 54, 61, 0.72);
+}
+
+.app-shell[data-reader-theme="dark"] .tag-add-button:hover {
+  border-color: rgba(10, 132, 255, 0.34);
+  background: rgba(10, 132, 255, 0.14);
+}
+
+.app-shell[data-reader-theme="dark"] .tag-add-button:disabled {
+  color: var(--ink-tertiary);
+  background: rgba(235, 235, 245, 0.06);
+}
+
+.app-shell[data-reader-theme="dark"] .tag-pending-chip {
+  border-color: rgba(10, 132, 255, 0.3);
+  color: #8cc8ff;
+  background: rgba(10, 132, 255, 0.14);
+}
+
+.app-shell[data-reader-theme="dark"] .tag-existing-chip {
+  border-color: var(--line-soft);
+  color: var(--ink-secondary);
+  background: rgba(235, 235, 245, 0.08);
+}
+
+.app-shell[data-reader-theme="dark"] .tag-existing-chip:hover {
+  border-color: rgba(10, 132, 255, 0.34);
+  color: #8cc8ff;
+  background: rgba(10, 132, 255, 0.14);
+}
+
+.app-shell[data-reader-theme="dark"] .tag-existing-chip > span {
+  color: var(--ink-tertiary);
+}
+
+.app-shell[data-reader-theme="dark"] .tag-suggestion-chip:not(.selected) {
+  border-color: var(--line-soft);
+  color: var(--ink-secondary);
+  background: rgba(235, 235, 245, 0.08);
+}
+
+.app-shell[data-reader-theme="dark"] .tag-suggestion-chip.selected {
+  border-color: rgba(10, 132, 255, 0.4);
+  color: #8cc8ff;
+  background: rgba(10, 132, 255, 0.16);
+}
+
+.app-shell[data-reader-theme="dark"] .ai-hint {
+  color: var(--ink-tertiary);
+}
+
+.app-shell[data-reader-theme="dark"] .ai-status-ok {
+  color: #7ee2a8;
+}
+
+.app-shell[data-reader-theme="dark"] .ai-status-error {
+  color: #ffb4a8;
+}
+
+.app-shell[data-reader-theme="dark"] .ai-settings-panel.ai-manager-panel {
+  border-color: rgba(235, 235, 245, 0.12);
+  background:
+    linear-gradient(180deg, rgba(43, 45, 51, 0.98), rgba(31, 33, 38, 0.97)),
+    rgba(31, 33, 38, 0.97);
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.44),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.app-shell[data-reader-theme="dark"] .ai-toolbar-button {
+  border-color: rgba(235, 235, 245, 0.13);
+  color: var(--ink-secondary);
+  background: rgba(52, 54, 61, 0.72);
+  box-shadow: none;
+}
+
+.app-shell[data-reader-theme="dark"] .ai-toolbar-button:hover,
+.app-shell[data-reader-theme="dark"] .ai-toolbar-button:focus-visible {
+  border-color: rgba(10, 132, 255, 0.34);
+  color: #8cc8ff;
+  background: rgba(10, 132, 255, 0.14);
+}
+
+.app-shell[data-reader-theme="dark"] .ai-manager-header,
+.app-shell[data-reader-theme="dark"] .ai-settings-tabs,
+.app-shell[data-reader-theme="dark"] .ai-manager-footer {
+  border-color: var(--line-soft);
+  background: rgba(31, 33, 38, 0.86);
+}
+
+.app-shell[data-reader-theme="dark"] .ai-manager-list,
+.app-shell[data-reader-theme="dark"] .ai-properties,
+.app-shell[data-reader-theme="dark"] .ai-form-grid,
+.app-shell[data-reader-theme="dark"] .settings-card,
+.app-shell[data-reader-theme="dark"] .settings-sync-status,
+.app-shell[data-reader-theme="dark"] .settings-theme-option,
+.app-shell[data-reader-theme="dark"] .settings-reader-preview,
+.app-shell[data-reader-theme="dark"] .ai-result-panel,
+.app-shell[data-reader-theme="dark"] .ai-action-feedback {
+  border-color: var(--line-soft);
+  color: var(--ink-secondary);
+  background: rgba(52, 54, 61, 0.72);
+  box-shadow: none;
+}
+
+.app-shell[data-reader-theme="dark"] .ai-list-item {
+  border-color: rgba(235, 235, 245, 0.09);
+  color: var(--ink-secondary);
+  background: rgba(52, 54, 61, 0.68);
+  box-shadow: none;
+}
+
+.app-shell[data-reader-theme="dark"] .ai-list-item:hover,
+.app-shell[data-reader-theme="dark"] .ai-list-item.selected,
+.app-shell[data-reader-theme="dark"] .ai-settings-tabs button:hover,
+.app-shell[data-reader-theme="dark"] .ai-settings-tabs button.active,
+.app-shell[data-reader-theme="dark"] .settings-theme-option:hover,
+.app-shell[data-reader-theme="dark"] .settings-theme-option.active {
+  border-color: rgba(10, 132, 255, 0.34);
+  color: #8cc8ff;
+  background: rgba(10, 132, 255, 0.14);
+  box-shadow: none;
+}
+
+.app-shell[data-reader-theme="dark"] .ai-settings-tabs button {
+  color: var(--ink-secondary);
+  background: rgba(235, 235, 245, 0.06);
+}
+
+.app-shell[data-reader-theme="dark"] .settings-agent-header .ai-settings-tabs {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.app-shell[data-reader-theme="dark"] .settings-agent-header .ai-settings-tabs button {
+  border: 1px solid rgba(235, 235, 245, 0.11);
+  color: var(--ink-secondary);
+  background: rgba(52, 54, 61, 0.68);
+}
+
+.app-shell[data-reader-theme="dark"] .settings-agent-header .ai-settings-tabs button:hover,
+.app-shell[data-reader-theme="dark"] .settings-agent-header .ai-settings-tabs button.active {
+  border-color: rgba(10, 132, 255, 0.34);
+  color: #8cc8ff;
+  background: rgba(10, 132, 255, 0.14);
+}
+
+.app-shell[data-reader-theme="dark"] .ai-panel-title h3,
+.app-shell[data-reader-theme="dark"] .model-call-title h3,
+.app-shell[data-reader-theme="dark"] .ai-list-header h3,
+.app-shell[data-reader-theme="dark"] .ai-list-item strong,
+.app-shell[data-reader-theme="dark"] .settings-sync-status strong {
+  color: var(--ink-primary);
+}
+
+.app-shell[data-reader-theme="dark"] .ai-panel-title p,
+.app-shell[data-reader-theme="dark"] .model-call-title p,
+.app-shell[data-reader-theme="dark"] .ai-list-item span,
+.app-shell[data-reader-theme="dark"] .ai-list-item small,
+.app-shell[data-reader-theme="dark"] .settings-sync-status span,
+.app-shell[data-reader-theme="dark"] .ai-field span,
+.app-shell[data-reader-theme="dark"] .ai-check-field {
+  color: var(--ink-secondary);
+}
+
+.app-shell[data-reader-theme="dark"] .ai-field {
+  border-bottom-color: var(--line-soft);
+}
+
+.app-shell[data-reader-theme="dark"] .ai-field input,
+.app-shell[data-reader-theme="dark"] .ai-field select,
+.app-shell[data-reader-theme="dark"] .ai-field textarea {
+  border-color: var(--line-soft);
+  color: var(--ink-primary);
+  background: rgba(24, 26, 31, 0.92);
+}
+
+.app-shell[data-reader-theme="dark"] .ai-field input::placeholder {
+  color: rgba(235, 235, 245, 0.42);
+}
+
+.app-shell[data-reader-theme="dark"] .ai-action-feedback.error {
+  border-color: rgba(255, 99, 87, 0.24);
+  color: #ffb4a8;
+  background: rgba(255, 99, 87, 0.12);
 }

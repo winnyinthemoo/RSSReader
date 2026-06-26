@@ -5,10 +5,10 @@ mod repository;
 mod service;
 
 pub use commands::{
-    article_delete_tag, article_get, article_get_note, article_list, article_list_tags,
-    article_mark_favorite, article_mark_read, article_save_note, article_save_tags, feed_add,
-    feed_delete, feed_list, feed_refresh, feed_refresh_isolated, feed_rename, feed_subscribe,
-    tag_delete, tag_list, tag_merge, tag_rename,
+    article_delete_tag, article_get, article_get_note, article_get_with_update_callback,
+    article_list, article_list_tags, article_mark_favorite, article_mark_read, article_save_note,
+    article_save_tags, feed_add, feed_delete, feed_list, feed_refresh, feed_refresh_isolated,
+    feed_rename, feed_subscribe, tag_delete, tag_list, tag_merge, tag_rename,
 };
 pub use model::{
     ArticleDetail, ArticleListFilter, ArticleListItem, ArticleListResult,

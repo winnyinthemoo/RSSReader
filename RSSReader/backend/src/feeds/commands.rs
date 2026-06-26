@@ -16,6 +16,7 @@ use super::{
 static FEED_SERVICE: OnceLock<Mutex<FeedService>> = OnceLock::new();
 static ARTICLE_ENRICHMENT_JOBS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 const MAX_ARTICLE_ENRICHMENT_JOBS: usize = 2;
+type ArticleEnrichmentCallback = Box<dyn FnOnce(String) + Send + 'static>;
 
 pub fn feed_list() -> FeedListResult {
     with_service(|service| service.list_feeds())
@@ -53,12 +54,29 @@ pub fn article_list(filter: ArticleListFilter) -> ArticleListResult {
 }
 
 pub fn article_get(article_id: String) -> Result<ArticleDetail, String> {
+    article_get_internal(article_id, None)
+}
+
+pub fn article_get_with_update_callback<F>(
+    article_id: String,
+    on_updated: F,
+) -> Result<ArticleDetail, String>
+where
+    F: FnOnce(String) + Send + 'static,
+{
+    article_get_internal(article_id, Some(Box::new(on_updated)))
+}
+
+fn article_get_internal(
+    article_id: String,
+    on_updated: Option<ArticleEnrichmentCallback>,
+) -> Result<ArticleDetail, String> {
     let article = with_service(|service| {
         service
             .get_article(&article_id)
             .ok_or_else(|| "Article not found".to_string())
     })?;
-    maybe_queue_article_enrichment(&article);
+    maybe_queue_article_enrichment(&article, on_updated);
     Ok(article)
 }
 
@@ -147,7 +165,10 @@ fn with_service<T>(handler: impl FnOnce(&mut FeedService) -> T) -> T {
     handler(&mut guard)
 }
 
-fn maybe_queue_article_enrichment(article: &ArticleDetail) {
+fn maybe_queue_article_enrichment(
+    article: &ArticleDetail,
+    on_updated: Option<ArticleEnrichmentCallback>,
+) {
     let current_plain_len = strip_html(&article.sanitized_html).chars().count();
     if current_plain_len >= 1800 || !is_http_url(&article.url) {
         return;
@@ -171,6 +192,7 @@ fn maybe_queue_article_enrichment(article: &ArticleDetail) {
     let spawn_result = thread::Builder::new()
         .name("rssreader-article-enrichment".to_string())
         .spawn(move || {
+            let mut on_updated = on_updated;
             let result = std::panic::catch_unwind(|| enrich_rss_content(&url, &current_html));
             if let Ok(enriched_html) = result {
                 let enriched_plain_len = strip_html(&enriched_html).chars().count();
@@ -178,7 +200,14 @@ fn maybe_queue_article_enrichment(article: &ArticleDetail) {
                     && enriched_html.trim() != current_html.trim()
                 {
                     if let Ok(repository) = FeedRepository::open_default() {
-                        let _ = repository.update_article_content(&article_id, &enriched_html);
+                        if repository
+                            .update_article_content(&article_id, &enriched_html)
+                            .is_ok()
+                        {
+                            if let Some(callback) = on_updated.take() {
+                                callback(article_id.clone());
+                            }
+                        }
                     }
                 }
             }

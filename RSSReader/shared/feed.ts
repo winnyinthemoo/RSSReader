@@ -194,6 +194,10 @@ export interface OpmlBackgroundRefreshEvent {
   message?: string;
 }
 
+export interface ArticleContentUpdatedEvent {
+  articleId: string;
+}
+
 export interface AppErrorPayload {
   code: string;
   message: string;
