@@ -2,429 +2,187 @@
 
 ## 项目总目标
 
-实现一个本地优先、无需登录、跨平台运行的 RSS Reader，复刻 Mercury 的核心阅读体验，并完整记录团队协作和 Coding Agent 使用过程。
+实现一个本地优先、无需登录、跨平台运行的桌面 RSS Reader。项目以 Mercury 的核心阅读体验为参考，但使用 React + TypeScript + Tauri 2 + Rust + SQLite 重新实现，并完整保留团队协作、GitHub Issue / PR 和 Coding Agent 使用过程。
 
-## 开发原则
+当前产品名为 **Vortex**，仓库名为 **RSSReader**。
 
-1. 文档先行，再写代码。
-2. 每个阶段都要有可验证成果。
-3. 每个功能通过 Issue 拆分。
-4. 每个 PR 尽量小而清晰。
-5. main 分支应尽量保持可运行。
-6. 功能开发之间穿插重构。
-7. Agent 负责执行，人类负责判断、审核和验收。
+## 当前状态
+
+截至 2026-06-26，项目开发主体已经基本完成，当前进入最终验收、演示准备和小范围缺陷收敛阶段。
+
+| 项目 | 当前状态 |
+|------|----------|
+| 应用版本 | `0.3.0` |
+| Windows 测试包 | `v0.3.0-alpha.1`，已发布到 GitHub Releases |
+| macOS 测试包 | `v0.3.0-macos-alpha.1`，Apple Silicon / arm64，ad-hoc 签名，未 notarize |
+| GitHub Issue | 25 个 issue 中 23 个已关闭，仍打开 #1、#4 |
+| GitHub PR | #17、#19、#20、#21、#24 均已关闭，其中 #20/#21 已整合，#24 为 AI 兼容性文档 |
+| 当前重点 | 最终文档、演示材料、安装包 smoke test、少量遗留问题说明 |
+
+仍打开的 Issue：
+
+- #1：Summary 提示词完善。属于摘要输出质量和 Prompt 体验优化。
+- #4：原始网页无法显示。主要受目标站点 iframe / CSP / 网络访问限制影响，应用已有原网页入口和 fallback，但需要在文档中明确限制。
+
+## 已完成功能总览
+
+### RSS 与文章
+
+- RSS / Atom 订阅源添加、重命名、删除、刷新和自动同步控制。
+- OPML 导入与导出；导入时先保存订阅源，再后台并发刷新文章。
+- Feed 自定义名称与源站标题分离，刷新不会覆盖用户命名。
+- 文章列表支持已读 / 未读、收藏、Feed 筛选、文章搜索、标签筛选。
+- 数据保存在本地 SQLite，数据库 migration 已覆盖核心功能和性能索引。
+
+### Reader 阅读体验
+
+- 三栏桌面布局、可调整栏宽、可隐藏侧栏。
+- Markdown 阅读视图、原始网页入口、双栏对比视图。
+- 阅读主题、字号、正文宽度、浅色 / 深色显示。
+- 当前文章查找、翻译视图查找高亮、文章列表搜索。
+- 文章内链接可在阅读器内打开并返回；相对链接和相对图片已做补全。
+- 标签、笔记、复制、分享和 Markdown 导出。
+- 文章点击性能已优化：本地详情立即返回，短正文补全转为后台任务。
+
+### 标签与笔记
+
+- 手动添加标签、AI 标签建议、标签筛选。
+- 左侧标签区保留单标签快速筛选，文章列表顶部支持多标签任一 / 全部匹配。
+- 标签重命名、合并、删除和确认弹窗。
+- 每篇文章可保存 Markdown 笔记，并支持分享、复制和导出。
+
+### AI 能力
+
+- OpenAI-compatible Provider / Model 配置与连接测试。
+- API Key 已升级为操作系统凭据管理器 / macOS Keychain 保存，不写入源码或 SQLite。
+- Summary、Translation、Tagging 三类 Agent 可独立绑定模型。
+- 摘要支持目标语言和详细程度配置，并已接入流式生成展示。
+- 翻译支持全文分段、双语对照、17 种目标语言、选中文本翻译、失败段落重试和后台任务显示控制。
+- 标签建议支持模型返回标签并写入本地标签系统。
+- AI 用量统计支持按 Provider、Model、Agent 查看和清理。
+- 已整理 `docs/ai-compatibility.md`，记录兼容接口、已测 Provider / Model 和测试流程。
+
+### 打包与发布
+
+- Windows NSIS 安装包已多轮发布到 GitHub Releases。
+- macOS Apple Silicon `.dmg` 内测包已支持 ad-hoc 签名；未 notarize，需按 README 说明解除 quarantine。
+- README 已包含中文 / 英文介绍、安装、快速上手、AI 配置、隐私说明、源码构建和常见问题。
 
 ## 当前项目目录定位
 
 项目应用代码统一放在 `RSSReader/` 目录下：
 
-- `RSSReader/frontend/`：前端，使用 React + TypeScript + Vite，负责页面、交互和状态展示。
-- `RSSReader/backend/`：后端，使用 Tauri + Rust，负责本地能力、RSS 解析、文件、AI 调用和数据库访问封装。
-- `RSSReader/db/`：数据库，保存 SQLite schema、migration、初始化脚本和数据库说明。
-- `RSSReader/shared/`：前后端共享，保存 Command 契约、共享类型和通用常量。
-- `RSSReader/resources/`：资源模板，保存 Prompt 模板、文摘模板和其他文本模板。
-- `RSSReader/build/`：打包，保存跨平台打包配置、脚本、产物说明和发布材料。
-- `RSSReader/docs/`：项目文档、决策记录、Agent 使用记录和过程资料。
-- `RSSReader/scripts/`：开发、检查、辅助生成等脚本。
-- `RSSReader/tests/`：跨模块测试、集成测试和人工验收材料。
-- `RSSReader/samples/`：RSS、OPML、文章内容等样例数据。
+- `RSSReader/frontend/`：React + TypeScript + Vite 前端，负责 UI、交互、状态展示和 Tauri Commands / dev server 调用。
+- `RSSReader/backend/`：Rust 业务 crate，负责 RSS、数据库、Reader 内容处理、AI Provider 调用和开发 HTTP server。
+- `RSSReader/src-tauri/`：Tauri 2 桌面应用壳，负责窗口、Commands、应用数据目录、桌面权限、OPML 文件选择和打包配置。
+- `RSSReader/db/`：SQLite schema、migration 和数据库说明。
+- `RSSReader/shared/`：前后端共享 Command 契约和 TypeScript 类型。
+- `RSSReader/resources/`：内置 Prompt 模板和可复用文本资源。
+- `RSSReader/build/`：跨平台打包说明和发布材料。
+- `RSSReader/docs/`：项目文档、AI 文档、Agent 工作记录和汇报材料。
+- `RSSReader/scripts/`：开发、检查、构建辅助脚本。
+- `RSSReader/tests/`：测试用例、测试数据和人工验收材料。
 - `RSSReader/screenshots/`：界面截图、验收截图和演示素材。
 
----
-
-# Phase 0：产品拆解与项目初始化
-
-## 目标
-
-明确我们要复刻 Mercury 的哪些功能，建立初始文档、目录结构和 GitHub 协作规则。
-
-## 任务
-
-### Task 0.1：整理成员信息和 README
-
-- 负责人：章涵
-- 内容：
-  - 在 README.md 中记录成员姓名、GitHub 账号、初步分工
-  - 添加项目简介
-  - 添加技术栈说明
-- 验证：
-  - GitHub 首页能正常显示成员信息表格
-
-### Task 0.2：建立项目基础文档
-
-- 负责人：章涵
-- 内容：
-  - 编写 INIT.md
-  - 编写 AGENTS.md
-  - 编写 PLAN.md
-  - 根据当前目录定位同步 Agent 工作规则和阶段计划
-- 验证：
-  - 三个文件已提交到 main
-  - 小组成员能根据文档理解项目目标和工作方式
-
-### Task 0.3：Mercury 产品拆解
-
-- 负责人：产品与文档组
-- 内容：
-  - 阅读 Mercury README、截图和功能描述
-  - 整理 P0 / P1 / P2 功能范围
-  - 输出 `RSSReader/docs/mercury-analysis.md`
-- 验证：
-  - 文档中说明参考功能、实现范围、不实现范围
-
-### Task 0.4：GitHub 协作设置
-
-- 负责人：章涵
-- 内容：
-  - 邀请全部组员
-  - 建立 Issue 标签
-  - 建立 Milestone
-  - 建立 PR 模板
-  - 说明 Branch / PR 工作流
-- 验证：
-  - 每位组员能接受邀请并看到仓库
-  - 至少创建第一批 Issues
-
----
-
-# Phase 1：项目脚手架与基础架构
-
-## 目标
-
-搭建 React + TypeScript + Vite + Tauri + Rust + SQLite 的可运行项目骨架。
-
-## 任务
-
-### Task 1.1：初始化前端项目
-
-- 负责人：前端核心开发
-- 内容：
-  - 初始化 React + TypeScript + Vite
-  - 建立 `RSSReader/frontend/src/` 目录结构
-  - 实现基础 App 入口
-- 影响目录：
-  - `RSSReader/frontend/`
-- 验证：
-  - 在 `RSSReader/frontend/` 下运行 `npm run dev` 可启动
-  - 在 `RSSReader/frontend/` 下运行 `npm run build` 可通过
-
-### Task 1.2：初始化 Tauri 后端
-
-- 负责人：后端核心开发
-- 内容：
-  - 初始化 Tauri
-  - 建立 `RSSReader/backend/` 目录结构
-  - 实现最小 Rust Command
-- 影响目录：
-  - `RSSReader/backend/`
-  - `RSSReader/shared/`
-- 验证：
-  - npm run tauri dev 可启动
-  - 前端能调用一个测试 Command
-
-### Task 1.3：初始化 SQLite
-
-- 负责人：后端核心开发 + 数据支持
-- 内容：
-  - 建立 SQLite 连接
-  - 设计初始表结构
-  - 建立 migration 目录和数据库说明
-  - 实现数据库初始化逻辑
-- 影响目录：
-  - `RSSReader/backend/src/database/`
-  - `RSSReader/db/`
-- 验证：
-  - 应用启动时能创建本地数据库
-  - 在 `RSSReader/backend/` 下运行 `cargo test` 通过基础数据库测试
-
-### Task 1.4：实现三栏静态界面
-
-- 负责人：前端核心开发 + UI 设计
-- 内容：
-  - 左侧 Feed 列表
-  - 中间文章列表
-  - 右侧 Reader 视图
-  - 基础空状态
-- 影响目录：
-  - `RSSReader/frontend/src/components/`
-  - `RSSReader/frontend/src/features/`
-- 验证：
-  - 页面结构接近 Mercury 的核心阅读布局
-  - 提供截图用于汇报
-
-### Task 1.5：建立共享契约与资源模板目录
-
-- 负责人：核心开发 + 文档支持
-- 内容：
-  - 在 `RSSReader/shared/` 中建立 Command 输入输出类型、共享常量和命名规则说明
-  - 在 `RSSReader/resources/` 中建立 Prompt 模板、文章摘要模板和文摘导出模板说明
-  - 明确前端、后端、资源模板之间的引用方式
-- 影响目录：
-  - `RSSReader/shared/`
-  - `RSSReader/resources/`
-- 验证：
-  - 新增 Command 前能先在共享契约中说明输入输出
-  - Prompt 和文摘模板不散落在业务代码中
-
----
-
-# Phase 2：RSS Reader MVP
-
-## 目标
-
-完成从添加订阅源到阅读文章的核心闭环。
-
-## 任务
-
-### Task 2.1：Feed 添加与保存
-
-- 负责人：核心开发
-- 内容：
-  - 前端提供添加 Feed 入口
-  - 后端校验 URL
-  - 保存 Feed 到 SQLite
-- 影响目录：
-  - `RSSReader/frontend/`
-  - `RSSReader/backend/`
-  - `RSSReader/db/`
-  - `RSSReader/shared/`
-- 验证：
-  - 输入 Feed URL 后，订阅源出现在左侧列表
-
-### Task 2.2：RSS 抓取与解析
-
-- 负责人：核心开发
-- 内容：
-  - 使用 reqwest 请求 RSS URL
-  - 使用 feed-rs 解析 RSS / Atom
-  - 转换为统一 Article 数据结构
-- 影响目录：
-  - `RSSReader/backend/src/feeds/`
-  - `RSSReader/shared/`
-  - `RSSReader/samples/`
-- 验证：
-  - 至少支持 3 个真实 RSS 源
-  - 解析失败时有明确错误提示
-
-### Task 2.3：文章列表
-
-- 负责人：前端核心开发
-- 内容：
-  - 显示文章标题、来源、发布时间、已读状态
-  - 点击 Feed 后筛选文章
-- 影响目录：
-  - `RSSReader/frontend/src/features/articles/`
-  - `RSSReader/frontend/src/features/feeds/`
-  - `RSSReader/shared/`
-- 验证：
-  - 点击不同 Feed 可切换文章列表
-
-### Task 2.4：阅读器视图
-
-- 负责人：前端核心开发 + Reader 支持
-- 内容：
-  - 点击文章显示正文
-  - 支持基础排版
-  - 标记已读
-- 影响目录：
-  - `RSSReader/frontend/src/features/reader/`
-  - `RSSReader/backend/src/articles/`
-  - `RSSReader/backend/src/reader/`
-  - `RSSReader/shared/`
-- 验证：
-  - 点击文章后右侧显示内容
-  - 重启应用后已读状态保留
-
-### Task 2.5：刷新订阅源
-
-- 负责人：核心开发
-- 内容：
-  - 手动刷新单个 Feed
-  - 更新新文章
-  - 避免重复文章
-- 影响目录：
-  - `RSSReader/frontend/src/features/feeds/`
-  - `RSSReader/backend/src/feeds/`
-  - `RSSReader/backend/src/articles/`
-  - `RSSReader/db/`
-- 验证：
-  - 重复刷新不会重复插入已有文章
-
----
-
-# Phase 3：体验完善与扩展功能
-
-## 目标
-
-补齐常见 RSS Reader 功能，提升产品完整度。
-
-## 任务
-
-### Task 3.1：OPML 导入导出
-
-- 内容：
-  - 导入 OPML 文件
-  - 导出当前订阅源为 OPML
-- 影响目录：
-  - `RSSReader/frontend/`
-  - `RSSReader/backend/`
-  - `RSSReader/shared/`
-  - `RSSReader/samples/`
-- 验证：
-  - 可导入样例 OPML
-  - 可导出并再次导入
-
-### Task 3.2：收藏与已读管理
-
-- 内容：
-  - 收藏文章
-  - 筛选未读 / 已收藏
-- 影响目录：
-  - `RSSReader/frontend/src/features/articles/`
-  - `RSSReader/backend/src/articles/`
-  - `RSSReader/db/`
-- 验证：
-  - 状态重启后保留
-
-### Task 3.3：搜索
-
-- 内容：
-  - 按标题、来源、正文搜索文章
-- 影响目录：
-  - `RSSReader/frontend/`
-  - `RSSReader/backend/src/articles/`
-  - `RSSReader/db/`
-- 验证：
-  - 搜索结果正确，空结果有提示
-
-### Task 3.4：标签
-
-- 内容：
-  - 手动添加标签
-  - 按标签筛选
-- 影响目录：
-  - `RSSReader/frontend/src/features/tags/`
-  - `RSSReader/backend/src/tags/`
-  - `RSSReader/db/`
-- 验证：
-  - 标签与文章关系可保存
-
-### Task 3.5：内容清洗
-
-- 内容：
-  - 使用 ammonia 清洗 HTML
-  - 改善 Reader 显示效果
-- 影响目录：
-  - `RSSReader/backend/src/reader/`
-  - `RSSReader/frontend/src/features/reader/`
-- 验证：
-  - 不可信 HTML 不会破坏页面结构
-
----
-
-# Phase 4：AI 功能与项目收尾
-
-## 目标
-
-实现基础 AI 能力，并完成课程验收所需文档、测试、演示材料。
-
-## 任务
-
-### Task 4.1：AI Provider 设置
-
-- 内容：
-  - 支持 Base URL
-  - 支持 API Key
-  - 支持 Model
-  - 设置保存在本地
-- 影响目录：
-  - `RSSReader/frontend/src/features/ai/`
-  - `RSSReader/backend/src/ai/`
-  - `RSSReader/shared/`
-- 验证：
-  - 不提交任何真实 API Key
-  - 可配置 OpenAI-compatible Provider
-
-### Task 4.2：文章摘要
-
-- 内容：
-  - 用户点击后生成文章摘要
-  - 摘要保存到 SQLite
-- 影响目录：
-  - `RSSReader/frontend/src/features/ai/`
-  - `RSSReader/backend/src/ai/`
-  - `RSSReader/resources/`
-  - `RSSReader/db/`
-- 验证：
-  - 摘要结果可显示、可再次查看
-
-### Task 4.3：用户文档
-
-- 内容：
-  - 安装说明
-  - 使用说明
-  - 功能截图
-  - 常见问题
-- 影响目录：
-  - `README.md`
-  - `RSSReader/docs/`
-  - `RSSReader/screenshots/`
-- 验证：
-  - 新成员按 README 可以启动项目
-
-### Task 4.4：测试与验收
-
-- 内容：
-  - 整理测试用例
-  - 记录测试结果
-  - 修复关键 bug
-- 影响目录：
-  - `RSSReader/tests/`
-  - `RSSReader/docs/`
-- 验证：
-  - 在 `RSSReader/frontend/` 下运行 `npm run build` 通过
-  - 在 `RSSReader/backend/` 下运行 `cargo test` 通过
-  - 核心功能人工验收通过
-
-### Task 4.5：演示材料
-
-- 内容：
-  - 项目介绍
-  - 技术架构图
-  - 分工说明
-  - Agent 使用记录
-  - GitHub 协作记录
-- 影响目录：
-  - `RSSReader/docs/`
-  - `RSSReader/screenshots/`
-  - `RSSReader/build/`
-- 验证：
-  - 可用于课程汇报
-
----
-
-# 阶段性重构安排
-
-每完成一个主要 Phase 后，安排一次 Refactor Issue：
-
-- Phase 1 后：整理目录和命名
-- Phase 2 后：拆分过大的 Command / Service / Component
-- Phase 3 后：统一错误处理和状态管理
-- Phase 4 前：清理无用代码、模板资源和文档
-
----
-
-# 验收标准
-
-最终项目应满足：
-
-1. 可以运行桌面应用。
-2. 可以添加、刷新 RSS Feed。
-3. 可以查看文章列表和正文。
-4. 可以本地保存数据。
-5. 不需要注册登录。
-6. 不主动采集用户数据。
-7. 有清晰 README、INIT、AGENTS、PLAN。
-8. 有 Agent 使用记录。
-9. 有团队协作记录。
-10. 每位成员在 GitHub 中有可见贡献。
+## 阶段完成情况
+
+| 阶段 | 状态 | 说明 |
+|------|------|------|
+| Phase 0 产品拆解与项目初始化 | 已完成 | 初始化文档、目录和协作方式已建立。 |
+| Phase 1 项目脚手架与基础架构 | 已完成 | React / Tauri / Rust / SQLite 项目骨架和共享契约已落地。 |
+| Phase 2 RSS Reader MVP | 已完成 | 添加 Feed、刷新、列表、阅读、状态保存已形成闭环。 |
+| Phase 3 体验完善与扩展功能 | 已完成 | OPML、收藏、搜索、标签、笔记、内容清洗和 Reader 体验已实现。 |
+| Phase 4 AI 功能与项目收尾 | 已完成主体 | Provider、Model、摘要、翻译、标签建议、用量统计、keyring 已实现。 |
+| Phase 5 Alpha 测试与打包验证 | 基本完成 | Windows/macOS alpha 包已发布，主要缺陷已关闭，剩少量说明型问题。 |
+| Phase 6 最终验收与展示 | 当前阶段 | 聚焦文档、演示、最终 smoke test 和遗留风险说明。 |
+
+## Phase 6：最终验收与展示
+
+### 目标
+
+不再扩大功能范围，围绕 `0.3.0` alpha 版本完成课程 / 项目验收所需的最终材料、测试记录和风险说明。
+
+### Task 6.1：最终安装包 Smoke Test
+
+- Windows：下载并安装 `v0.3.0-alpha.1`，验证启动、添加 Feed、OPML 导入、同步、阅读、搜索、收藏、标签、笔记、摘要、翻译、导出和设置页。
+- macOS：下载并安装 `v0.3.0-macos-alpha.1`，验证打开方式、quarantine 解除说明、基础阅读流程和 AI Keychain 权限提示。
+- 输出：一份最终 smoke test 记录，包含测试人、系统版本、安装包版本、通过项和失败项。
+
+### Task 6.2：关闭或说明遗留 Issue
+
+- #1：若时间允许，继续微调 Summary Prompt；若不改代码，则在最终说明中标记为低优先级体验优化。
+- #4：明确原始网页内嵌受目标站点限制，不作为应用核心缺陷；文档中说明 fallback 和外部打开策略。
+- 若验收前出现新问题，只修阻断演示或破坏核心流程的问题。
+
+### Task 6.3：最终文档整理
+
+- 保持 README 与 Releases 当前版本一致。
+- 更新 AGENTS / INIT / PLAN，使其反映“开发主体完成，进入验收收尾”的状态。
+- 检查 `docs/agent-logs/` 是否覆盖关键 Agent 工作记录。
+- 保留 AI 兼容性、macOS 打包、内容抽取修复、性能修复等说明文档。
+
+### Task 6.4：演示材料准备
+
+- 准备最终截图或录屏，覆盖：订阅源管理、阅读器、OPML、标签 / 笔记、AI 摘要、AI 翻译、设置页、用量统计。
+- 准备架构说明：React 前端、Tauri 壳、Rust 后端、SQLite、OpenAI-compatible AI、系统 keyring。
+- 准备协作说明：Issue、PR、Release、Agent log、测试反馈和小核心开发 + 全员测试流程。
+
+### Task 6.5：发布与风险说明
+
+- 明确当前发布包仍为 alpha 测试版，不是正式稳定版。
+- 说明 macOS 包为 ad-hoc 签名，未 notarize，仅用于课程 / 内测场景。
+- 说明 Linux 与 Intel Mac 尚未作为正式验收平台。
+- 说明 AI 能力依赖用户自行配置的 Provider、API Key、模型能力和网络环境。
+
+## 验证命令
+
+常规验证以 README 和脚本为准。最终阶段建议至少保留以下命令和人工验收：
+
+```bash
+npm run frontend:build
+```
+
+```bash
+cd backend
+cargo check
+cargo test
+```
+
+```bash
+cd src-tauri
+cargo check
+```
+
+```bash
+npm run tauri:build:windows
+npm run tauri:build:mac
+```
+
+打包命令需要对应平台环境。Windows 需要 Visual Studio Build Tools / Windows SDK，macOS 需要 Xcode Command Line Tools。打包成功后必须人工安装并做 smoke test。
+
+## 后续可选优化
+
+以下内容不阻塞当前验收，可作为后续版本方向：
+
+- Summary Prompt 质量继续打磨。
+- 原始网页打开策略继续增强，例如外部浏览器打开、代理阅读或更清晰的站点限制提示。
+- 文章搜索升级为 SQLite FTS，提升大数据量搜索性能。
+- AI 设置页进一步拆分和动态加载，降低前端主 chunk 体积。
+- 翻译后端加入真正可取消任务队列和并发速率控制。
+- macOS Developer ID 签名、notarization 和 Intel Mac 包。
+- Linux 打包和安装测试。
+- 更多 Provider / Model 兼容性测试记录。
+
+## 最终验收标准
+
+1. Windows 安装包可以安装、启动，并完成核心阅读流程。
+2. macOS Apple Silicon 内测包可以按 README 说明打开，并完成基础流程。
+3. 可以添加、导入、刷新、重命名和删除 RSS / Atom 订阅源。
+4. 可以查看文章列表、正文、原网页入口和双栏对比视图。
+5. 可以本地保存订阅源、文章、阅读状态、收藏、标签、笔记、摘要和翻译结果。
+6. 可以使用标签、搜索、收藏、已读 / 未读筛选管理阅读队列。
+7. 可以配置 OpenAI-compatible Provider / Model，并使用摘要、翻译和标签建议。
+8. API Key 不写入源码或 SQLite，保存到系统凭据 / 钥匙串。
+9. 不需要注册登录，不主动采集或上传用户阅读数据。
+10. README、INIT、AGENTS、PLAN、Agent logs、AI 文档和打包说明可支撑最终汇报。
+11. 已知限制和遗留 issue 有清晰说明，不影响核心演示。

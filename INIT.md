@@ -2,26 +2,28 @@
 
 ## 项目名称
 
-Web RSS Reader
+Vortex（仓库名 RSSReader）
 
 ## 目标
 
-实现一个本地优先、无需登录、跨平台运行的 RSS Reader，复刻 Mercury 的核心阅读体验，并在 GitHub 中完整记录团队协作与 Coding Agent 使用过程。
+实现一个本地优先、无需登录、跨平台运行的桌面 RSS Reader，复刻 Mercury 的核心阅读体验，并在 GitHub 中完整记录团队协作与 Coding Agent 使用过程。
+
+截至 2026-06-26，项目开发主体已经基本完成，当前进入 `0.3.0` alpha 版本的最终验收和演示准备阶段。
 
 ## 项目背景
 
 本项目建立团队协作仓库，持续记录成员信息、项目分工、项目计划、开发记录、文档资料与协作过程。
 
-我们参考的产品是 Mercury。Mercury 是一个本地优先的 RSS Reader，具有订阅源管理、文章阅读、OPML、内容清洗、AI 摘要、翻译、标签等功能。我们的目标不是逐行复刻 Mercury 的源码，而是在理解其产品体验和架构思想的基础上，用 Web + Rust 技术栈实现一个跨平台版本。
+我们参考的产品是 Mercury。Mercury 是一个本地优先的 RSS Reader，具有订阅源管理、文章阅读、OPML、内容清洗、AI 摘要、翻译、标签等功能。我们的目标不是逐行复刻 Mercury 的源码，而是在理解其产品体验和架构思想的基础上，用 Web + Rust + Tauri 技术栈实现一个跨平台桌面版本。
 
 ## 核心约束
 
-1. 产品体验：界面应简洁、清晰、易用，优先完成稳定的阅读流程。
+1. 产品体验：界面应简洁、清晰、易用，优先保证稳定的阅读流程。
 2. 本地优先：无需注册登录，不主动采集用户数据。
-3. 平台中立：目标支持 Windows / macOS / Linux。
-4. 大模型中立：AI 功能应支持 OpenAI-compatible API，不绑定单一模型服务。
+3. 平台中立：目标支持 Windows / macOS，Linux 作为后续扩展验证。
+4. 大模型中立：AI 功能支持 OpenAI-compatible API，不绑定单一模型服务。
 5. Coding Agent 留痕：使用 AI 辅助开发时，需要记录关键 Prompt、产出、人工审核和验证结果。
-6. 团队协同留痕：通过 Issue、Branch、Commit、Pull Request 记录协作过程。
+6. 团队协同留痕：通过 Issue、Branch、Commit、Pull Request、Release 记录协作过程。
 7. 小步开发：每个阶段都应保持项目可运行、可验证。
 
 ## 参考产品范围
@@ -41,7 +43,7 @@ Web RSS Reader
 
 ## 本项目功能范围
 
-### P0：必须完成
+### P0：必须完成（已完成）
 
 - 添加 RSS / Atom 订阅源
 - 拉取并解析订阅源
@@ -53,7 +55,7 @@ Web RSS Reader
 - 提供基础错误提示和加载状态
 - 完成 GitHub 协作留痕和 Agent 使用留痕
 
-### P1：建议完成
+### P1：建议完成（已完成主体）
 
 - OPML 导入 / 导出
 - 收藏文章
@@ -63,14 +65,14 @@ Web RSS Reader
 - 基础设置页
 - 用户使用文档
 
-### P2：加分功能
+### P2：加分功能（已完成主体）
 
 - AI 文章摘要
 - AI 翻译
 - AI 标签建议
 - LLM Provider 设置
 - LLM 调用记录或用量统计
-- 导出单篇文章或文摘
+- 导出单篇文章或文摘 / 笔记
 
 ## 暂不考虑的功能
 
@@ -80,48 +82,56 @@ Web RSS Reader
 - 多用户权限管理
 - 服务端数据库
 - 主动上传用户阅读数据
+- 正式商业分发所需的 macOS notarization 和完整 Linux 支持
 
-## 初步技术选型
+## 技术选型
 
-- 前端：React + TypeScript + Vite
-- 桌面框架：Tauri
-- 后端：Rust
+- 前端：React 19 + TypeScript + Vite 7
+- 前端 UI 与阅读渲染：CSS、lucide-react、react-markdown、remark-gfm、rehype-raw、turndown
+- 桌面框架：Tauri 2
+- 后端：Rust 业务 crate + Tauri Commands
 - 本地数据库：SQLite
 - RSS 解析：feed-rs
 - HTTP 请求：reqwest
-- SQLite 访问：rusqlite
-- 数据序列化：serde
+- SQLite 访问：rusqlite bundled
+- 数据序列化：serde / serde_json / serde_yaml
 - HTML 清洗：ammonia
-- AI Provider：OpenAI-compatible API
+- 正文抽取辅助：readability
+- API Key 存储：keyring（系统凭据管理器 / macOS Keychain）
+- AI Provider：OpenAI-compatible Chat Completions API
 
 ## 架构原则
 
-1. 前后端职责清晰：前端负责 UI 和交互，后端负责 RSS、数据库、文件、AI 调用等本地能力。
-2. 通过 Tauri Commands 定义前后端通信接口。
+1. 前后端职责清晰：前端负责 UI 和交互，后端负责 RSS、数据库、Reader、AI 调用等本地能力。
+2. 通过 Tauri Commands 定义桌面端前后端通信接口；普通浏览器开发模式通过本地 REST dev server 辅助调试。
 3. 数据模型优先稳定，避免 UI 直接操作数据库。
 4. 每个功能模块尽量高内聚、低耦合。
-5. 所有关键技术决策记录到 docs/decisions。
+5. 所有关键技术决策记录到 docs、agent logs 或专项说明文档中。
 6. 每个阶段完成后更新 PLAN.md 和 AGENTS.md。
 
 ## 当前状态
 
-- GitHub 仓库已建立
-- README.md 已记录成员信息
-- 正在确定项目架构、技术选型、分工与初步计划
-- 尚未开始正式功能开发
+- GitHub 仓库已建立，README、Agent logs、Issue、PR 和 Release 记录已经形成完整协作链路。
+- 项目版本已推进到 `0.3.0`。
+- Windows 最新测试包为 `v0.3.0-alpha.1`。
+- macOS 最新测试包为 `v0.3.0-macos-alpha.1`，支持 Apple Silicon / arm64，使用 ad-hoc 签名。
+- RSS 阅读、Reader、OPML、标签、笔记、AI 摘要、AI 翻译、AI 标签建议、用量统计、keyring、安装包构建等主体功能已经完成。
+- 当前工作重点从功能开发转向最终验收、演示材料、少量遗留 Issue 说明和文档收尾。
 
 ## 已知风险
 
-1. 组员人数较多，若所有人同时开发核心代码，容易产生冲突。
-2. Rust / Tauri / SQLite 对部分成员有学习成本。
-3. RSS 源格式复杂，真实网站可能出现格式不规范、请求失败、编码异常等问题。
-4. AI 生成代码可能引入不一致的风格，需要人工 Code Review。
-5. 跨平台打包和文件路径可能出现系统差异。
+1. 原始网页视图受目标网站 iframe / CSP / 网络限制影响，部分网站无法内嵌显示。
+2. Summary Prompt 输出质量仍可继续打磨。
+3. macOS 包为 ad-hoc 签名且未 notarize，下载后可能需要按 README 说明解除 quarantine。
+4. Linux 与 Intel Mac 尚未作为正式验收平台。
+5. AI 功能依赖用户配置的 Provider、API Key、模型能力和网络环境。
+6. Vite chunk size warning 尚未处理，但不阻塞当前验收。
+7. 最终阶段如果继续大规模改动，可能重新引入性能或 UI 回归。
 
 ## 应对策略
 
-1. 采用“核心开发小队 + 支援角色”的分工方式，减少多人同时修改核心代码。
-2. 先搭建稳定的目录结构和接口边界，再进行功能开发。
-3. 每个功能通过 Issue 拆分，使用独立 Branch 开发。
-4. 所有 PR 合并前必须人工运行和检查。
-5. 每个阶段安排一次文档更新和小规模重构。
+1. 最终阶段不再扩大功能范围，只修阻断演示或破坏核心流程的问题。
+2. 对 #1、#4 等遗留 Issue 做明确优先级判断；无法在验收前解决的，写入最终风险说明。
+3. Windows 和 macOS 安装包都做 smoke test，记录测试环境、版本和结果。
+4. 继续保持 Agent log，确保最终文档、修复和验收过程可追踪。
+5. 保持 README、PLAN、AGENTS、INIT 与 Release 状态一致，减少汇报时的信息冲突。
