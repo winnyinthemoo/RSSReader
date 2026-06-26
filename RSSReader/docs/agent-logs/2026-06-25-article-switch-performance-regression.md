@@ -1,0 +1,24 @@
+# 2026-06-25 Article Switch Performance Regression
+
+- 日期：2026-06-25
+- 负责人：Codex
+- 使用工具：PowerShell、rg、apply_patch、cargo fmt、cargo test
+- 对应 Issue / PR：未指定
+- 任务目标：排查当前版本切换文章时软件卡住、文章展示慢、部分订阅源文章点击后闪退的问题；判断是否需要重构，若为小问题则直接修复。
+- 关键 Prompt 摘要：用户反馈近期文章展示相关改动后出现明显卡顿，要求结合 AGENTS/INIT/PLAN 和历史 agent-log 排查，尤其对照开发前期类似卡顿问题。
+- Agent 修改内容摘要：
+  - 对照 `docs/fix-content-extraction-2026-05-30.md`、`2026-06-09-article-click-response.md` 与 `2026-06-24-jeff-feed-reader-ui-followup.md`，确认近期为补全短正文又把同步全文抓取放回文章点击路径。
+  - 修复 `article_get`：文章详情只同步读取本地 SQLite 后立即返回；短正文全文补全改为后台线程执行，并通过独立 `FeedRepository` 回写，避免占用全局 `FeedService` 锁。
+  - 增加后台补全任务去重与并发上限，避免快速连续点击同一文章时重复发起抓取，也避免过多后台抓取争抢资源。
+  - 为 `extract_hero_banner_img` 增加安全窗口切片，防止 `hero/banner` 关键字接近文档末尾时越界 panic。
+  - 全局 FeedService 锁恢复时改为处理 poisoned lock，降低历史 panic 后继续使用时再次崩溃的风险。
+- 人工检查结果：
+  - 当前卡顿主因不是需要立即做大重构，而是文章详情读取路径重新引入了同步 HTTP/readability 工作，并且该工作处于全局锁内。
+  - ReaderView 仍然偏大，后续可以单独重构，但本次问题有明确的小修复路径。
+- 是否运行测试：
+  - 已运行 `cargo fmt`。
+  - 已运行 `cargo test --target-dir "$env:TEMP\rssreader-codex-cargo-test-target-2"`，通过：后端 34 个库测试、2 个 dev server 测试、doc tests 通过。
+  - 期间遇到一次 Windows `LNK1104` 临时 exe 文件锁，换用新的临时 target 目录后通过。
+- 未解决问题：
+  - 后台补全文完成后当前已打开文章不会自动热更新，需要重新点开或后续增加事件通知。
+  - 若某篇文章本身缓存了极大的 HTML，前端 Markdown 转换仍可能有渲染压力，建议后续作为 Reader 渲染性能专项处理。

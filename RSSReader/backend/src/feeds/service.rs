@@ -1,10 +1,10 @@
 use super::{
-    enrich_rss_content, fetch_and_parse_feed, host_from_url, stable_id, strip_html, ArticleDetail,
-    ArticleListFilter, ArticleListItem, ArticleMarkFavoriteRequest, ArticleMarkReadRequest,
-    ArticleNote, ArticleNoteSaveRequest, ArticleTagDeleteRequest, ArticleTagsResult,
-    ArticleTagsSaveRequest, FeedAddRequest, FeedDeleteRequest, FeedListResult, FeedRefreshRequest,
-    FeedRefreshResult, FeedRenameRequest, FeedRepository, FeedStatus, FeedSummary,
-    FeedWithArticles, TagDeleteRequest, TagListResult, TagMergeRequest, TagRenameRequest,
+    fetch_and_parse_feed, host_from_url, stable_id, ArticleDetail, ArticleListFilter,
+    ArticleListItem, ArticleMarkFavoriteRequest, ArticleMarkReadRequest, ArticleNote,
+    ArticleNoteSaveRequest, ArticleTagDeleteRequest, ArticleTagsResult, ArticleTagsSaveRequest,
+    FeedAddRequest, FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult,
+    FeedRenameRequest, FeedRepository, FeedStatus, FeedSummary, FeedWithArticles, TagDeleteRequest,
+    TagListResult, TagMergeRequest, TagRenameRequest,
 };
 
 pub struct FeedService {
@@ -190,24 +190,7 @@ impl FeedService {
     }
 
     pub fn get_article(&self, article_id: &str) -> Option<ArticleDetail> {
-        let mut article = self.repository.get_article(article_id).ok().flatten()?;
-        let current_plain_len = strip_html(&article.sanitized_html).chars().count();
-
-        if current_plain_len < 1800 && is_http_url(&article.url) {
-            let enriched_html = enrich_rss_content(&article.url, &article.sanitized_html);
-            let enriched_plain_len = strip_html(&enriched_html).chars().count();
-            if enriched_plain_len > current_plain_len
-                && enriched_html.trim() != article.sanitized_html.trim()
-                && self
-                    .repository
-                    .update_article_content(&article.id, &enriched_html)
-                    .is_ok()
-            {
-                article.sanitized_html = enriched_html;
-            }
-        }
-
-        Some(article)
+        self.repository.get_article(article_id).ok().flatten()
     }
 
     pub fn update_article_content(&self, article_id: &str, html: &str) -> Result<(), String> {
@@ -331,10 +314,6 @@ fn normalize_feed_url(url: &str) -> Result<String, String> {
     } else {
         Err("Feed URL must start with http:// or https://".to_string())
     }
-}
-
-fn is_http_url(url: &str) -> bool {
-    url.starts_with("https://") || url.starts_with("http://")
 }
 
 fn normalize_tag_name(raw: &str) -> String {

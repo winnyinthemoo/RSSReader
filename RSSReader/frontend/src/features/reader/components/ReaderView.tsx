@@ -125,6 +125,7 @@ export function ReaderView({
   const [readerSearchQuery, setReaderSearchQuery] = useState("");
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const [readerSearchOpen, setReaderSearchOpen] = useState(false);
+  const [bilingualSearchMatchCount, setBilingualSearchMatchCount] = useState(0);
   const readerSearchInputRef = useRef<HTMLInputElement>(null);
 
   const [bilingualOpen, setBilingualOpen] = useState(false);
@@ -275,21 +276,30 @@ export function ReaderView({
     () => findTextMatches(markdown, readerSearchQuery),
     [markdown, readerSearchQuery],
   );
+  const readerSearchMatchCount = bilingualOpen
+    ? bilingualSearchMatchCount
+    : readerSearchMatches.length;
+
+  useEffect(() => {
+    if (!bilingualOpen || !readerSearchQuery.trim()) {
+      setBilingualSearchMatchCount(0);
+    }
+  }, [bilingualOpen, readerSearchQuery]);
 
   useEffect(() => {
     setActiveSearchIndex(0);
   }, [article?.id]);
 
   useEffect(() => {
-    if (readerSearchMatches.length === 0) {
+    if (readerSearchMatchCount === 0) {
       setActiveSearchIndex(0);
       return;
     }
 
     setActiveSearchIndex((currentIndex) =>
-      Math.min(currentIndex, readerSearchMatches.length - 1),
+      Math.min(currentIndex, readerSearchMatchCount - 1),
     );
-  }, [readerSearchMatches.length]);
+  }, [readerSearchMatchCount]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -458,7 +468,7 @@ export function ReaderView({
   }
 
   function handleReaderSearchStep(direction: 1 | -1) {
-    if (readerSearchMatches.length === 0) {
+    if (readerSearchMatchCount === 0) {
       return;
     }
 
@@ -468,7 +478,7 @@ export function ReaderView({
 
     setActiveSearchIndex(
       (currentIndex) =>
-        (currentIndex + direction + readerSearchMatches.length) % readerSearchMatches.length,
+        (currentIndex + direction + readerSearchMatchCount) % readerSearchMatchCount,
     );
   }
 
@@ -967,8 +977,8 @@ export function ReaderView({
           />
           <span className="reader-find-count">
             {readerSearchQuery.trim()
-              ? readerSearchMatches.length > 0
-                ? `${Math.min(activeSearchIndex + 1, readerSearchMatches.length)} / ${readerSearchMatches.length}`
+              ? readerSearchMatchCount > 0
+                ? `${Math.min(activeSearchIndex + 1, readerSearchMatchCount)} / ${readerSearchMatchCount}`
                 : "0 / 0"
               : ""}
           </span>
@@ -976,7 +986,7 @@ export function ReaderView({
             className="tool-button"
             type="button"
             title={text.reader.previousMatch}
-            disabled={readerSearchMatches.length === 0}
+            disabled={readerSearchMatchCount === 0}
             onClick={() => handleReaderSearchStep(-1)}
           >
             <ChevronUp size={15} />
@@ -985,7 +995,7 @@ export function ReaderView({
             className="tool-button"
             type="button"
             title={text.reader.nextMatch}
-            disabled={readerSearchMatches.length === 0}
+            disabled={readerSearchMatchCount === 0}
             onClick={() => handleReaderSearchStep(1)}
           >
             <ChevronDown size={15} />
@@ -1036,6 +1046,9 @@ export function ReaderView({
                 isSelection={false}
                 retryingSegmentIndexes={retryingSegmentIndexes}
                 onRetrySegment={(segmentIndex) => void handleRetryTranslationSegment(segmentIndex)}
+                searchQuery={readerSearchQuery}
+                activeSearchIndex={activeSearchIndex}
+                onSearchMatchCountChange={setBilingualSearchMatchCount}
               />
             ) : markdownLoading ? (
               <div className="reader-content reader-content-md">

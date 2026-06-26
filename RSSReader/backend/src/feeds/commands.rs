@@ -1,14 +1,21 @@
-use std::sync::{Mutex, OnceLock};
+use std::{
+    collections::HashSet,
+    sync::{Mutex, OnceLock},
+    thread,
+};
 
 use super::{
-    ArticleDetail, ArticleListFilter, ArticleListResult, ArticleMarkFavoriteRequest,
-    ArticleMarkReadRequest, ArticleNote, ArticleNoteSaveRequest, ArticleTagDeleteRequest,
-    ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest, FeedDeleteRequest, FeedListResult,
-    FeedRefreshRequest, FeedRefreshResult, FeedRenameRequest, FeedService, FeedWithArticles,
-    TagDeleteRequest, TagListResult, TagMergeRequest, TagRenameRequest,
+    enrich_rss_content, strip_html, ArticleDetail, ArticleListFilter, ArticleListResult,
+    ArticleMarkFavoriteRequest, ArticleMarkReadRequest, ArticleNote, ArticleNoteSaveRequest,
+    ArticleTagDeleteRequest, ArticleTagsResult, ArticleTagsSaveRequest, FeedAddRequest,
+    FeedDeleteRequest, FeedListResult, FeedRefreshRequest, FeedRefreshResult, FeedRenameRequest,
+    FeedRepository, FeedService, FeedWithArticles, TagDeleteRequest, TagListResult,
+    TagMergeRequest, TagRenameRequest,
 };
 
 static FEED_SERVICE: OnceLock<Mutex<FeedService>> = OnceLock::new();
+static ARTICLE_ENRICHMENT_JOBS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+const MAX_ARTICLE_ENRICHMENT_JOBS: usize = 2;
 
 pub fn feed_list() -> FeedListResult {
     with_service(|service| service.list_feeds())
@@ -46,11 +53,13 @@ pub fn article_list(filter: ArticleListFilter) -> ArticleListResult {
 }
 
 pub fn article_get(article_id: String) -> Result<ArticleDetail, String> {
-    with_service(|service| {
+    let article = with_service(|service| {
         service
             .get_article(&article_id)
             .ok_or_else(|| "Article not found".to_string())
-    })
+    })?;
+    maybe_queue_article_enrichment(&article);
+    Ok(article)
 }
 
 pub fn article_mark_read(article_id: String, is_read: bool) -> Result<(), String> {
@@ -134,6 +143,64 @@ fn with_service<T>(handler: impl FnOnce(&mut FeedService) -> T) -> T {
         .get_or_init(|| Mutex::new(FeedService::new().expect("feed service should initialize")));
     let mut guard = service
         .lock()
-        .expect("feed service lock should not be poisoned");
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     handler(&mut guard)
+}
+
+fn maybe_queue_article_enrichment(article: &ArticleDetail) {
+    let current_plain_len = strip_html(&article.sanitized_html).chars().count();
+    if current_plain_len >= 1800 || !is_http_url(&article.url) {
+        return;
+    }
+
+    let article_id = article.id.clone();
+    {
+        let mut jobs = article_enrichment_jobs()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if jobs.len() >= MAX_ARTICLE_ENRICHMENT_JOBS {
+            return;
+        }
+        if !jobs.insert(article_id.clone()) {
+            return;
+        }
+    }
+
+    let url = article.url.clone();
+    let current_html = article.sanitized_html.clone();
+    let spawn_result = thread::Builder::new()
+        .name("rssreader-article-enrichment".to_string())
+        .spawn(move || {
+            let result = std::panic::catch_unwind(|| enrich_rss_content(&url, &current_html));
+            if let Ok(enriched_html) = result {
+                let enriched_plain_len = strip_html(&enriched_html).chars().count();
+                if enriched_plain_len > current_plain_len
+                    && enriched_html.trim() != current_html.trim()
+                {
+                    if let Ok(repository) = FeedRepository::open_default() {
+                        let _ = repository.update_article_content(&article_id, &enriched_html);
+                    }
+                }
+            }
+            finish_article_enrichment_job(&article_id);
+        });
+
+    if spawn_result.is_err() {
+        finish_article_enrichment_job(&article.id);
+    }
+}
+
+fn article_enrichment_jobs() -> &'static Mutex<HashSet<String>> {
+    ARTICLE_ENRICHMENT_JOBS.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn finish_article_enrichment_job(article_id: &str) {
+    let mut jobs = article_enrichment_jobs()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    jobs.remove(article_id);
+}
+
+fn is_http_url(url: &str) -> bool {
+    url.starts_with("https://") || url.starts_with("http://")
 }

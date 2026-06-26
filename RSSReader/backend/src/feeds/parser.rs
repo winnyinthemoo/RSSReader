@@ -526,12 +526,11 @@ fn extract_hero_banner_img(raw_html: &str, article_url: &str) -> Option<String> 
     // Find a hero/banner container
     let lower = raw_html.to_lowercase();
     let hero_start = lower.find("hero").or_else(|| lower.find("banner"))?;
-    let window_start = if hero_start > 2000 {
-        hero_start - 2000
-    } else {
-        0
-    };
-    let window = &raw_html[window_start..hero_start + 500];
+    let window = safe_html_window(
+        raw_html,
+        hero_start.saturating_sub(2000),
+        hero_start.saturating_add(500),
+    );
 
     // Check for <img> inside the window first
     if let Some(s) = window.find("<img") {
@@ -565,6 +564,23 @@ fn extract_hero_banner_img(raw_html: &str, article_url: &str) -> Option<String> 
     }
 
     None
+}
+
+fn safe_html_window(raw_html: &str, start: usize, end: usize) -> &str {
+    let safe_start = previous_char_boundary(raw_html, start);
+    let mut safe_end = previous_char_boundary(raw_html, end);
+    if safe_end < safe_start {
+        safe_end = safe_start;
+    }
+    &raw_html[safe_start..safe_end]
+}
+
+fn previous_char_boundary(value: &str, index: usize) -> usize {
+    let mut index = index.min(value.len());
+    while !value.is_char_boundary(index) {
+        index -= 1;
+    }
+    index
 }
 
 /// Resolve a potentially relative URL against the article base URL.
@@ -722,5 +738,14 @@ mod tests {
 
         assert!(focused.contains("Main body"));
         assert!(!focused.contains("Comment body"));
+    }
+
+    #[test]
+    fn hero_image_extraction_handles_keyword_near_document_end() {
+        let html = "<main><p>Body</p></main><!-- hero -->";
+
+        let hero = extract_hero_banner_img(html, "https://example.com/post");
+
+        assert!(hero.is_none());
     }
 }
