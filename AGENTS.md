@@ -179,7 +179,7 @@ Issue -> Branch -> Agent/人工开发 -> 本地运行 -> Commit -> Push -> Pull 
 当前项目已经进入最终验收阶段，常规工作流为：
 
 ```text
-发现问题 -> 判断是否阻断验收 -> 小范围修复 -> 构建验证 -> 记录 Agent log -> 必要时发布新 alpha 包 -> 更新 README / PLAN
+发现问题 -> 判断是否阻断验收 -> 小范围修复 -> 构建验证 -> 记录 Agent log -> 必要时发布新修订包 -> 更新 README / PLAN
 ```
 
 每个 PR 应说明：
@@ -240,9 +240,9 @@ npm run tauri:build:mac
 
 ## 11. 当前项目状态
 
-- 项目已进入 `0.3.0` alpha 验收收尾阶段。
-- Windows 最新测试包为 `v0.3.0-alpha.1`。
-- macOS 最新测试包为 `v0.3.0-macos-alpha.1`，Apple Silicon / arm64，ad-hoc 签名，未 notarize。
+- 项目已进入 `1.0.0` 正式首版发布阶段。
+- Windows 正式首版为 `v1.0.0`。
+- macOS 正式首版为 `v1.0.0`，Apple Silicon / arm64，ad-hoc 签名，未 notarize。
 - RSS 阅读、OPML、搜索、标签、笔记、AI 摘要、AI 翻译、AI 标签建议、用量统计、keyring、Windows/macOS 打包均已完成主体实现。
 - 当前重点是最终 smoke test、演示材料、README / PLAN / INIT / AGENTS 同步，以及少量遗留 Issue 的说明或关闭。
 
@@ -250,7 +250,7 @@ npm run tauri:build:mac
 
 - Summary Prompt 输出质量仍可继续打磨，对应 GitHub Issue #1。
 - 原始网页视图受目标网站 iframe / CSP / 网络限制影响，对应 GitHub Issue #4；应用应提供 fallback 或清晰说明。
-- macOS 包当前为 ad-hoc 签名，未 notarize，适合课程 / 内测，不适合正式公开分发。
+- macOS 包当前为 ad-hoc 签名，未 notarize，适合课程、内测和受控分发；公开分发前仍需 Developer ID 签名与 notarization。
 - Linux 与 Intel Mac 尚未作为正式验收平台。
 - Vite 仍存在 chunk size warning，当前不阻塞功能验收。
 - AI 功能依赖用户自行配置的 Provider、API Key、模型能力和网络环境。

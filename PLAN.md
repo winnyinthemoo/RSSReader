@@ -12,9 +12,9 @@
 
 | 项目 | 当前状态 |
 |------|----------|
-| 应用版本 | `0.3.0` |
-| Windows 测试包 | `v0.3.0-alpha.1`，已发布到 GitHub Releases |
-| macOS 测试包 | `v0.3.0-macos-alpha.1`，Apple Silicon / arm64，ad-hoc 签名，未 notarize |
+| 应用版本 | `1.0.0` |
+| Windows 正式包 | `v1.0.0`，发布到 GitHub Releases |
+| macOS 正式包 | `v1.0.0`，Apple Silicon / arm64，ad-hoc 签名，未 notarize |
 | GitHub Issue | 25 个 issue 中 23 个已关闭，仍打开 #1、#4 |
 | GitHub PR | #17、#19、#20、#21、#24 均已关闭，其中 #20/#21 已整合，#24 为 AI 兼容性文档 |
 | 当前重点 | 最终文档、演示材料、安装包 smoke test、少量遗留问题说明 |
@@ -93,19 +93,19 @@
 | Phase 2 RSS Reader MVP | 已完成 | 添加 Feed、刷新、列表、阅读、状态保存已形成闭环。 |
 | Phase 3 体验完善与扩展功能 | 已完成 | OPML、收藏、搜索、标签、笔记、内容清洗和 Reader 体验已实现。 |
 | Phase 4 AI 功能与项目收尾 | 已完成主体 | Provider、Model、摘要、翻译、标签建议、用量统计、keyring 已实现。 |
-| Phase 5 Alpha 测试与打包验证 | 基本完成 | Windows/macOS alpha 包已发布，主要缺陷已关闭，剩少量说明型问题。 |
+| Phase 5 测试与打包验证 | 基本完成 | Windows/macOS 安装包已验证，主要缺陷已关闭，剩少量说明型问题。 |
 | Phase 6 最终验收与展示 | 当前阶段 | 聚焦文档、演示、最终 smoke test 和遗留风险说明。 |
 
 ## Phase 6：最终验收与展示
 
 ### 目标
 
-不再扩大功能范围，围绕 `0.3.0` alpha 版本完成课程 / 项目验收所需的最终材料、测试记录和风险说明。
+不再扩大功能范围，围绕 `1.0.0` 正式首版完成课程 / 项目验收所需的最终材料、测试记录和风险说明。
 
 ### Task 6.1：最终安装包 Smoke Test
 
-- Windows：下载并安装 `v0.3.0-alpha.1`，验证启动、添加 Feed、OPML 导入、同步、阅读、搜索、收藏、标签、笔记、摘要、翻译、导出和设置页。
-- macOS：下载并安装 `v0.3.0-macos-alpha.1`，验证打开方式、quarantine 解除说明、基础阅读流程和 AI Keychain 权限提示。
+- Windows：下载并安装 `v1.0.0`，验证启动、添加 Feed、OPML 导入、同步、阅读、搜索、收藏、标签、笔记、摘要、翻译、导出和设置页。
+- macOS：下载并安装 `v1.0.0`，验证打开方式、quarantine 解除说明、基础阅读流程和 AI Keychain 权限提示。
 - 输出：一份最终 smoke test 记录，包含测试人、系统版本、安装包版本、通过项和失败项。
 
 ### Task 6.2：关闭或说明遗留 Issue
@@ -129,7 +129,7 @@
 
 ### Task 6.5：发布与风险说明
 
-- 明确当前发布包仍为 alpha 测试版，不是正式稳定版。
+- 明确当前发布包为 `1.0.0` 正式首版，同时保留 macOS 未 notarize 等平台分发限制说明。
 - 说明 macOS 包为 ad-hoc 签名，未 notarize，仅用于课程 / 内测场景。
 - 说明 Linux 与 Intel Mac 尚未作为正式验收平台。
 - 说明 AI 能力依赖用户自行配置的 Provider、API Key、模型能力和网络环境。

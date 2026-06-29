@@ -3621,7 +3621,7 @@ dependencies = [
 
 [[package]]
 name = "rssreader-backend"
-version = "0.3.0"
+version = "1.0.0"
 dependencies = [
  "ammonia",
  "feed-rs",
@@ -3638,7 +3638,7 @@ dependencies = [
 
 [[package]]
 name = "rssreader-desktop"
-version = "0.3.0"
+version = "1.0.0"
 dependencies = [
  "quick-xml 0.39.4",
  "rfd",

@@ -18,14 +18,16 @@ interface CompareViewProps {
   isDragging: boolean;
   compareRef: RefObject<HTMLDivElement | null>;
   compareIframeError: boolean;
+  compareErrorMessage?: string;
+  compareProxyHtml?: string;
+  compareProxyLoading?: boolean;
   compareUseRender: boolean;
-  renderUrl: string;
   searchMatches?: Array<{ start: number; end: number }>;
   activeSearchIndex?: number;
   onDividerMouseDown: (event: MouseEvent) => void;
   onToggleProxy: () => void;
   onRetryProxy: () => void;
-  onIframeLoad: () => void;
+  onIframeLoad: (iframe: HTMLIFrameElement) => void;
 }
 
 export function CompareView({
@@ -38,8 +40,10 @@ export function CompareView({
   isDragging,
   compareRef,
   compareIframeError,
+  compareErrorMessage,
+  compareProxyHtml,
+  compareProxyLoading = false,
   compareUseRender,
-  renderUrl,
   searchMatches = [],
   activeSearchIndex = 0,
   onDividerMouseDown,
@@ -76,13 +80,30 @@ export function CompareView({
           <RefreshCw size={18} />
         </button>
         {compareIframeError ? (
-          <OriginalPageFallback url={article.url} onRetryProxy={onRetryProxy} />
+          <OriginalPageFallback url={article.url} message={compareErrorMessage} onRetryProxy={onRetryProxy} />
+        ) : compareUseRender && (compareProxyLoading || !compareProxyHtml) ? (
+          <div className="reader-iframe-fallback" aria-live="polite">
+            <div className="fallback-header">
+              <p className="eyebrow">Loading original page proxy</p>
+              <p className="fallback-desc">Fetching the page through Vortex so it can render in app.</p>
+            </div>
+          </div>
+        ) : compareUseRender && compareProxyHtml ? (
+          <iframe
+            className="reader-iframe"
+            srcDoc={compareProxyHtml}
+            title="Original article page"
+            sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts"
+            referrerPolicy="no-referrer-when-downgrade"
+            onLoad={(event) => onIframeLoad(event.currentTarget)}
+          />
         ) : (
           <iframe
             className="reader-iframe"
-            src={compareUseRender ? renderUrl : article.url}
+            src={article.url}
             title="Original article page"
-            onLoad={onIframeLoad}
+            referrerPolicy="no-referrer-when-downgrade"
+            onLoad={(event) => onIframeLoad(event.currentTarget)}
           />
         )}
       </div>

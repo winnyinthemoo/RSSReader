@@ -134,6 +134,17 @@ export interface ArticleDetail extends ArticleListItem {
   sanitizedHtml: string;
 }
 
+export interface OriginalPageRenderRequest {
+  url: string;
+}
+
+export interface OriginalPageRenderResult {
+  url: string;
+  html: string;
+  fetched: boolean;
+  message?: string;
+}
+
 export interface FeedWithArticles {
   feed: FeedSummary;
   articles: ArticleListItem[];

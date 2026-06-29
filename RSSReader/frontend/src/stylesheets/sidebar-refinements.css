@@ -61,27 +61,40 @@
 /* 涓棿鏍忓ご閮ㄥ竷灞€ */
 .header-title-row {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 20px;
+  gap: 10px;
+  min-width: 0;
 }
 
 .header-title-row h2 {
   margin: 0;
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.22;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 璁╂寜閽潬鍙筹紝骞舵帶鍒剁鍙宠竟妗嗙殑璺濈 */
 .article-stats {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-end;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 52%;
+  min-width: 0;
   margin-left: auto;     /* 鎺ㄥ埌鍙宠竟 */
-  margin-right: 8px;
+  margin-right: 0;
 }
 
 .unread-count-badge,
 .read-count-badge {
+  min-width: 0;
+  max-width: 100%;
   border: 0;
   background: #e5e7eb;
   color: #6b7280;
@@ -89,6 +102,8 @@
   border-radius: 20px;
   font-size: 0.80rem;
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -379,6 +394,11 @@ body:has(.app-shell[data-reader-theme="dark"]) .dialog-field select {
   height: auto;
 }
 
+.reader-side-panel {
+  background: #fbfcfa;
+  backdrop-filter: none;
+}
+
 .reader-web-return-bar {
   position: sticky;
   top: 62px;
@@ -609,7 +629,7 @@ body:has(.app-shell[data-reader-theme="dark"]) .dialog-field select {
 .app-shell[data-reader-theme="dark"] .reader-side-panel {
   border-color: rgba(235, 235, 245, 0.13);
   color: var(--ink-primary);
-  background: rgba(43, 45, 51, 0.97);
+  background: #2b2d33;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.34);
 }
 

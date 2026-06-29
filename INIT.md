@@ -8,7 +8,7 @@ Vortex（仓库名 RSSReader）
 
 实现一个本地优先、无需登录、跨平台运行的桌面 RSS Reader，复刻 Mercury 的核心阅读体验，并在 GitHub 中完整记录团队协作与 Coding Agent 使用过程。
 
-截至 2026-06-26，项目开发主体已经基本完成，当前进入 `0.3.0` alpha 版本的最终验收和演示准备阶段。
+截至 2026-06-29，项目开发主体已经基本完成，当前进入 `1.0.0` 正式首版发布和演示准备阶段。
 
 ## 项目背景
 
@@ -112,9 +112,9 @@ Vortex（仓库名 RSSReader）
 ## 当前状态
 
 - GitHub 仓库已建立，README、Agent logs、Issue、PR 和 Release 记录已经形成完整协作链路。
-- 项目版本已推进到 `0.3.0`。
-- Windows 最新测试包为 `v0.3.0-alpha.1`。
-- macOS 最新测试包为 `v0.3.0-macos-alpha.1`，支持 Apple Silicon / arm64，使用 ad-hoc 签名。
+- 项目版本已推进到 `1.0.0` 正式首版。
+- Windows 正式首版为 `v1.0.0`。
+- macOS 正式首版为 `v1.0.0`，支持 Apple Silicon / arm64，使用 ad-hoc 签名。
 - RSS 阅读、Reader、OPML、标签、笔记、AI 摘要、AI 翻译、AI 标签建议、用量统计、keyring、安装包构建等主体功能已经完成。
 - 当前工作重点从功能开发转向最终验收、演示材料、少量遗留 Issue 说明和文档收尾。
 

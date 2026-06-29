@@ -107,6 +107,7 @@ export default function App() {
   const [isSidebarHidden, setIsSidebarHidden] = useState(false);
   const [syncSettings, setSyncSettings] = useFeedSyncSettings();
   const [paneLayout, setPaneLayout] = useState<PaneLayout>(() => readPaneLayout());
+  const paneLayoutRef = useRef(paneLayout);
   const [lastSyncAt, setLastSyncAt] = useState<Date | undefined>();
   const [showAiSettings, setShowAiSettings] = useState(false);
   const [readerSettings, setReaderSettings] = useState<ReaderSettings>(() => readReaderSettings());
@@ -219,7 +220,7 @@ export default function App() {
   }, [articleSearchInput, isArticleSearchComposing]);
 
   useEffect(() => {
-    writePaneLayout(paneLayout);
+    paneLayoutRef.current = paneLayout;
   }, [paneLayout]);
 
   useEffect(() => {
@@ -802,46 +803,74 @@ export default function App() {
     event.preventDefault();
 
     const startX = event.clientX;
-    const startLayout = paneLayout;
+    const startLayout = paneLayoutRef.current;
     const shellWidth = appShellRef.current?.getBoundingClientRect().width ?? window.innerWidth;
     const minSidebarWidth = 240;
     const minArticleWidth = 320;
     const minReaderWidth = Math.max(520, shellWidth * 0.5);
     const reservedSpace = 44;
+    let latestClientX = startX;
+    let latestLayout = startLayout;
+    let frameId: number | undefined;
 
     document.body.classList.add("pane-resizing");
 
-    function handlePointerMove(moveEvent: PointerEvent) {
-      const deltaX = moveEvent.clientX - startX;
+    function nextLayoutForClientX(clientX: number): PaneLayout {
+      const deltaX = clientX - startX;
 
-      setPaneLayout(() => {
-        if (divider === "sidebar") {
-          const maxSidebarWidth =
-            shellWidth - startLayout.articleWidth - minReaderWidth - reservedSpace;
-          return {
-            ...startLayout,
-            sidebarWidth: clamp(
-              startLayout.sidebarWidth + deltaX,
-              minSidebarWidth,
-              Math.max(minSidebarWidth, maxSidebarWidth),
-            ),
-          };
-        }
-
-        const maxArticleWidth =
-          shellWidth - startLayout.sidebarWidth - minReaderWidth - reservedSpace;
+      if (divider === "sidebar") {
+        const maxSidebarWidth =
+          shellWidth - startLayout.articleWidth - minReaderWidth - reservedSpace;
         return {
           ...startLayout,
-          articleWidth: clamp(
-            startLayout.articleWidth + deltaX,
-            minArticleWidth,
-            Math.max(minArticleWidth, maxArticleWidth),
+          sidebarWidth: clamp(
+            startLayout.sidebarWidth + deltaX,
+            minSidebarWidth,
+            Math.max(minSidebarWidth, maxSidebarWidth),
           ),
         };
-      });
+      }
+
+      const maxArticleWidth =
+        shellWidth - startLayout.sidebarWidth - minReaderWidth - reservedSpace;
+      return {
+        ...startLayout,
+        articleWidth: clamp(
+          startLayout.articleWidth + deltaX,
+          minArticleWidth,
+          Math.max(minArticleWidth, maxArticleWidth),
+        ),
+      };
     }
 
-    function handlePointerUp() {
+    function flushPaneLayout() {
+      frameId = undefined;
+      latestLayout = nextLayoutForClientX(latestClientX);
+      paneLayoutRef.current = latestLayout;
+      setPaneLayout(latestLayout);
+    }
+
+    function schedulePaneLayout(clientX: number) {
+      latestClientX = clientX;
+      if (frameId !== undefined) {
+        return;
+      }
+
+      frameId = window.requestAnimationFrame(flushPaneLayout);
+    }
+
+    function handlePointerMove(moveEvent: PointerEvent) {
+      schedulePaneLayout(moveEvent.clientX);
+    }
+
+    function handlePointerUp(upEvent: PointerEvent) {
+      latestClientX = upEvent.clientX;
+      if (frameId !== undefined) {
+        window.cancelAnimationFrame(frameId);
+        frameId = undefined;
+      }
+      flushPaneLayout();
+      writePaneLayout(latestLayout);
       document.body.classList.remove("pane-resizing");
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);

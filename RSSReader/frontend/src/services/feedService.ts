@@ -25,6 +25,8 @@ import type {
   OpmlImportItemResult,
   OpmlImportRequest,
   OpmlImportResult,
+  OriginalPageRenderRequest,
+  OriginalPageRenderResult,
   TagDeleteRequest,
   TagListResult,
   TagMergeRequest,
@@ -320,6 +322,29 @@ export async function saveArticleNote(
     method: "POST",
     body: JSON.stringify(request),
   });
+}
+
+export async function renderOriginalPage(
+  request: OriginalPageRenderRequest,
+): Promise<OriginalPageRenderResult> {
+  const invoke = getInvoke();
+  if (invoke) {
+    return invoke<OriginalPageRenderResult>("original_page_render", { request });
+  }
+
+  const response = await fetch(
+    `${backendBaseUrl}/api/render?url=${encodeURIComponent(request.url)}`,
+  );
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new Error(message);
+  }
+
+  return {
+    url: request.url,
+    html: await response.text(),
+    fetched: true,
+  };
 }
 
 export async function exportArticleNote(

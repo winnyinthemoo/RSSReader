@@ -18,7 +18,7 @@ use rssreader_backend::ai::{
 };
 use rssreader_backend::{
     ArticleDetail, ArticleListFilter, ArticleListResult, ArticleNote, ArticleTagsResult,
-    FeedListResult, FeedRefreshResult, FeedWithArticles, TagListResult,
+    FeedListResult, FeedRefreshResult, FeedWithArticles, OriginalPageRenderResult, TagListResult,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager};
@@ -38,6 +38,12 @@ where
 #[serde(rename_all = "camelCase")]
 struct ArticleContentUpdatedEvent {
     article_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OriginalPageRenderRequest {
+    url: String,
 }
 
 #[tauri::command]
@@ -137,6 +143,13 @@ fn article_get_note(article_id: String) -> Option<ArticleNote> {
 #[tauri::command]
 fn article_save_note(article_id: String, content: String) -> Result<ArticleNote, String> {
     backend::feeds::article_save_note(article_id, content)
+}
+
+#[tauri::command]
+async fn original_page_render(
+    request: OriginalPageRenderRequest,
+) -> Result<OriginalPageRenderResult, String> {
+    run_blocking(move || backend::reader::render_original_page(&request.url)).await
 }
 
 #[derive(Debug, Deserialize)]
@@ -527,6 +540,7 @@ fn main() {
             article_delete_tag,
             article_get_note,
             article_save_note,
+            original_page_render,
             article_note_export,
             opml_import,
             opml_export,

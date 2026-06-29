@@ -15,6 +15,7 @@ import {
   exportArticleNote,
   getArticleNote,
   listArticleTags,
+  renderOriginalPage,
   saveArticleNote,
   saveArticleTags,
 } from "../../../services/feedService";
@@ -91,12 +92,20 @@ export function ReaderView({
   const [openedReaderUrl, setOpenedReaderUrl] = useState<string | undefined>();
   const [sourceIframeError, setSourceIframeError] = useState(false);
   const [sourceUseRender, setSourceUseRender] = useState(false);
+  const [sourceProxyHtml, setSourceProxyHtml] = useState<string | undefined>();
+  const [sourceProxyLoading, setSourceProxyLoading] = useState(false);
+  const [sourceProxyError, setSourceProxyError] = useState<string | undefined>();
   const sourceIframeLoaded = useRef(false);
   const sourceTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const sourceProxyTokenRef = useRef(0);
   const [compareIframeError, setCompareIframeError] = useState(false);
   const [compareUseRender, setCompareUseRender] = useState(false);
+  const [compareProxyHtml, setCompareProxyHtml] = useState<string | undefined>();
+  const [compareProxyLoading, setCompareProxyLoading] = useState(false);
+  const [compareProxyError, setCompareProxyError] = useState<string | undefined>();
   const compareIframeLoaded = useRef(false);
   const compareTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const compareProxyTokenRef = useRef(0);
 
   const [splitRatio, setSplitRatio] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
@@ -142,16 +151,7 @@ export function ReaderView({
     status: "idle",
   });
 
-  const proxyBase = `http://${
-    window.location.hostname === "127.0.0.1" ? "127.0.0.1:5181" : window.location.host
-  }/api`;
   const activeSourceUrl = openedReaderUrl ?? article?.url ?? "";
-  const sourceRenderUrl = activeSourceUrl
-    ? `${proxyBase}/render?url=${encodeURIComponent(activeSourceUrl)}`
-    : "";
-  const compareRenderUrl = article?.url
-    ? `${proxyBase}/render?url=${encodeURIComponent(article.url)}`
-    : "";
   const openedSourceText =
     appLanguage === "zh-Hans"
       ? {
@@ -204,6 +204,12 @@ export function ReaderView({
     setTranslationSkipped(false);
     setSelectionTranslation({ selectedText: "", status: "idle" });
     setOpenedReaderUrl(undefined);
+    setSourceProxyHtml(undefined);
+    setSourceProxyLoading(false);
+    setSourceProxyError(undefined);
+    setCompareProxyHtml(undefined);
+    setCompareProxyLoading(false);
+    setCompareProxyError(undefined);
   }, [article?.id, targetLanguage]);
 
   useEffect(() => {
@@ -363,18 +369,58 @@ export function ReaderView({
   }, [activePanel]);
 
   useEffect(() => {
-    if (viewMode === "source" && activeSourceUrl) {
-      startSourceIframe();
-    }
-    if (viewMode === "compare" && article?.url) {
-      startCompareIframe();
+    clearTimeout(sourceTimerRef.current);
+
+    if (viewMode !== "source" || !activeSourceUrl) {
+      return;
     }
 
-    return () => {
-      clearTimeout(sourceTimerRef.current);
-      clearTimeout(compareTimerRef.current);
-    };
-  }, [activeSourceUrl, article?.url, viewMode]);
+    sourceIframeLoaded.current = false;
+    setSourceIframeError(false);
+
+    if (sourceUseRender) {
+      void loadSourceProxyHtml(activeSourceUrl);
+      return;
+    }
+
+    setSourceProxyHtml(undefined);
+    setSourceProxyLoading(false);
+    setSourceProxyError(undefined);
+    sourceTimerRef.current = window.setTimeout(() => {
+      if (!sourceIframeLoaded.current) {
+        setSourceIframeError(true);
+      }
+    }, 8000);
+
+    return () => clearTimeout(sourceTimerRef.current);
+  }, [activeSourceUrl, sourceUseRender, viewMode]);
+
+  useEffect(() => {
+    clearTimeout(compareTimerRef.current);
+
+    if (viewMode !== "compare" || !article?.url) {
+      return;
+    }
+
+    compareIframeLoaded.current = false;
+    setCompareIframeError(false);
+
+    if (compareUseRender) {
+      void loadCompareProxyHtml(article.url);
+      return;
+    }
+
+    setCompareProxyHtml(undefined);
+    setCompareProxyLoading(false);
+    setCompareProxyError(undefined);
+    compareTimerRef.current = window.setTimeout(() => {
+      if (!compareIframeLoaded.current) {
+        setCompareIframeError(true);
+      }
+    }, 12000);
+
+    return () => clearTimeout(compareTimerRef.current);
+  }, [article?.url, compareUseRender, viewMode]);
 
   useEffect(() => {
     if (viewMode !== "source" && openedReaderUrl) {
@@ -417,6 +463,12 @@ export function ReaderView({
     setCompareIframeError(false);
     setSourceUseRender(false);
     setCompareUseRender(false);
+    setSourceProxyHtml(undefined);
+    setSourceProxyLoading(false);
+    setSourceProxyError(undefined);
+    setCompareProxyHtml(undefined);
+    setCompareProxyLoading(false);
+    setCompareProxyError(undefined);
   }
 
   function handleOpenUrlInReader(url: string) {
@@ -430,6 +482,9 @@ export function ReaderView({
     sourceIframeLoaded.current = false;
     setSourceIframeError(false);
     setSourceUseRender(false);
+    setSourceProxyHtml(undefined);
+    setSourceProxyLoading(false);
+    setSourceProxyError(undefined);
   }
 
   function handleReturnFromOpenedUrl() {
@@ -438,6 +493,9 @@ export function ReaderView({
     sourceIframeLoaded.current = false;
     setSourceIframeError(false);
     setSourceUseRender(false);
+    setSourceProxyHtml(undefined);
+    setSourceProxyLoading(false);
+    setSourceProxyError(undefined);
   }
 
   function handleArticleContentClick(event: ReactMouseEvent<HTMLDivElement>) {
@@ -846,38 +904,86 @@ export function ReaderView({
     setActivePanel((currentPanel) => (currentPanel === panel ? undefined : panel));
   }
 
-  function startSourceIframe() {
-    setSourceUseRender(false);
-    sourceIframeLoaded.current = false;
-    setSourceIframeError(false);
-    clearTimeout(sourceTimerRef.current);
-    sourceTimerRef.current = window.setTimeout(() => {
-      if (!sourceIframeLoaded.current) {
-        if (!sourceUseRender) {
-          setSourceUseRender(true);
-          sourceIframeLoaded.current = false;
-          clearTimeout(sourceTimerRef.current);
-          sourceTimerRef.current = window.setTimeout(() => {
-            if (!sourceIframeLoaded.current) {
-              setSourceIframeError(true);
-            }
-          }, 15000);
-        } else {
-          setSourceIframeError(true);
-        }
+  async function loadSourceProxyHtml(url: string) {
+    const requestToken = ++sourceProxyTokenRef.current;
+    setSourceProxyLoading(true);
+    setSourceProxyHtml(undefined);
+    setSourceProxyError(undefined);
+
+    try {
+      const result = await renderOriginalPage({ url });
+      if (sourceProxyTokenRef.current !== requestToken) {
+        return;
       }
-    }, 8000);
+
+      setSourceProxyHtml(result.html);
+      setSourceProxyError(result.message);
+      setSourceIframeError(false);
+    } catch (error) {
+      if (sourceProxyTokenRef.current !== requestToken) {
+        return;
+      }
+
+      setSourceProxyError(getUnknownErrorMessage(error));
+      setSourceIframeError(true);
+    } finally {
+      if (sourceProxyTokenRef.current === requestToken) {
+        setSourceProxyLoading(false);
+      }
+    }
   }
 
-  function startCompareIframe() {
-    compareIframeLoaded.current = false;
-    setCompareIframeError(false);
-    clearTimeout(compareTimerRef.current);
-    compareTimerRef.current = window.setTimeout(() => {
-      if (!compareIframeLoaded.current) {
-        setCompareIframeError(true);
+  async function loadCompareProxyHtml(url: string) {
+    const requestToken = ++compareProxyTokenRef.current;
+    setCompareProxyLoading(true);
+    setCompareProxyHtml(undefined);
+    setCompareProxyError(undefined);
+
+    try {
+      const result = await renderOriginalPage({ url });
+      if (compareProxyTokenRef.current !== requestToken) {
+        return;
       }
-    }, 12000);
+
+      setCompareProxyHtml(result.html);
+      setCompareProxyError(result.message);
+      setCompareIframeError(false);
+    } catch (error) {
+      if (compareProxyTokenRef.current !== requestToken) {
+        return;
+      }
+
+      setCompareProxyError(getUnknownErrorMessage(error));
+      setCompareIframeError(true);
+    } finally {
+      if (compareProxyTokenRef.current === requestToken) {
+        setCompareProxyLoading(false);
+      }
+    }
+  }
+
+  function handleSourceIframeLoad(iframe: HTMLIFrameElement) {
+    if (!sourceUseRender && isAppFrameLoaded(iframe, activeSourceUrl)) {
+      sourceIframeLoaded.current = false;
+      setSourceIframeError(true);
+      return;
+    }
+
+    sourceIframeLoaded.current = true;
+    clearTimeout(sourceTimerRef.current);
+    setSourceIframeError(false);
+  }
+
+  function handleCompareIframeLoad(iframe: HTMLIFrameElement) {
+    if (!compareUseRender && isAppFrameLoaded(iframe, article?.url ?? "")) {
+      compareIframeLoaded.current = false;
+      setCompareIframeError(true);
+      return;
+    }
+
+    compareIframeLoaded.current = true;
+    clearTimeout(compareTimerRef.current);
+    setCompareIframeError(false);
   }
 
   const toolbar = (
@@ -1079,24 +1185,23 @@ export function ReaderView({
             </div>
           ) : null}
           <OriginalPageView
-          url={activeSourceUrl}
-          iframeError={sourceIframeError}
-          useRender={sourceUseRender}
-          renderUrl={sourceRenderUrl}
-          onToggleProxy={() => {
-            setSourceUseRender((value) => !value);
-            setSourceIframeError(false);
-            sourceIframeLoaded.current = false;
-          }}
-          onRetryProxy={() => {
-            setSourceUseRender(true);
-            setSourceIframeError(false);
-            sourceIframeLoaded.current = false;
-          }}
-          onLoad={() => {
-            sourceIframeLoaded.current = true;
-            setSourceIframeError(false);
-          }}
+            url={activeSourceUrl}
+            iframeError={sourceIframeError}
+            errorMessage={sourceProxyError}
+            isProxyLoading={sourceProxyLoading}
+            proxyHtml={sourceProxyHtml}
+            useRender={sourceUseRender}
+            onToggleProxy={() => {
+              setSourceUseRender((value) => !value);
+              setSourceIframeError(false);
+              sourceIframeLoaded.current = false;
+            }}
+            onRetryProxy={() => {
+              setSourceUseRender(true);
+              setSourceIframeError(false);
+              sourceIframeLoaded.current = false;
+            }}
+            onLoad={handleSourceIframeLoad}
           />
         </div>
       ) : (
@@ -1110,8 +1215,10 @@ export function ReaderView({
           isDragging={isDragging}
           compareRef={compareRef}
           compareIframeError={compareIframeError}
+          compareErrorMessage={compareProxyError}
+          compareProxyHtml={compareProxyHtml}
+          compareProxyLoading={compareProxyLoading}
           compareUseRender={compareUseRender}
-          renderUrl={compareRenderUrl}
           searchMatches={readerSearchMatches}
           activeSearchIndex={activeSearchIndex}
           onDividerMouseDown={handleDividerMouseDown}
@@ -1125,10 +1232,7 @@ export function ReaderView({
             setCompareIframeError(false);
             compareIframeLoaded.current = false;
           }}
-          onIframeLoad={() => {
-            compareIframeLoaded.current = true;
-            setCompareIframeError(false);
-          }}
+          onIframeLoad={handleCompareIframeLoad}
         />
       )}
       <SummaryPanel appLanguage={appLanguage} articleId={article.id} />
@@ -1150,6 +1254,34 @@ function resolveReaderUrl(href: string, baseUrl: string | undefined) {
 
 function isWebUrl(value: string) {
   return /^https?:\/\//i.test(value);
+}
+
+function isAppFrameLoaded(iframe: HTMLIFrameElement, expectedUrl: string) {
+  if (!isWebUrl(expectedUrl)) {
+    return true;
+  }
+
+  try {
+    const frameLocation = iframe.contentWindow?.location.href;
+    if (!frameLocation || frameLocation === "about:blank") {
+      return false;
+    }
+
+    const expected = new URL(expectedUrl);
+    const frame = new URL(frameLocation);
+    if (frame.origin !== window.location.origin || expected.origin === window.location.origin) {
+      return false;
+    }
+
+    const documentRoot = iframe.contentDocument?.querySelector("#root, .app-shell");
+    return Boolean(documentRoot);
+  } catch {
+    return false;
+  }
+}
+
+function getUnknownErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function findTextMatches(markdown: string, query: string) {
