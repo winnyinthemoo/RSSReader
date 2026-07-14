@@ -1,3 +1,17 @@
+## 小组成员
+
+| 姓名 | GitHub 账号 |
+| --- | --- |
+| 章涵 | [@winnyinthemoo](https://github.com/winnyinthemoo) |
+| 沈丁 | [@SShending](https://github.com/SShending) |
+| 陈婧 | [@paradise-o](https://github.com/paradise-o) |
+| 王诗雨 | [@AkanthaWang](https://github.com/AkanthaWang) |
+| 王妍匀 | [@qiaomaEva](https://github.com/qiaomaEva) |
+| 常苗韦 | [@CMW-888](https://github.com/CMW-888) |
+| 张滨 | [@zb1nn](https://github.com/zb1nn) |
+| 韩威如 | [@RuGuoH](https://github.com/RuGuoH) |
+| 施曼丽 | [@ManliSHI](https://github.com/ManliSHI) |
+
 <a id="zh"></a>
 
 # Vortex
